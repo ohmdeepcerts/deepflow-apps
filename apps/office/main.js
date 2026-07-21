@@ -1,5 +1,6 @@
 import { SB_URL, SB_KEY, restFetch, createSupaAuthClient, makeJwtResolver } from '@core';
 import { escHtml } from '@ui';
+import { toDb as _toDb, fromDb as _fromDb, createRepository, TO_DB as _TO_DB } from '@data';
 
 // ════════════════════════════════════════════════════════════════
 //  DATABASE — Supabase
@@ -38,36 +39,12 @@ const STATUS = Object.freeze({
 });
 
 // ── FIELD MAPPING: camelCase JS ↔ lowercase Supabase columns ─
-const _TO_DB = {
-  jobs:{jobNum:'jobnum',certTypes:'certtypes',timeSlot:'timeslot',confirmed:'confirmed',
-    landlordName:'landlordname',landlordPhone:'landlordphone',landlordEmail:'landlordemail',
-    landlordAddr:'landlordaddr',landlordWA:'landlordwa',landlordNotes:'landlordnotes',
-    agencyName:'agencyname',agencyPhone:'agencyphone',agencyEmail:'agencyemail',
-    agencyNotes:'agencynotes',agentName:'agentname',agentPhone:'agentphone',
-    agentEmail:'agentemail',_sortOrder:'sortorder',invNumber:'invnumber',linkedInvId:'linkedinvid'},
-  certs:{issueDate:'issuedate',expiryDate:'expirydate',certNum:'certnum',jobId:'jobid',jobNum:'jobnum',noExpiry:'noexpiry',pdfUrl:'pdf_url',pdfPath:'pdf_path',notResponding:'notresponding'},
-  invoices:{clientId:'clientid',clientName:'clientname',clientEmail:'clientemail',clientAddr:'clientaddr',
-    clientWA:'clientwa',dueDate:'duedate',jobId:'jobid',linkedJobId:'linkedjobid',jobRef:'jobref',
-    agentCC:'agentcc',agentName:'agentname',agentEmail:'agentemail',
-    invoiceType:'invoicetype',billToName:'billtoname',billToAddress:'billtoaddress',
-    jobAddress:'jobaddress',agencyName:'agencyname',agencyAddress:'agencyaddress',
-    landlordName:'landlordname',propertyAddress:'propertyaddress',jobNum:'jobnum',
-    linkedInvId:'linkedinvid'},
-  agents:  {agencyId:'agencyid'},
-  persons: {agencyId:'agencyid',bankName:'bankname',bankAcc:'bankacc',bankSort:'banksort',bankRef:'bankref'},
-  agencies:{bankName:'bankname',bankAcc:'bankacc',bankSort:'banksort',bankRef:'bankref'},
-  payments:{invId:'inv_id',recordedBy:'recorded_by'},
-  expenses:{jobRef:'jobref',desc:'description'},
-  overtime:{},
-  portal_contacts:{contactName:'contact_name',sortOrder:'sort_order'},
-};
-const _FROM_DB = {};
-for(const [tbl,map] of Object.entries(_TO_DB)){
-  _FROM_DB[tbl]={};
-  for(const [k,v] of Object.entries(map)) _FROM_DB[tbl][v]=k;
-}
-function _toDb(store,obj){const map=_TO_DB[store];if(!map)return obj;const o={};for(const[k,v]of Object.entries(obj))o[map[k]||k]=v;return o;}
-function _fromDb(store,obj){if(!obj)return obj;const map=_FROM_DB[store];if(!map)return obj;const o={};for(const[k,v]of Object.entries(obj))o[map[k]||k]=v;return o;}
+// Now lives in @data (Phase 2 — see ARCHITECTURE_REDESIGN_PROPOSAL.md);
+// this file's copy WAS the source that @data's mapping was taken from
+// (already the most complete of the three apps'), so this is a pure
+// extraction with no field-list changes. _toDb/_fromDb are imported above,
+// aliased to their original names since 11 call sites throughout this file
+// reference them directly.
 function _fix(j){if(!j||typeof j!=='object')return j;return _fromDb('jobs',j);}
 
 // ── UNIFIED FETCH LAYER ──────────────────────────────────────
@@ -241,69 +218,15 @@ const uid = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
 });
 const TODAY = () => new Date().toISOString().slice(0,10);
 
-async function dGet(store, id) {
-  if (_LOCAL.has(store)) {
-    const v = localStorage.getItem('df_'+store+'_'+id);
-    return v ? JSON.parse(v) : undefined;
-  }
-  const r = await _sb(store+'?id=eq.'+encodeURIComponent(id)+'&limit=1');
-  return r && r[0] ? _fromDb(store, r[0]) : undefined;
-}
-
-async function dAll(store) {
-  if (store === 'settings') return [];
-  if (_LOCAL.has(store)) {
-    const v = localStorage.getItem('df_all_'+store);
-    return v ? JSON.parse(v) : [];
-  }
-  // ═══ FIXED: Pagination to fetch ALL rows (not just 5000) ═══
-  let allRows = [];
-  let offset = 0;
-  const limit = 1000; // Fetch in chunks of 1000
-  
-  while (true) {
-    const chunk = await _sb(store+`?limit=${limit}&offset=${offset}&order=created.desc&select=*`) || [];
-    if (chunk.length === 0) break; // No more rows
-    allRows = allRows.concat(chunk);
-    if (chunk.length < limit) break; // Last chunk (less than limit means we're done)
-    offset += limit;
-    // Safety: Stop at 50k rows to prevent infinite loop
-    if (offset > 50000) {
-      console.warn(`⚠️ Stopped fetching ${store} at 50k rows - implement proper filtering`);
-      break;
-    }
-  }
-  return allRows.map(r => _fromDb(store, r));
-}
-
-async function dPut(store, obj) {
-  if (store === 'settings') {
-    localStorage.setItem('df_setting_'+obj.key, JSON.stringify(obj.value));
-    return;
-  }
-  if (_LOCAL.has(store)) {
-    const all = JSON.parse(localStorage.getItem('df_all_'+store)||'[]');
-    const i = all.findIndex(x=>x.id===obj.id);
-    i>=0 ? all[i]=obj : all.push(obj);
-    localStorage.setItem('df_all_'+store, JSON.stringify(all));
-    return;
-  }
-  await _sb(store, {
-    method: 'POST',
-    body: _toDb(store, obj),
-    prefer: 'resolution=merge-duplicates,return=minimal'
-  });
-}
-
-async function dDel(store, id) {
-  if (store === 'settings') { localStorage.removeItem('df_setting_'+id); return; }
-  if (_LOCAL.has(store)) {
-    const all = JSON.parse(localStorage.getItem('df_all_'+store)||'[]');
-    localStorage.setItem('df_all_'+store, JSON.stringify(all.filter(x=>x.id!==id)));
-    return;
-  }
-  await _sb(store+'?id=eq.'+encodeURIComponent(id), { method:'DELETE', prefer:'return=minimal' });
-}
+// dGet/dAll/dPut/dDel now come from @data's generic repository (Phase 2) —
+// this was already byte-for-byte what that factory implements (it was
+// built from this exact code, being the most complete of the three apps'
+// data-access patterns). Bound to this app's own _sb, matching the
+// factory's design of taking the caller's fetch function as a parameter
+// rather than assuming one, since Phase 1 preserved each app's fetch
+// wrapper as deliberately different (sync-state tracking here, none in the
+// other two apps).
+const { dGet, dAll, dPut, dDel } = createRepository(_sb, { localTables: _LOCAL });
 
 // ── Settings cache ──
 let S = {

@@ -170,13 +170,13 @@ draw();
 
 'use strict';
 // ══════════════════════════════════════════════════════════════
-//  CONFIG — SB_URL/SB_KEY/restFetch now live in @core (see
-//  ARCHITECTURE_REDESIGN_PROPOSAL.md Phase 1). The jobs-only field mapping
-//  and STATUS enum stay local deliberately — unifying field mappings across
-//  apps is Phase 2, not this extraction.
+//  CONFIG — SB_URL/SB_KEY/restFetch now live in @core (Phase 1); the field
+//  mapping now lives in @data (Phase 2). STATUS stays local — it's a domain
+//  enum, not a field-name mapping concern.
 // ══════════════════════════════════════════════════════════════
 import { SB_URL, SB_KEY, restFetch, createSupaAuthClient, makeJwtResolver } from '@core';
 import { escHtml } from '@ui';
+import { fromDb } from '@data';
 
 const _supaAuth = createSupaAuthClient();
 if(!_supaAuth){
@@ -189,14 +189,15 @@ const STATUS = Object.freeze({
   INVOICED:'Invoiced', CANNOT_ACCESS:'Cannot Access', CANCELLED:'Cancelled',
 });
 
-const _TO_DB_JOBS = {jobNum:'jobnum',certTypes:'certtypes',timeSlot:'timeslot',
-  landlordName:'landlordname',landlordPhone:'landlordphone',landlordEmail:'landlordemail',
-  landlordAddr:'landlordaddr',landlordWA:'landlordwa',landlordNotes:'landlordnotes',
-  agencyName:'agencyname',agencyPhone:'agencyphone',agencyEmail:'agencyemail',
-  agencyNotes:'agencynotes',agentName:'agentname',agentPhone:'agentphone',agentEmail:'agentemail'};
-const _FROM_DB_JOBS = Object.fromEntries(Object.entries(_TO_DB_JOBS).map(([k,v])=>[v,k]));
-function _fix(j){if(!j||typeof j!=='object')return j;const o={};for(const[k,v]of Object.entries(j))o[_FROM_DB_JOBS[k]||k]=v;return o;}
-
+// The jobs-only mapping now comes from @data's unified table (Phase 2 —
+// see ARCHITECTURE_REDESIGN_PROPOSAL.md). sb() used to run every result
+// through this mapping unconditionally regardless of which table was
+// queried (this app also hits users/attachments/engineer_requests/
+// engineer_alerts/app_settings, not just jobs) — confirmed via direct
+// schema query that none of those tables have any column name overlapping
+// the jobs mapping, so it was a no-op for them, not a live bug. Now
+// correctly scoped by table (parsed from the request path) instead of
+// relying on that coincidence.
 const _getJWT = makeJwtResolver(_supaAuth);
 async function sb(path,opts={}){
   const jwt=await _getJWT();
@@ -204,7 +205,8 @@ async function sb(path,opts={}){
   const txt=await res.text();
   if(!res.ok)throw new Error(`[DeepFlow] ${path} → ${res.status}: ${txt}`);
   const d=txt?JSON.parse(txt):null;
-  return Array.isArray(d)?d.map(_fix):d;
+  const table=path.split('?')[0];
+  return Array.isArray(d)?d.map(row=>fromDb(table,row)):d;
 }
 
 // Same audit_log table the Office App's Admin-only Audit Log page reads —

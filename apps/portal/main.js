@@ -5,6 +5,7 @@
 // Supabase Auth session exists here), same error-message format.
 import { SB_KEY, restFetch } from '@core';
 import { escText as e, escAttr as ea } from '@ui';
+import { FROM_DB } from '@data';
 
 async function sb(path,opts={}){
   const r=await restFetch(path,opts,SB_KEY);
@@ -15,15 +16,28 @@ async function sb(path,opts={}){
   const t=await r.text();return t?JSON.parse(t):null;
 }
 
+// This app's own field coverage is deliberately narrower than the full
+// jobs/certs/invoices/persons maps in @data (it only ever touches these
+// specific fields) — sourcing the values from @data rather than
+// hardcoding them means they can never independently drift again, without
+// silently widening what this app converts. `createdat`→`createdAt` was
+// dropped here: it isn't a real column anywhere (the same dead entry was
+// already found and removed from the Office App's copy earlier in this
+// engagement) — see ARCHITECTURE_REDESIGN_PROPOSAL.md Phase 2.
+const _fixMap = {
+  jobnum: FROM_DB.jobs.jobnum, certtypes: FROM_DB.jobs.certtypes, timeslot: FROM_DB.jobs.timeslot,
+  landlordname: FROM_DB.jobs.landlordname, agencyname: FROM_DB.jobs.agencyname, agentname: FROM_DB.jobs.agentname,
+  issuedate: FROM_DB.certs.issuedate, expirydate: FROM_DB.certs.expirydate, certnum: FROM_DB.certs.certnum,
+  noexpiry: FROM_DB.certs.noexpiry, jobid: FROM_DB.certs.jobid,
+  clientname: FROM_DB.invoices.clientname, duedate: FROM_DB.invoices.duedate, invoicetype: FROM_DB.invoices.invoicetype,
+  billtoname: FROM_DB.invoices.billtoname, billtoaddress: FROM_DB.invoices.billtoaddress,
+  jobaddress: FROM_DB.invoices.jobaddress, propertyaddress: FROM_DB.invoices.propertyaddress,
+  bankname: FROM_DB.persons.bankname, bankacc: FROM_DB.persons.bankacc,
+  banksort: FROM_DB.persons.banksort, bankref: FROM_DB.persons.bankref,
+};
 function _fix(j){
   if(!j||typeof j!=='object')return j;
-  const M={jobnum:'jobNum',certtypes:'certTypes',timeslot:'timeSlot',landlordname:'landlordName',
-    agencyname:'agencyName',agentname:'agentName',issuedate:'issueDate',expirydate:'expiryDate',
-    certnum:'certNum',noexpiry:'noExpiry',jobid:'jobId',clientname:'clientName',duedate:'dueDate',
-    createdat:'createdAt',bankname:'bankName',bankacc:'bankAcc',banksort:'bankSort',bankref:'bankRef',
-    invoicetype:'invoiceType',billtoname:'billToName',billtoaddress:'billToAddress',
-    jobaddress:'jobAddress',propertyaddress:'propertyAddress'};
-  const r={};for(const[k,v]of Object.entries(j))r[M[k]||k]=v;return r;
+  const r={};for(const[k,v]of Object.entries(j))r[_fixMap[k]||k]=v;return r;
 }
 
 function dd(d){return d?Math.ceil((new Date(d)-new Date())/86400000):null}
