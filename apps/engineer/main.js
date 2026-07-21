@@ -182,6 +182,7 @@ import { createOfflineQueue, isNetworkError as _isNetworkError } from '@offline'
 import { _hdist, _loadGeoCache, geocodeAddress, fetchWeather, fetchLandRegistry, _geoCache } from './geo-weather.js';
 import { showTool, calcVD, calcZs, updateConduit, clearConduit, addWire } from './calc-tools.js';
 import { openQN, closeQN, _switchQNTab, _toggleQN, applyQN } from './quick-notes.js';
+import { loadRequests, openOvertimeForm, openLeaveForm, submitOvertimeRequest, submitLeaveRequest } from './requests.js';
 
 const _supaAuth = createSupaAuthClient();
 if(!_supaAuth){
@@ -202,7 +203,7 @@ if(!_supaAuth){
 // correctly scoped by table (parsed from the request path) instead of
 // relying on that coincidence.
 const _getJWT = makeJwtResolver(_supaAuth);
-async function sb(path,opts={}){
+export async function sb(path,opts={}){
   const jwt=await _getJWT();
   const res=await restFetch(path,opts,jwt);
   const txt=await res.text();
@@ -405,6 +406,7 @@ async function _loadOfficeSettings(){
 
 let _officeSettingsCache = {}; // populated by _loadOfficeSettings() — used by sendNotificationWebhook()
 let currentUser  = null;
+export function getCurrentUser(){ return currentUser; }
 let currentJob   = null;
 let currentTab   = 'today';
 let _allJobs     = [];
@@ -2047,64 +2049,6 @@ async function loadDash(){
 function _gr(){const h=new Date().getHours();return h<12?'morning':h<17?'afternoon':'evening';}
 
 // ══════════════════════════════════════════════════════════════
-//  REQUESTS
-// ══════════════════════════════════════════════════════════════
-async function loadRequests(){
-  const el=document.getElementById('requests-list');if(!el)return;
-  try{
-    const reqs=await sb(`engineer_requests?engineer_name=eq.${encodeURIComponent(currentUser.name)}&order=created.desc&limit=50`).catch(()=>[]);
-    if(!reqs?.length){el.innerHTML='<div class="empty"><div class="empty-icon">📤</div><div class="empty-title">No requests yet</div><div class="empty-sub">Use the buttons above to submit overtime or leave requests.</div></div>';return;}
-    _setBadge('requests',reqs.filter(r=>r.status==='pending').length);
-    el.innerHTML=reqs.map(r=>`<div class="req-card">
-      <div class="req-card-hd"><div><div class="req-title">${r.type==='overtime'?'⏱ Overtime':'📆 Time Off'}</div>
-      <div class="req-meta">${r.date?`📅 ${r.date}`:''} ${r.hours?`⏱ ${r.hours}h`:''} ${r.leave_from&&r.leave_to?`${r.leave_from} → ${r.leave_to}`:''}</div></div>
-      <span class="req-badge rb-${r.status||'pending'}">${r.status||'pending'}</span></div>
-      ${r.notes?`<div class="req-note">${r.notes}</div>`:''}
-      ${r.office_reply?`<div class="req-note" style="background:rgba(34,197,94,.07);border-color:rgba(34,197,94,.2);color:var(--green)">💬 Office: ${r.office_reply}</div>`:''}
-      <div style="font-size:10px;color:var(--txt3);margin-top:8px">${_fd(r.created)}</div>
-    </div>`).join('');
-  }catch(e){el.innerHTML='<div style="padding:20px;text-align:center;color:var(--txt3)">Unable to load requests.</div>';}
-}
-
-function openOvertimeForm(){
-  document.getElementById('ot-date').value=new Date().toISOString().split('T')[0];
-  document.getElementById('ot-hours').value='';
-  document.getElementById('ot-job').value='';
-  document.getElementById('ot-notes').value='';
-  document.getElementById('ot-modal').classList.add('open');
-}
-function openLeaveForm(){
-  const t=new Date().toISOString().split('T')[0];
-  document.getElementById('leave-from').value=t;
-  document.getElementById('leave-to').value=t;
-  document.getElementById('leave-notes').value='';
-  document.getElementById('leave-modal').classList.add('open');
-}
-async function submitOvertimeRequest(){
-  const date=document.getElementById('ot-date').value;
-  const hours=parseFloat(document.getElementById('ot-hours').value);
-  const rate=document.getElementById('ot-rate').value;
-  const job=document.getElementById('ot-job').value.trim();
-  const notes=document.getElementById('ot-notes').value.trim();
-  if(!date||isNaN(hours)||hours<=0){toast('Please fill in date and hours','error');return;}
-  try{
-    await sb('engineer_requests',{method:'POST',body:{id:`req-${Date.now()}`,engineer_name:currentUser.name,type:'overtime',date,hours,rate,job,notes,status:'pending',created:Date.now()}});
-    _clearDraft('ot-notes');closeModal('ot-modal');toast('✅ Overtime request sent!','success');if(navigator.vibrate)navigator.vibrate([50,30,80]);loadRequests();
-  }catch(e){toast('❌ '+(e.message||'').slice(0,80),'error');if(navigator.vibrate)navigator.vibrate([80]);}
-}
-async function submitLeaveRequest(){
-  const type=document.getElementById('leave-type').value;
-  const from=document.getElementById('leave-from').value;
-  const to=document.getElementById('leave-to').value;
-  const notes=document.getElementById('leave-notes').value.trim();
-  if(!from||!to){toast('Please select dates','error');return;}
-  try{
-    await sb('engineer_requests',{method:'POST',body:{id:`req-${Date.now()}`,engineer_name:currentUser.name,type:'leave',leave_type:type,leave_from:from,leave_to:to,notes,status:'pending',created:Date.now()}});
-    closeModal('leave-modal');toast('✅ Leave request sent!','success');if(navigator.vibrate)navigator.vibrate([50,30,80]);loadRequests();
-  }catch(e){toast('❌ '+(e.message||'').slice(0,80),'error');if(navigator.vibrate)navigator.vibrate([80]);}
-}
-
-// ══════════════════════════════════════════════════════════════
 //  PUSH NOTIFICATIONS
 // ══════════════════════════════════════════════════════════════
 async function _initPush(){
@@ -2316,12 +2260,12 @@ function switchTab(tab){
   if(tab==='requests')loadRequests();
 }
 
-function closeModal(id){
+export function closeModal(id){
   document.getElementById(id)?.classList.remove('open');
   if(id==='job-modal')currentJob=null;
 }
 
-function _setBadge(tab,count){
+export function _setBadge(tab,count){
   const b=document.getElementById(`badge-${tab}`);
   if(!b)return;
   b.style.display=count>0?'inline-block':'none';
@@ -2335,7 +2279,7 @@ export function toast(msg,type=''){
   clearTimeout(_tt);_tt=setTimeout(()=>{el.className='';},3200);
 }
 
-function _fd(ts){
+export function _fd(ts){
   if(!ts)return'';
   return new Date(typeof ts==='number'?ts:Date.parse(ts)).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
 }
@@ -2382,7 +2326,7 @@ function initAutoSave(){
   // _hookJobNotesAutoSave() — no window patch needed here (FIX 12).
 }
 
-function _clearDraft(id){
+export function _clearDraft(id){
   localStorage.removeItem('draft_'+id);
   const el=document.getElementById(id);
   if(el){el.style.borderColor='';el._autoSaveHooked=false;}
