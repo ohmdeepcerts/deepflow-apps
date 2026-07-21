@@ -2,6 +2,7 @@ import { SB_URL, SB_KEY, restFetch, createSupaAuthClient, makeJwtResolver } from
 import { escHtml } from '@ui';
 import { toDb as _toDb, fromDb as _fromDb, createRepository, TO_DB as _TO_DB } from '@data';
 import { STATUS, calcLineItemsTotal, officeVatRate } from '@business';
+import { createOfflineQueue } from '@offline';
 
 // ════════════════════════════════════════════════════════════════
 //  DATABASE — Supabase
@@ -70,71 +71,17 @@ async function _sb(path,opts={}){
   }
 }
 
-// ── Offline write queue — ported from engineer.html, which needed this
-// because engineers work in the field with unreliable connectivity. The
-// Office App only ever had a visual "you're offline" indicator (above),
-// which tells you there's a problem but doesn't stop a save from being
-// silently lost if it fails while offline. Scoped to the Jobs page's
-// highest-value write paths (job save, status change, inline time/price
-// edit) rather than every write call in the app.
-const OFFLINE_QUEUE_KEY='df_office_offline_queue';
-
-function _isNetworkError(e){
-  if(!navigator.onLine) return true;
-  if(e instanceof TypeError) return true; // fetch() itself rejected — no HTTP response at all
-  return /failed to fetch|networkerror|load failed/i.test(e?.message||'');
-}
-
-function _offlineQueueGet(){
-  try{ return JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY)||'[]'); }catch(e){ return []; }
-}
-function _offlineQueueSet(arr){
-  localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(arr));
-  _renderOfflineBadge(arr.length);
-}
-
-// Wraps an _sb() write: tries it immediately, and if it fails for what looks
-// like a connectivity reason, queues it for later instead of losing it.
-// `label` is shown in the pending-sync badge (pass null for background
-// writes that don't need their own line item).
-async function queueableSave(label, path, opts){
-  try{
-    await _sb(path, opts);
-    return {ok:true, queued:false};
-  }catch(e){
-    if(_isNetworkError(e)){
-      const q=_offlineQueueGet();
-      q.push({qid:(Date.now()+'_'+Math.random().toString(36).slice(2)), label, path, opts, ts:Date.now()});
-      _offlineQueueSet(q);
-      return {ok:true, queued:true};
-    }
-    throw e; // a real server-side rejection — let the caller's existing catch/toast handle it
-  }
-}
-
-let _offlineFlushing=false;
-async function _flushOfflineQueue(){
-  if(_offlineFlushing || !navigator.onLine) return;
-  const q=_offlineQueueGet();
-  if(!q.length) return;
-  _offlineFlushing=true;
-  try{
-    while(q.length){
-      const item=q[0];
-      try{
-        await _sb(item.path, item.opts);
-      }catch(e){
-        if(_isNetworkError(e)) break; // still offline (or flaky) — stop, keep the rest queued, try again later
-        console.warn('[OfflineQueue] dropping unsendable item',item,e); // server rejected it outright — will never succeed
-      }
-      q.shift();
-      _offlineQueueSet(q);
-    }
-    if(!q.length){ toast('✅ Synced — all offline changes saved','success'); _invalidateJobCache(); _renderJobsKeepScroll(); }
-  } finally {
-    _offlineFlushing=false;
-  }
-}
+// ── Offline write queue — now in @offline (Phase 4). Badge rendering stays
+// local (own DOM id/CSS position), as does what happens on a fully-synced
+// flush (this app also refreshes the Jobs list — the Employee App's
+// equivalent does not, see tests/unit/offline-queue.test.js).
+const _officeQueue = createOfflineQueue('df_office_offline_queue', {
+  sbFetch: _sb,
+  onQueueChange: (count) => _renderOfflineBadge(count),
+  onSynced: () => { toast('✅ Synced — all offline changes saved','success'); _invalidateJobCache(); _renderJobsKeepScroll(); },
+});
+const queueableSave = _officeQueue.queueableSave;
+const _flushOfflineQueue = _officeQueue.flush;
 
 function _renderOfflineBadge(count){
   let el=document.getElementById('offline-queue-badge');
@@ -158,7 +105,7 @@ window.addEventListener('online', _flushOfflineQueue);
 document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') _flushOfflineQueue(); });
 setInterval(_flushOfflineQueue, 20000);
 // Restore badge on load if a previous offline session left items queued
-_renderOfflineBadge(_offlineQueueGet().length);
+_renderOfflineBadge(_officeQueue.getQueue().length);
 
 // ── Storage upload — same pattern as the Employee app's sbStorage(), added
 // here for certificate PDF uploads (the Office app previously only ever read

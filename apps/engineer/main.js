@@ -178,6 +178,7 @@ import { SB_URL, SB_KEY, restFetch, createSupaAuthClient, makeJwtResolver } from
 import { escHtml } from '@ui';
 import { fromDb } from '@data';
 import { STATUS } from '@business';
+import { createOfflineQueue, isNetworkError as _isNetworkError } from '@offline';
 
 const _supaAuth = createSupaAuthClient();
 if(!_supaAuth){
@@ -303,71 +304,19 @@ async function notifyNextTenantEta(completedJob){
 }
 
 // ══════════════════════════════════════════════════════════════
-//  OFFLINE SAVE QUEUE — typed data (notes, status, hours) is never lost to
-//  a dropped connection. A failed save that looks like a network problem
-//  (as opposed to the server rejecting the request) is queued to
-//  localStorage and automatically replayed once the connection returns —
-//  no manual "retry" action needed from the engineer.
+//  OFFLINE SAVE QUEUE — now in @offline (Phase 4). Badge rendering stays
+//  local (own DOM id/CSS position — bottom:80px here, above the bottom tab
+//  bar, vs. bottom:24px in the Office App). Unlike the Office App, this
+//  app's onSynced is just the toast — no Jobs-list refresh, see
+//  tests/unit/offline-queue.test.js.
 // ══════════════════════════════════════════════════════════════
-const OFFLINE_QUEUE_KEY='df_eng_offline_queue';
-
-function _isNetworkError(e){
-  if(!navigator.onLine) return true;
-  if(e instanceof TypeError) return true; // fetch() itself rejected — no HTTP response at all
-  return /failed to fetch|networkerror|load failed/i.test(e?.message||'');
-}
-
-function _offlineQueueGet(){
-  try{ return JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY)||'[]'); }catch(e){ return []; }
-}
-function _offlineQueueSet(arr){
-  localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(arr));
-  _renderOfflineBadge(arr.length);
-}
-
-// Wraps an sb() write: tries it immediately, and if it fails for what looks
-// like a connectivity reason, queues it for later instead of losing it.
-// `label` is shown in the pending-sync badge (pass null for background
-// writes like audit logs that don't need their own line item).
-async function queueableSave(label, path, opts){
-  try{
-    await sb(path, opts);
-    return {ok:true, queued:false};
-  }catch(e){
-    if(_isNetworkError(e)){
-      const q=_offlineQueueGet();
-      q.push({qid: (Date.now()+'_'+Math.random().toString(36).slice(2)), label, path, opts, ts: Date.now()});
-      _offlineQueueSet(q);
-      return {ok:true, queued:true};
-    }
-    throw e; // a real server-side rejection — let the caller's existing catch/toast handle it
-  }
-}
-
-let _offlineFlushing=false;
-async function _flushOfflineQueue(){
-  if(_offlineFlushing || !navigator.onLine) return;
-  const q=_offlineQueueGet();
-  if(!q.length) return;
-  _offlineFlushing=true;
-  try{
-    while(q.length){
-      const item=q[0];
-      try{
-        await sb(item.path, item.opts);
-      }catch(e){
-        if(_isNetworkError(e)) break; // still offline (or flaky) — stop, keep the rest queued, try again later
-        // Server rejected it outright (e.g. the job was deleted meanwhile) — drop it, it'll never succeed.
-        console.warn('[OfflineQueue] dropping unsendable item',item,e);
-      }
-      q.shift();
-      _offlineQueueSet(q);
-    }
-    if(!q.length) toast('✅ Synced — all offline changes saved','success');
-  } finally {
-    _offlineFlushing=false;
-  }
-}
+const _engQueue = createOfflineQueue('df_eng_offline_queue', {
+  sbFetch: sb,
+  onQueueChange: (count) => _renderOfflineBadge(count),
+  onSynced: () => toast('✅ Synced — all offline changes saved','success'),
+});
+const queueableSave = _engQueue.queueableSave;
+const _flushOfflineQueue = _engQueue.flush;
 
 function _renderOfflineBadge(count){
   let el=document.getElementById('offline-queue-badge');
@@ -391,7 +340,7 @@ window.addEventListener('online', _flushOfflineQueue);
 document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') _flushOfflineQueue(); });
 setInterval(_flushOfflineQueue, 20000);
 // Restore badge on load if a previous offline session left items queued
-_renderOfflineBadge(_offlineQueueGet().length);
+_renderOfflineBadge(_engQueue.getQueue().length);
 
 const df=(()=>{
   const _L={};
