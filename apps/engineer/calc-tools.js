@@ -3,10 +3,8 @@
 // a conduit-fill visualiser. Extracted from main.js verbatim (Phase 5 of
 // the architecture migration, Employee App module 2) — no behaviour
 // changes. Pure DOM + arithmetic, zero Supabase/job-state coupling.
-//
-// showTool() calls updateOmwPreview()/_prefillOmw() (still in main.js)
-// through typeof-guards, not direct calls — `typeof x` never throws on an
-// undeclared identifier, so this is safe without importing them.
+
+import { updateOmwPreview, _prefillOmw } from './on-my-way.js';
 
 // ═══════════════════════════════════════════════
 // TOOL TAB SWITCHER
@@ -19,7 +17,7 @@ export function showTool(id, btn){
   document.querySelectorAll('.tool-tab').forEach(b=>b.classList.remove('active'));
   if(btn)btn.classList.add('active');
   if(id==='max-zs'&&typeof calcZs==='function')calcZs();
-  if(id==='on-my-way'){if(typeof updateOmwPreview==='function')updateOmwPreview();if(typeof _prefillOmw==='function')_prefillOmw();}
+  if(id==='on-my-way'){updateOmwPreview();_prefillOmw();}
   if(navigator.vibrate)navigator.vibrate(30);
 }
 

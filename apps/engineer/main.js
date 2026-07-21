@@ -186,6 +186,7 @@ import { loadRequests, openOvertimeForm, openLeaveForm, submitOvertimeRequest, s
 import { renderGuide, toggleGuide } from './guide.js';
 import { _setPhotoMode, _renderPhotoGrid, _triggerBAUpload, _handleBAUpload, _deleteBAPhoto, handleUpload, getBaMode } from './photos.js';
 import { setMapView } from './map.js';
+import { updateOmwPreview, sendOmwClient, sendOmwOffice, _prefillOmw } from './on-my-way.js';
 
 const _supaAuth = createSupaAuthClient();
 if(!_supaAuth){
@@ -364,6 +365,7 @@ const df=(()=>{
 // _loadOfficeSettings() which is called inside showApp(). Falls back to localStorage
 // cache, then to the placeholder below if neither is available.
 let OFFICE_WA_NUMBER = localStorage.getItem('df_eng_office_wa') || '447700000000';
+export function getOfficeWaNumber(){ return OFFICE_WA_NUMBER; }
 
 // Resolved per-engineer visibility permissions, set once office settings load.
 // Defaults match the Office app's own defaults (see saveEngDefaults()) — only
@@ -589,71 +591,6 @@ function openUserMenu(){
 function closeUserMenu(){
   const s=document.getElementById('user-menu-sheet');
   if(s)s.style.display='none';
-}
-
-// ═══════════════════════════════════════════════
-// ON MY WAY MESSAGES
-// ═══════════════════════════════════════════════
-function _getEtaTime(mins){
-  const d=new Date();d.setMinutes(d.getMinutes()+parseInt(mins||20));
-  return d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
-}
-function updateOmwPreview(){
-  const to=document.getElementById('omw-to')?.value||currentJob?.address||'the property';
-  const eta=document.getElementById('omw-eta')?.value||20;
-  const etaTime=_getEtaTime(eta);
-  const engineer=currentUser?.name||'Your engineer';
-  const msg=`Hi, this is ${engineer} from ${S_CO?.coName||'the office'}.
-
-I'm on my way to:
-📍 ${to}
-
-🕐 I should arrive in approximately ${eta} minutes (around ${etaTime}).
-
-Please make sure access is available. Thank you! 👷⚡`;
-  const prev=document.getElementById('omw-preview');
-  if(prev)prev.textContent=msg;
-}
-// S_CO fallback
-let S_CO={coName:''};
-try{const raw=localStorage.getItem('df_setting_coName');if(raw)S_CO.coName=JSON.parse(raw);}catch(e){}
-
-function sendOmwClient(){
-  const to=document.getElementById('omw-to')?.value||currentJob?.address||'the property';
-  const eta=document.getElementById('omw-eta')?.value||20;
-  const etaTime=_getEtaTime(eta);
-  const phone=currentJob?.contact?.replace(/\D/g,'')||currentJob?.tenantPhone?.replace(/\D/g,'')||'';
-  const msg=encodeURIComponent(`Hi, this is ${currentUser?.name||'Your engineer'} from ${S_CO.coName||'the office'}.
-
-I'm on my way to:
-📍 ${to}
-
-ETA: approx ${eta} mins (around ${etaTime}).
-
-Please ensure access is available. Thank you! 👷⚡`);
-  window.open(`https://wa.me/${phone}?text=${msg}`,'_blank');
-  if(navigator.vibrate)navigator.vibrate(40);
-}
-function sendOmwOffice(){
-  const to=document.getElementById('omw-to')?.value||currentJob?.address||'—';
-  const eta=document.getElementById('omw-eta')?.value||20;
-  const etaTime=_getEtaTime(eta);
-  const msg=encodeURIComponent(`🚗 *On My Way*
-👷 ${currentUser?.name||'Engineer'}
-📍 Heading to: ${to}
-🕐 ETA: ~${eta} mins (${etaTime})`);
-  const officeNum=(typeof OFFICE_WA_NUMBER!=='undefined'?OFFICE_WA_NUMBER:'')||'';
-  window.open(`https://wa.me/${officeNum}?text=${msg}`,'_blank');
-  if(navigator.vibrate)navigator.vibrate(40);
-}
-
-// Pre-fill On My Way with current job if open
-function _prefillOmw(){
-  if(currentJob){
-    const addr=document.getElementById('omw-to');
-    if(addr&&!addr.value)addr.value=currentJob.address||'';
-    updateOmwPreview();
-  }
 }
 
 // ══ OFFICE CONNECTION STATUS ══
