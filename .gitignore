@@ -18,6 +18,11 @@ dist/
 # Accidental artifacts
 nul
 
+# Playwright output
+test-results/
+playwright-report/
+blob-report/
+
 # OS / editor cruft
 .DS_Store
 Thumbs.db
