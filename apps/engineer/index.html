@@ -1,13 +1,923 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>DeepFlow — Employee App (scaffold)</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0a0d14">
+<title>DeepFlow Engineer</title>
+<link rel="manifest" href="data:application/manifest+json;base64,eyJuYW1lIjogIk9FIEVuZ2luZWVyIFBvcnRhbCIsICJzaG9ydF9uYW1lIjogIk9FIEVuZ2luZWVyIiwgImRlc2NyaXB0aW9uIjogIk9obSBFbGVjdHJpY2FsIFx1MjAxNCBFbmdpbmVlciBKb2IgUG9ydGFsIiwgInN0YXJ0X3VybCI6ICIuLyIsICJkaXNwbGF5IjogInN0YW5kYWxvbmUiLCAiYmFja2dyb3VuZF9jb2xvciI6ICIjMWExYTFhIiwgInRoZW1lX2NvbG9yIjogIiM0ZjhmZmYiLCAib3JpZW50YXRpb24iOiAiYW55IiwgImljb25zIjogW3sic3JjIjogImRhdGE6aW1hZ2Uvc3ZnK3htbDtiYXNlNjQsUEhOMlp5QjRiV3h1Y3owaWFIUjBjRG92TDNkM2R5NTNNeTV2Y21jdk1qQXdNQzl6ZG1jaUlIZHBaSFJvUFNJeE9USWlJR2hsYVdkb2REMGlNVGt5SWlCMmFXVjNRbTk0UFNJd0lEQWdNVGt5SURFNU1pSStQSEpsWTNRZ2QybGtkR2c5SWpFNU1pSWdhR1ZwWjJoMFBTSXhPVElpSUhKNFBTSXpOaUlnWm1sc2JEMGlJekZoTVdFeFlTSXZQangwWlhoMElIZzlJamsySWlCNVBTSXhNVGtpSUhSbGVIUXRZVzVqYUc5eVBTSnRhV1JrYkdVaUlHWnZiblF0Wm1GdGFXeDVQU0pCY21saGJDQkNiR0ZqYXl4QmNtbGhiQ3h6WVc1ekxYTmxjbWxtSWlCbWIyNTBMWE5wZW1VOUlqazVJaUJtYjI1MExYZGxhV2RvZEQwaU9UQXdJaUJtYVd4c1BTSWpaVEExTWpVeUlqN09xVHd2ZEdWNGRENDhkR1Y0ZENCNFBTSTVOaUlnZVQwaU1UVTNJaUIwWlhoMExXRnVZMmh2Y2owaWJXbGtaR3hsSWlCbWIyNTBMV1poYldsc2VUMGlRWEpwWVd3c2MyRnVjeTF6WlhKcFppSWdabTl1ZEMxemFYcGxQU0l6TWlJZ1ptOXVkQzEzWldsbmFIUTlJamN3TUNJZ1ptbHNiRDBpSTJZMVl6WXlNeUlnYkdWMGRHVnlMWE53WVdOcGJtYzlJamNpUGs5RlBDOTBaWGgwUGp3dmMzWm5QZz09IiwgInNpemVzIjogIjE5MngxOTIiLCAidHlwZSI6ICJpbWFnZS9zdmcreG1sIiwgInB1cnBvc2UiOiAiYW55IG1hc2thYmxlIn0sIHsic3JjIjogImRhdGE6aW1hZ2Uvc3ZnK3htbDtiYXNlNjQsUEhOMlp5QjRiV3h1Y3owaWFIUjBjRG92TDNkM2R5NTNNeTV2Y21jdk1qQXdNQzl6ZG1jaUlIZHBaSFJvUFNJMU1USWlJR2hsYVdkb2REMGlOVEV5SWlCMmFXVjNRbTk0UFNJd0lEQWdOVEV5SURVeE1pSStQSEpsWTNRZ2QybGtkR2c5SWpVeE1pSWdhR1ZwWjJoMFBTSTFNVElpSUhKNFBTSTVOeUlnWm1sc2JEMGlJekZoTVdFeFlTSXZQangwWlhoMElIZzlJakkxTmlJZ2VUMGlNekUzSWlCMFpYaDBMV0Z1WTJodmNqMGliV2xrWkd4bElpQm1iMjUwTFdaaGJXbHNlVDBpUVhKcFlXd2dRbXhoWTJzc1FYSnBZV3dzYzJGdWN5MXpaWEpwWmlJZ1ptOXVkQzF6YVhwbFBTSXlOallpSUdadmJuUXRkMlZwWjJoMFBTSTVNREFpSUdacGJHdzlJaU5sTURVeU5USWlQczZwUEM5MFpYaDBQangwWlhoMElIZzlJakkxTmlJZ2VUMGlOREU1SWlCMFpYaDBMV0Z1WTJodmNqMGliV2xrWkd4bElpQm1iMjUwTFdaaGJXbHNlVDBpUVhKcFlXd3NjMkZ1Y3kxelpYSnBaaUlnWm05dWRDMXphWHBsUFNJNE55SWdabTl1ZEMxM1pXbG5hSFE5SWpjd01DSWdabWxzYkQwaUkyWTFZell5TXlJZ2JHVjBkR1Z5TFhOd1lXTnBibWM5SWpJd0lqNVBSVHd2ZEdWNGRENDhMM04yWno0PSIsICJzaXplcyI6ICI1MTJ4NTEyIiwgInR5cGUiOiAiaW1hZ2Uvc3ZnK3htbCIsICJwdXJwb3NlIjogImFueSBtYXNrYWJsZSJ9LCB7InNyYyI6ICJkYXRhOmltYWdlL3N2Zyt4bWw7YmFzZTY0LFBITjJaeUI0Yld4dWN6MGlhSFIwY0RvdkwzZDNkeTUzTXk1dmNtY3ZNakF3TUM5emRtY2lJSGRwWkhSb1BTSXhPREFpSUdobGFXZG9kRDBpTVRnd0lpQjJhV1YzUW05NFBTSXdJREFnTVRnd0lERTRNQ0krUEhKbFkzUWdkMmxrZEdnOUlqRTRNQ0lnYUdWcFoyaDBQU0l4T0RBaUlISjRQU0l6TkNJZ1ptbHNiRDBpSXpGaE1XRXhZU0l2UGp4MFpYaDBJSGc5SWprd0lpQjVQU0l4TVRFaUlIUmxlSFF0WVc1amFHOXlQU0p0YVdSa2JHVWlJR1p2Ym5RdFptRnRhV3g1UFNKQmNtbGhiQ0JDYkdGamF5eEJjbWxoYkN4ellXNXpMWE5sY21sbUlpQm1iMjUwTFhOcGVtVTlJamt6SWlCbWIyNTBMWGRsYVdkb2REMGlPVEF3SWlCbWFXeHNQU0lqWlRBMU1qVXlJajdPcVR3dmRHVjRkRDQ4ZEdWNGRDQjRQU0k1TUNJZ2VUMGlNVFEzSWlCMFpYaDBMV0Z1WTJodmNqMGliV2xrWkd4bElpQm1iMjUwTFdaaGJXbHNlVDBpUVhKcFlXd3NjMkZ1Y3kxelpYSnBaaUlnWm05dWRDMXphWHBsUFNJek1DSWdabTl1ZEMxM1pXbG5hSFE5SWpjd01DSWdabWxzYkQwaUkyWTFZell5TXlJZ2JHVjBkR1Z5TFhOd1lXTnBibWM5SWpjaVBrOUZQQzkwWlhoMFBqd3ZjM1puUGc9PSIsICJzaXplcyI6ICIxODB4MTgwIiwgInR5cGUiOiAiaW1hZ2Uvc3ZnK3htbCIsICJwdXJwb3NlIjogImFueSJ9XX0=">
+<link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxODAiIGhlaWdodD0iMTgwIiB2aWV3Qm94PSIwIDAgMTgwIDE4MCI+PHJlY3Qgd2lkdGg9IjE4MCIgaGVpZ2h0PSIxODAiIHJ4PSIzNCIgZmlsbD0iIzFhMWExYSIvPjx0ZXh0IHg9IjkwIiB5PSIxMTEiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJBcmlhbCBCbGFjayxBcmlhbCxzYW5zLXNlcmlmIiBmb250LXNpemU9IjkzIiBmb250LXdlaWdodD0iOTAwIiBmaWxsPSIjZTA1MjUyIj7OqTwvdGV4dD48dGV4dCB4PSI5MCIgeT0iMTQ3IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LWZhbWlseT0iQXJpYWwsc2Fucy1zZXJpZiIgZm9udC1zaXplPSIzMCIgZm9udC13ZWlnaHQ9IjcwMCIgZmlsbD0iI2Y1YzYyMyIgbGV0dGVyLXNwYWNpbmc9IjciPk9FPC90ZXh0Pjwvc3ZnPg==">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="OE Engineer">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMiIgaGVpZ2h0PSIzMiIgdmlld0JveD0iMCAwIDMyIDMyIj48cmVjdCB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHJ4PSI2IiBmaWxsPSIjMWExYTFhIi8+PHRleHQgeD0iMTYiIHk9IjE5IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LWZhbWlseT0iQXJpYWwgQmxhY2ssQXJpYWwsc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNiIgZm9udC13ZWlnaHQ9IjkwMCIgZmlsbD0iI2UwNTI1MiI+zqk8L3RleHQ+PHRleHQgeD0iMTYiIHk9IjI2IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LWZhbWlseT0iQXJpYWwsc2Fucy1zZXJpZiIgZm9udC1zaXplPSI1IiBmb250LXdlaWdodD0iNzAwIiBmaWxsPSIjZjVjNjIzIiBsZXR0ZXItc3BhY2luZz0iMSI+T0U8L3RleHQ+PC9zdmc+">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0a0d14;--s1:#0f1320;--s2:#151b2c;--s3:#1c2438;--s4:#222d42;
+  --border:#263047;--border2:#2e3d5a;
+  --txt:#e2eaf8;--txt2:#8a9bbf;--txt3:#4e6080;
+  --acc:#4f8fff;--acc2:#3575f0;
+  --green:#22c55e;--red:#f04444;--yellow:#f5a623;
+  --orange:#f97316;--purple:#a855f7;--teal:#14b8a6;
+  --r:14px;--r2:10px;--r3:8px;
+  --sh:0 8px 32px rgba(0,0,0,.5);
+  --font:'DM Sans',system-ui,sans-serif;
+  --mono:'JetBrains Mono',monospace;
+}
+[data-theme="light"]{
+  --bg:#f0f2f7;--s1:#ffffff;--s2:#f8f9fc;--s3:#eef0f6;--s4:#e4e7f0;
+  --border:#d8dce8;--border2:#c8cdd8;
+  --txt:#1a1f2e;--txt2:#4a5568;--txt3:#9aa0b4;
+  --acc:#2563eb;--acc2:#1d4ed8;
+  --sh:0 4px 20px rgba(0,0,0,.1);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{background:var(--bg);color:var(--txt);font-family:var(--font);min-height:100vh;overscroll-behavior:none;transition:background .3s,color .3s}
+
+/* LOGIN */
+#login-screen{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px;background:radial-gradient(ellipse 80% 60% at 50% -10%,rgba(79,143,255,.25) 0%,transparent 70%),var(--bg);transition:background .3s}
+.login-bolt{font-size:56px;margin-bottom:6px;filter:drop-shadow(0 0 24px rgba(79,143,255,.6))}
+.login-brand{font-size:34px;font-weight:900;letter-spacing:-1.5px;background:linear-gradient(135deg,#fff 30%,var(--acc));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+[data-theme="light"] .login-brand{background:linear-gradient(135deg,#1a1f2e 30%,var(--acc));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.login-role{color:var(--txt3);font-size:12px;letter-spacing:3px;text-transform:uppercase;margin-bottom:40px;margin-top:6px;font-weight:600}
+.login-box{background:var(--s1);border:1px solid var(--border);border-radius:20px;padding:30px;width:100%;max-width:340px;box-shadow:var(--sh)}
+.fi{width:100%;background:var(--s2);border:1.5px solid var(--border);border-radius:var(--r2);color:var(--txt);padding:14px 16px;font-size:16px;margin-bottom:12px;outline:none;transition:border-color .2s;-webkit-appearance:none;font-family:var(--font)}
+.fi:focus{border-color:var(--acc)}
+.btn-login{width:100%;background:var(--acc);color:#fff;border:none;border-radius:var(--r2);padding:16px;font-size:16px;font-weight:800;cursor:pointer;transition:all .15s;font-family:var(--font)}
+.btn-login:active{transform:scale(.98);background:var(--acc2)}
+.login-err{color:var(--red);font-size:13px;text-align:center;margin-top:10px;display:none;background:rgba(240,68,68,.1);border:1px solid rgba(240,68,68,.2);border-radius:8px;padding:10px}
+.login-hint{font-size:11px;color:var(--txt3);text-align:center;margin-top:14px}
+
+/* APP SHELL */
+#app{display:none;min-height:100vh;padding-bottom:100px}
+
+/* TOPBAR */
+.topbar{background:rgba(10,13,20,.95);border-bottom:1px solid var(--border);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
+[data-theme="light"] .topbar{background:rgba(248,249,252,.95)}
+.topbar-left{display:flex;flex-direction:column}
+.topbar-name{font-weight:800;font-size:16px;letter-spacing:-.4px}
+.topbar-date{color:var(--txt3);font-size:11px;margin-top:1px;font-weight:500}
+.topbar-right{display:flex;align-items:center;gap:6px}
+.btn-icon{background:var(--s2);border:1px solid var(--border);border-radius:8px;color:var(--txt2);padding:8px 11px;font-size:14px;cursor:pointer;transition:all .15s;font-family:var(--font)}
+.btn-icon:active{background:var(--s3);transform:scale(.96)}
+.refresh-btn{background:var(--s2);border:1px solid var(--border);border-radius:20px;padding:6px 12px;font-size:11px;font-weight:700;color:var(--acc);cursor:pointer;display:flex;align-items:center;gap:4px;transition:all .15s;font-family:var(--font);white-space:nowrap}
+.refresh-btn:active{transform:scale(.96)}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spinning{animation:spin .7s linear infinite;display:inline-block}
+
+/* BOTTOM NAV */
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:rgba(10,13,20,.97);border-top:1px solid var(--border);display:flex;z-index:100;padding-bottom:calc(env(safe-area-inset-bottom) + 10px);backdrop-filter:blur(20px)}
+[data-theme="light"] .bottom-nav{background:rgba(255,255,255,.97)}
+.nav-item{flex:1;padding:16px 4px 12px;text-align:center;cursor:pointer;font-size:11px;font-weight:700;color:var(--txt3);transition:color .2s;text-transform:uppercase;letter-spacing:.3px;position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;min-height:62px}
+.nav-item.active{color:var(--acc)}
+.nav-icon{font-size:19px}
+.nav-badge{position:absolute;top:8px;right:calc(50% - 16px);background:var(--red);color:#fff;border-radius:8px;font-size:8px;padding:1px 4px;font-weight:800;line-height:1.4}
+
+/* FAB - floating action button */
+.fab{position:fixed;bottom:96px;right:18px;width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,var(--acc),var(--acc2));border:none;color:#fff;font-size:28px;cursor:pointer;z-index:150;box-shadow:0 4px 20px rgba(79,143,255,.5);display:flex;align-items:center;justify-content:center;transition:all .2s;line-height:1}
+.fab:active{transform:scale(.93)}
+.fab.hidden{display:none}
+
+/* PAGES */
+.page{display:none;padding-bottom:10px}
+.page.active{display:block}
+.page-scroll{padding:12px 14px}
+.sec-hd{font-size:10px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:1.4px;padding:14px 14px 8px;display:flex;align-items:center;gap:8px}
+.sec-hd-line{flex:1;height:1px;background:var(--border)}
+
+/* PULL TO REFRESH */
+
+/* JOB CARDS — full tinted background */
+.job-card{border-radius:var(--r);padding:14px 14px 14px 16px;margin-bottom:8px;cursor:pointer;transition:all .18s;position:relative;overflow:hidden;border:1px solid transparent}
+.job-card:active{transform:scale(.99)}
+/* Pending — amber tint */
+.job-card.s-pending{background:rgba(245,166,35,.10);border-color:rgba(245,166,35,.22)}
+[data-theme="light"] .job-card.s-pending{background:rgba(245,166,35,.08);border-color:rgba(245,166,35,.3)}
+/* In Progress — blue tint */
+/* ── Live pulse on In Progress jobs ── */
+@keyframes livePulse{
+  0%{box-shadow:0 0 0 0 rgba(79,143,255,.5);border-color:rgba(79,143,255,.4)}
+  70%{box-shadow:0 0 0 8px rgba(79,143,255,0);border-color:rgba(79,143,255,.7)}
+  100%{box-shadow:0 0 0 0 rgba(79,143,255,0);border-color:rgba(79,143,255,.4)}
+}
+.job-card.s-progress{background:rgba(79,143,255,.10);border-color:rgba(79,143,255,.4);animation:livePulse 2.2s ease-in-out infinite}
+[data-theme="light"] .job-card.s-progress{background:rgba(79,143,255,.08);border-color:rgba(79,143,255,.3)}
+/* Completed — green tint */
+.job-card.s-completed{background:rgba(34,197,94,.08);border-color:rgba(34,197,94,.18)}
+[data-theme="light"] .job-card.s-completed{background:rgba(34,197,94,.06);border-color:rgba(34,197,94,.25)}
+/* Emergency — red tint */
+.job-card.s-emergency{background:rgba(240,68,68,.10);border-color:rgba(240,68,68,.40);position:relative;overflow:hidden}
+.job-card.s-emergency::before{content:"";position:absolute;top:0;left:0;right:0;height:5px;background:repeating-linear-gradient(90deg,#f5a623,#f5a623 8px,#1a1a1a 8px,#1a1a1a 16px);z-index:1}
+[data-theme="light"] .job-card.s-emergency{background:rgba(240,68,68,.08);border-color:rgba(240,68,68,.35)}
+/* No Access — orange tint */
+.job-card.s-noaccess{background:rgba(249,115,22,.10);border-color:rgba(249,115,22,.22)}
+[data-theme="light"] .job-card.s-noaccess{background:rgba(249,115,22,.07);border-color:rgba(249,115,22,.28)}
+
+/* Left accent stripe */
+.job-quick-row{display:flex;gap:6px;padding:8px 12px 10px;border-top:1px solid var(--border);flex-wrap:wrap}
+.jq-btn{padding:5px 10px;border-radius:20px;font-size:11px;font-weight:700;border:none;cursor:pointer;font-family:var(--fh);white-space:nowrap;text-decoration:none;display:inline-flex;align-items:center}
+.jq-green{background:rgba(34,197,94,.15);color:#16a34a}
+.jq-blue{background:rgba(79,143,255,.15);color:#3b82f6}
+.jq-red{background:rgba(224,82,82,.12);color:#dc2626}
+.jq-map{background:rgba(245,166,35,.12);color:#d97706}
+
+.ptr-spinner{display:none;text-align:center;padding:12px;color:var(--txt3);font-size:12px;font-family:var(--fh)}
+
+/* job-card-stripe: base position/size shared; colour varies per status below */
+.job-card-stripe{position:absolute;left:0;top:0;bottom:0;width:4px}
+.job-card.s-pending .job-card-stripe{background:var(--yellow)}
+.job-card.s-progress .job-card-stripe{background:var(--acc);box-shadow:0 0 10px rgba(79,143,255,.5)}
+.job-card.s-completed .job-card-stripe{background:var(--green)}
+.job-card.s-emergency .job-card-stripe{background:var(--red);width:5px;box-shadow:0 0 10px rgba(240,68,68,.5)}
+.job-card.s-noaccess .job-card-stripe{background:var(--orange)}
+
+.job-card-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;gap:8px}
+.job-num{font-size:11px;font-weight:700;color:var(--acc);font-family:var(--mono);letter-spacing:.5px}
+.job-addr{font-size:14px;font-weight:700;line-height:1.3;margin-bottom:8px;padding-right:4px;flex:1}
+.job-meta{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+.job-chip{font-size:10px;padding:3px 8px;border-radius:12px;font-weight:600;letter-spacing:.2px}
+.chip-time{background:rgba(79,143,255,.15);color:var(--acc);border:1px solid rgba(79,143,255,.25)}
+.chip-trade{background:rgba(255,255,255,.08);color:var(--txt2);border:1px solid var(--border)}
+[data-theme="light"] .chip-trade{background:rgba(0,0,0,.05)}
+.chip-cert{background:rgba(20,184,166,.12);color:var(--teal);border:1px solid rgba(20,184,166,.22)}
+.chip-hours{background:rgba(245,166,35,.1);color:var(--yellow);border:1px solid rgba(245,166,35,.22)}
+.chip-desc{background:rgba(255,255,255,.06);color:var(--txt);border:1px solid rgba(255,255,255,.12);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+[data-theme="light"] .chip-desc{background:rgba(0,0,0,.04);border-color:rgba(0,0,0,.1);color:var(--txt)}
+
+
+/* STATUS PILLS */
+.status-pill{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:800;padding:4px 10px;border-radius:20px;text-transform:uppercase;letter-spacing:.6px;white-space:nowrap}
+.sp-pending{background:rgba(245,166,35,.14);color:var(--yellow);border:1px solid rgba(245,166,35,.25)}
+.sp-progress{background:rgba(79,143,255,.14);color:var(--acc);border:1px solid rgba(79,143,255,.25)}
+.sp-completed{background:rgba(34,197,94,.14);color:var(--green);border:1px solid rgba(34,197,94,.25)}
+.sp-emergency{background:rgba(240,68,68,.14);color:var(--red);border:1px solid rgba(240,68,68,.25)}
+.sp-noaccess{background:rgba(249,115,22,.12);color:var(--orange);border:1px solid rgba(249,115,22,.22)}
+.sp-cancelled{background:rgba(100,116,139,.12);color:var(--txt3);border:1px solid rgba(100,116,139,.22)}
+/* Cancelled job card */
+.job-card.s-cancelled{background:rgba(100,116,139,.07);border-color:rgba(100,116,139,.2);opacity:.75}
+[data-theme="light"] .job-card.s-cancelled{background:rgba(100,116,139,.05);border-color:rgba(100,116,139,.2)}
+.job-card.s-cancelled .job-card-stripe{background:var(--txt3)}
+
+/* EMPTY STATE */
+.empty{text-align:center;padding:60px 24px;color:var(--txt3)}
+.empty-icon{font-size:52px;margin-bottom:12px;opacity:.7}
+.empty-title{font-size:17px;font-weight:800;color:var(--txt2);margin-bottom:6px}
+.empty-sub{font-size:13px;line-height:1.5}
+
+/* DASHBOARD */
+.dash-hero{background:linear-gradient(135deg,var(--s2) 0%,var(--s3) 100%);border-bottom:1px solid var(--border);padding:20px 16px 24px;position:relative;overflow:hidden}
+.dash-hero::before{content:'';position:absolute;top:-40px;right:-40px;width:180px;height:180px;border-radius:50%;background:radial-gradient(circle,rgba(79,143,255,.15) 0%,transparent 70%)}
+.dash-greeting{font-size:13px;color:var(--txt3);margin-bottom:4px;font-weight:600}
+.dash-hero-name{font-size:24px;font-weight:900;letter-spacing:-.6px}
+.dash-hero-sub{font-size:12px;color:var(--txt2);margin-top:4px}
+.kpi-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px}
+.kpi-card{background:var(--s1);border:1px solid var(--border);border-radius:var(--r2);padding:14px;position:relative;overflow:hidden}
+.kpi-card::after{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--kc,var(--acc))}
+.kpi-val{font-size:28px;font-weight:900;letter-spacing:-1.5px;color:var(--txt);line-height:1;font-family:var(--mono)}
+.kpi-lbl{font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.8px;margin-top:5px;font-weight:700}
+.dash-section{background:var(--s1);border:1px solid var(--border);border-radius:var(--r);margin:0 14px 12px;overflow:hidden}
+.dash-sec-hd{padding:12px 16px;background:var(--s2);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.dash-sec-title{font-size:11px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:.9px}
+.dash-sec-body{padding:14px 16px}
+.bar-row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.bar-row:last-child{margin-bottom:0}
+.bar-label{font-size:12px;font-weight:600;width:110px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar-track{flex:1;height:6px;background:var(--s3);border-radius:3px;overflow:hidden}
+.bar-fill{height:100%;border-radius:3px;transition:width .8s cubic-bezier(.4,0,.2,1)}
+.bar-count{font-size:11px;color:var(--txt3);width:28px;text-align:right;flex-shrink:0;font-weight:700;font-family:var(--mono)}
+.cert-pill{display:inline-flex;align-items:center;gap:5px;background:var(--s2);border:1px solid var(--border);border-radius:20px;padding:5px 12px;font-size:12px;margin:3px}
+.cert-pill-n{color:var(--acc);font-weight:800;font-size:13px;font-family:var(--mono)}
+.recent-row{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)}
+.recent-row:last-child{border-bottom:none}
+.recent-dot{width:8px;height:8px;border-radius:50%;background:var(--green);flex-shrink:0;margin-top:4px}
+.recent-addr{font-size:13px;font-weight:600;line-height:1.3}
+.recent-meta{font-size:11px;color:var(--txt3);margin-top:2px}
+.recent-hrs{font-size:12px;color:var(--acc);font-weight:700;white-space:nowrap;margin-left:auto;flex-shrink:0;font-family:var(--mono)}
+
+/* JOB DETAIL MODAL */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:500;display:none;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.overlay.open{display:block}
+.modal{background:var(--s1);border-radius:20px 20px 0 0;min-height:70vh;margin-top:40px;padding-bottom:40px}
+.modal-handle{width:44px;height:4px;background:var(--border2);border-radius:2px;margin:14px auto 0}
+.modal-hd{padding:16px 18px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start}
+.modal-jobnum{font-size:11px;font-weight:700;color:var(--acc);font-family:var(--mono);letter-spacing:.5px;margin-bottom:3px}
+.modal-addr{font-size:18px;font-weight:800;line-height:1.25;padding-right:8px}
+.modal-close{background:var(--s3);border:1px solid var(--border);color:var(--txt2);width:36px;height:36px;border-radius:50%;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px;transition:all .15s}
+.modal-close:active{transform:scale(.93)}
+.status-selector{padding:14px 16px 6px}
+.status-selector-label{font-size:10px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px}
+.status-pills-row{display:flex;gap:7px;overflow-x:auto;scrollbar-width:none;padding-bottom:4px}
+.status-pills-row::-webkit-scrollbar{display:none}
+.sp-btn{flex-shrink:0;padding:9px 14px;border-radius:24px;border:2px solid var(--border);background:var(--s2);color:var(--txt2);font-size:12px;font-weight:700;cursor:pointer;transition:all .18s;letter-spacing:.3px;font-family:var(--font);white-space:nowrap}
+.sp-btn:active{transform:scale(.95)}
+.sp-btn.active.sp-pending{background:rgba(245,166,35,.15);border-color:var(--yellow);color:var(--yellow)}
+.sp-btn.active.sp-progress{background:rgba(79,143,255,.15);border-color:var(--acc);color:var(--acc)}
+.sp-btn.active.sp-completed{background:rgba(34,197,94,.15);border-color:var(--green);color:var(--green)}
+.sp-btn.active.sp-noaccess{background:rgba(249,115,22,.15);border-color:var(--orange);color:var(--orange)}
+.sp-btn.active.sp-emergency{background:rgba(240,68,68,.15);border-color:var(--red);color:var(--red)}
+.d-section{margin:0 14px 12px}
+.d-section-hd{font-size:10px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:.9px;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.d-block{background:var(--s2);border:1px solid var(--border);border-radius:var(--r2);overflow:hidden}
+.d-row{display:flex;padding:11px 13px;border-bottom:1px solid var(--border);gap:10px;align-items:flex-start}
+.d-row:last-child{border-bottom:none}
+.d-lbl{font-size:10px;color:var(--txt3);min-width:80px;flex-shrink:0;padding-top:2px;font-weight:700;text-transform:uppercase;letter-spacing:.4px}
+.d-val{font-size:13px;color:var(--txt);flex:1;line-height:1.45;font-weight:500}
+.d-val a{color:var(--acc);text-decoration:none}
+.cta-row{display:flex;gap:7px;margin-top:8px;flex-wrap:wrap}
+.cta{flex:1;min-width:76px;padding:9px 7px;border-radius:var(--r3);border:1px solid var(--border);background:var(--s3);color:var(--txt2);font-size:11px;font-weight:700;cursor:pointer;text-align:center;text-decoration:none;display:block;transition:all .15s;font-family:var(--font)}
+.cta:active{transform:scale(.96)}
+.cta-call{border-color:rgba(34,197,94,.4);color:var(--green);background:rgba(34,197,94,.07)}
+.cta-wa{border-color:rgba(37,211,102,.4);color:#25d366;background:rgba(37,211,102,.07)}
+.cta-map{border-color:rgba(79,143,255,.3);color:var(--acc);background:rgba(79,143,255,.06)}
+.cta-waze{border-color:rgba(20,184,166,.3);color:var(--teal);background:rgba(20,184,166,.06)}
+.cta-email{border-color:rgba(168,85,247,.3);color:var(--purple);background:rgba(168,85,247,.06)}
+.cta-wa-job{border-color:rgba(37,211,102,.4);color:#25d366;background:rgba(37,211,102,.07);display:flex;align-items:center;justify-content:center;gap:5px}
+
+/* NOTES */
+.notes-box{width:100%;background:var(--s2);border:1.5px solid var(--border);border-radius:var(--r2);color:var(--txt);padding:13px;font-size:14px;resize:none;min-height:88px;outline:none;font-family:var(--font);transition:border-color .2s;line-height:1.5}
+.notes-box:focus{border-color:var(--acc)}
+.notes-toolbar{display:flex;gap:7px;margin-bottom:8px}
+.notes-tool-btn{background:var(--s2);border:1px solid var(--border);border-radius:8px;color:var(--txt2);padding:7px 11px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);transition:all .15s;flex-shrink:0}
+.notes-tool-btn:active{background:var(--s3)}
+
+/* QUICK NOTES PICKER */
+.qn-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:600;display:none;align-items:flex-end}
+.qn-overlay.open{display:flex}
+.qn-sheet{background:var(--s1);border-radius:20px 20px 0 0;padding:0 0 24px;width:100%;max-height:85vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.qn-hd{padding:16px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--s1);z-index:1}
+.qn-hd-title{font-size:16px;font-weight:800}
+.qn-tabs{display:flex;gap:6px;padding:10px 14px;overflow-x:auto;scrollbar-width:none}
+.qn-tabs::-webkit-scrollbar{display:none}
+.qn-tab{flex-shrink:0;padding:7px 14px;border-radius:20px;border:1.5px solid var(--border);background:var(--s2);color:var(--txt2);font-size:12px;font-weight:700;cursor:pointer;transition:all .15s;font-family:var(--font)}
+.qn-tab.active{background:var(--acc);border-color:var(--acc);color:#fff}
+.qn-list{padding:0 14px}
+.qn-item{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:10px;margin-bottom:5px;cursor:pointer;transition:background .15s;border:1px solid transparent}
+.qn-item:active,.qn-item.selected{background:rgba(79,143,255,.1);border-color:rgba(79,143,255,.2)}
+.qn-check{width:20px;height:20px;border-radius:6px;border:2px solid var(--border2);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:13px;transition:all .15s}
+.qn-item.selected .qn-check{background:var(--acc);border-color:var(--acc);color:#fff}
+.qn-text{font-size:13px;font-weight:500;color:var(--txt);flex:1;line-height:1.4}
+.qn-footer{padding:14px 14px 0;display:flex;gap:8px;position:sticky;bottom:0;background:var(--s1);border-top:1px solid var(--border);margin-top:10px}
+
+/* UPLOAD */
+.upload-zone{border:2px dashed var(--border2);border-radius:var(--r);padding:22px 16px;text-align:center;cursor:pointer;transition:all .2s;background:var(--s2);margin-bottom:8px}
+.upload-zone:active{border-color:var(--acc);background:rgba(79,143,255,.05)}
+.upload-zone-icon{font-size:26px;margin-bottom:6px}
+.upload-zone-text{font-size:13px;color:var(--txt2);font-weight:700}
+.upload-zone-sub{font-size:11px;color:var(--txt3);margin-top:3px}
+input[type=file]{display:none}
+.upload-quality-row{display:flex;gap:8px;margin-bottom:8px}
+.quality-btn{flex:1;padding:8px;border-radius:8px;border:1.5px solid var(--border);background:var(--s2);color:var(--txt2);font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);transition:all .15s;text-align:center}
+.quality-btn.active{border-color:var(--acc);color:var(--acc);background:rgba(79,143,255,.1)}
+/* ── Before / After photo grid ── */
+.ba-grid{display:flex;flex-direction:column;gap:10px;margin-bottom:10px}
+.ba-pair{display:grid;grid-template-columns:1fr 1fr;gap:8px;position:relative}
+.ba-pair-num{position:absolute;top:-9px;left:50%;transform:translateX(-50%);background:var(--s3);border:1px solid var(--border);border-radius:20px;font-size:9px;font-weight:800;color:var(--txt3);padding:1px 9px;white-space:nowrap;z-index:2;letter-spacing:.5px;text-transform:uppercase}
+.ba-slot{position:relative;border-radius:10px;overflow:hidden;background:var(--s2);border:1.5px solid var(--border);aspect-ratio:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:5px;transition:border-color .2s}
+.ba-slot.has-photo{border-color:var(--border2)}
+.ba-slot-label{position:absolute;top:0;left:0;right:0;padding:4px 8px;font-size:9px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;z-index:3;display:flex;align-items:center;gap:4px}
+.ba-slot.role-before .ba-slot-label{background:rgba(245,166,35,.85);color:#000}
+.ba-slot.role-after  .ba-slot-label{background:rgba(34,197,94,.85);color:#000}
+.ba-slot img{width:100%;height:100%;object-fit:cover;display:block;cursor:pointer}
+.ba-add-btn{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;cursor:pointer;color:var(--txt3);font-size:11px;font-weight:700;padding:8px;text-align:center;transition:all .2s;border:none;background:none}
+.ba-add-btn:active{background:rgba(79,143,255,.08)}
+.ba-add-btn .ba-plus{width:36px;height:36px;border-radius:50%;border:2px dashed var(--border2);display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--txt3);transition:all .2s}
+.ba-slot.role-before .ba-add-btn .ba-plus{border-color:rgba(245,166,35,.5);color:rgba(245,166,35,.8)}
+.ba-slot.role-after  .ba-add-btn .ba-plus{border-color:rgba(34,197,94,.5);color:rgba(34,197,94,.8)}
+.ba-add-btn:active .ba-plus{transform:scale(.9)}
+/* Solo photos (no before/after) */
+.photo-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px}
+.photo-wrap{position:relative;border-radius:8px;overflow:hidden;aspect-ratio:1}
+.photo-img{width:100%;height:100%;object-fit:cover;cursor:pointer;display:block}
+/* Toggle bar */
+.ba-mode-toggle{display:flex;background:var(--s3);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:10px}
+.ba-mode-btn{flex:1;padding:9px 6px;font-size:11px;font-weight:800;text-align:center;cursor:pointer;color:var(--txt3);transition:all .2s;border:none;background:none;font-family:var(--font)}
+.ba-mode-btn.active{background:var(--acc);color:#fff}
+/* Delete button on photo */
+.ba-del-btn{position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,.6);border:none;color:#fff;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:4;line-height:1}
+.pdf-row{display:flex;align-items:center;gap:10px;background:var(--s2);border:1px solid var(--border);border-radius:var(--r3);padding:10px 12px;margin-bottom:8px}
+.pdf-icon{font-size:24px;flex-shrink:0}
+.pdf-info{flex:1;min-width:0}
+.pdf-name{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pdf-meta{font-size:10px;color:var(--txt3);margin-top:2px}
+.btn-open{background:var(--acc);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:11px;font-weight:700;text-decoration:none;white-space:nowrap;cursor:pointer}
+.stamp-notice{background:rgba(79,143,255,.08);border:1px solid rgba(79,143,255,.2);border-radius:8px;padding:8px 12px;font-size:11px;color:var(--txt2);margin-bottom:10px;line-height:1.5}
+
+/* SAVE BUTTON */
+.save-btn{width:100%;background:var(--acc);color:#fff;border:none;border-radius:var(--r2);padding:15px;font-size:15px;font-weight:800;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font)}
+.save-btn:active{transform:scale(.98);background:var(--acc2)}
+.save-btn.green{background:var(--green)}
+.save-btn.orange{background:var(--orange)}
+.save-btn.purple{background:var(--purple)}
+
+/* MAP */
+.map-toolbar{display:flex;align-items:center;gap:8px;padding:12px 14px;background:var(--s1);border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none}
+.map-toolbar::-webkit-scrollbar{display:none}
+.map-tool-btn{flex-shrink:0;padding:8px 14px;border-radius:20px;border:1.5px solid var(--border);background:var(--s2);color:var(--txt2);font-size:12px;font-weight:700;cursor:pointer;transition:all .2s;white-space:nowrap;font-family:var(--font)}
+.map-tool-btn.active{background:var(--acc);border-color:var(--acc);color:#fff}
+.map-tool-btn:active{transform:scale(.95)}
+.map-legend{display:flex;gap:12px;flex-wrap:wrap;padding:10px 14px;background:var(--s2);border-top:1px solid var(--border)}
+.map-legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--txt2);font-weight:600}
+.map-legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+
+/* REQUESTS */
+.req-card{background:var(--s1);border:1px solid var(--border);border-radius:var(--r);padding:14px;margin-bottom:10px}
+.req-card-hd{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
+.req-title{font-size:14px;font-weight:800}
+.req-badge{font-size:10px;font-weight:800;padding:3px 9px;border-radius:12px;text-transform:uppercase;letter-spacing:.5px}
+.rb-pending{background:rgba(245,166,35,.12);color:var(--yellow)}
+.rb-approved{background:rgba(34,197,94,.12);color:var(--green)}
+.rb-rejected{background:rgba(240,68,68,.12);color:var(--red)}
+.req-meta{font-size:12px;color:var(--txt2);display:flex;flex-wrap:wrap;gap:8px;margin-bottom:6px;font-weight:500}
+.req-note{font-size:12px;color:var(--txt3);font-style:italic;background:var(--s2);border-radius:6px;padding:8px 10px;margin-top:6px}
+
+/* FORMS */
+.fi-sm{width:100%;background:var(--s3);border:1.5px solid var(--border);border-radius:var(--r3);color:var(--txt);padding:10px 12px;font-size:14px;margin-bottom:10px;outline:none;transition:border-color .2s;font-family:var(--font);-webkit-appearance:none}
+.fi-sm:focus{border-color:var(--acc)}
+select.fi-sm{cursor:pointer}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.form-label{font-size:10px;color:var(--txt3);font-weight:800;display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.6px}
+
+/* GUIDE */
+.guide-section{background:var(--s1);border:1px solid var(--border);border-radius:var(--r);margin:0 14px 10px;overflow:hidden}
+.guide-hd{padding:14px 16px;background:var(--s2);border-bottom:1px solid transparent;cursor:pointer;display:flex;align-items:center;justify-content:space-between;transition:background .2s}
+.guide-hd:active{background:var(--s3)}
+.guide-hd.open{border-bottom-color:var(--border)}
+.guide-hd-title{font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px}
+.guide-chevron{color:var(--txt3);transition:transform .25s;font-size:12px}
+.guide-hd.open .guide-chevron{transform:rotate(180deg)}
+.guide-body{padding:14px 16px;display:none}
+.guide-body.open{display:block}
+.guide-step{display:flex;gap:10px;margin-bottom:11px;padding-bottom:11px;border-bottom:1px solid var(--border)}
+.guide-step:last-child{margin-bottom:0;padding-bottom:0;border-bottom:none}
+.guide-step-num{width:24px;height:24px;border-radius:50%;background:var(--acc);color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.guide-step-text{font-size:13px;color:var(--txt2);line-height:1.5;flex:1}
+.guide-step-text strong{color:var(--txt)}
+.guide-tip{background:rgba(79,143,255,.08);border:1px solid rgba(79,143,255,.2);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--txt2);margin-top:8px;line-height:1.5}
+.api-card{background:var(--s1);border:1px solid var(--border);border-radius:var(--r);padding:14px;margin:0 14px 10px}
+.api-card-hd{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.api-icon{font-size:22px}
+.api-title{font-size:14px;font-weight:800}
+.api-status{font-size:10px;font-weight:700;padding:3px 8px;border-radius:10px}
+.api-active{background:rgba(34,197,94,.12);color:var(--green)}
+.api-soon{background:rgba(245,166,35,.12);color:var(--yellow)}
+.api-desc{font-size:12px;color:var(--txt2);line-height:1.5}
+
+/* TOAST & SPINNER */
+#toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:var(--s3);border:1px solid var(--border2);border-radius:24px;padding:10px 20px;font-size:13px;font-weight:700;z-index:9999;opacity:0;transition:opacity .25s;white-space:nowrap;pointer-events:none;max-width:90vw;font-family:var(--font)}
+#toast.show{opacity:1}
+#toast.success{border-color:var(--green);color:var(--green)}
+#toast.error{border-color:var(--red);color:var(--red)}
+#toast.info{border-color:var(--acc);color:var(--acc)}
+.spin{width:34px;height:34px;border:3px solid var(--border);border-top-color:var(--acc);border-radius:50%;animation:spin .7s linear infinite;margin:40px auto}
+.loading-center{text-align:center;padding:40px}
+
+/* ── MCB Toggle Switch ── */
+.mcb-switch{position:relative;display:inline-block;width:52px;height:28px;flex-shrink:0}
+.mcb-switch input{opacity:0;width:0;height:0;position:absolute}
+.mcb-slider{position:absolute;cursor:pointer;inset:0;background:#252a3a;border-radius:5px;border:1px solid #3a4255;box-shadow:inset 0 2px 6px rgba(0,0,0,.5);transition:.18s}
+.mcb-slider:before{position:absolute;content:"OFF";height:20px;width:22px;left:3px;bottom:4px;background:#555;transition:.18s;border-radius:3px;font-size:7px;font-weight:900;color:#1a1a1a;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 5px rgba(0,0,0,.5);letter-spacing:.5px}
+input:checked + .mcb-slider{background:#1a2035;border-color:rgba(245,166,35,.4)}
+input:checked + .mcb-slider:before{transform:translateX(23px);background:#f5a623;content:"ON";color:#000;box-shadow:0 0 8px rgba(245,166,35,.5)}
+
+/* ── Tools Page ── */
+#page-tools .page-scroll{padding:14px;padding-bottom:100px}
+.tool-tab-row{display:flex;gap:6px;margin-bottom:16px;overflow-x:auto;padding-bottom:2px}
+.tool-tab{padding:7px 14px;border-radius:20px;border:1px solid var(--border2);background:var(--s2);font-size:11px;font-weight:700;color:var(--txt3);cursor:pointer;white-space:nowrap;transition:all .15s;font-family:var(--font)}
+.tool-tab.active{background:var(--acc);border-color:var(--acc);color:#fff}
+.calc-card{background:var(--s1);border:1px solid var(--border2);border-radius:14px;padding:16px;margin-bottom:14px}
+.calc-title{font-size:14px;font-weight:800;margin-bottom:4px;display:flex;align-items:center;gap:7px}
+.calc-sub{font-size:11px;color:var(--txt3);margin-bottom:14px;line-height:1.4}
+.calc-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--txt3);margin-bottom:5px;margin-top:10px;display:block}
+.calc-input{width:100%;background:var(--s2);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;color:var(--txt);font-size:15px;font-family:var(--font);outline:none;box-sizing:border-box}
+.calc-select{width:100%;background:var(--s2);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;color:var(--txt);font-size:13px;font-family:var(--font);outline:none;box-sizing:border-box;appearance:none}
+.calc-slider{width:100%;accent-color:var(--acc);height:3px;margin:6px 0}
+.calc-display{margin-top:14px;background:#000;border:1px solid rgba(79,143,255,.2);border-radius:10px;padding:14px 16px;text-align:center;box-shadow:inset 0 0 20px rgba(0,0,0,.5)}
+.calc-display-label{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:#444;margin-bottom:4px}
+.calc-display-val{font-family:'Orbitron',monospace;font-size:32px;font-weight:900;letter-spacing:2px;line-height:1;transition:color .2s}
+.calc-display-status{font-size:11px;font-weight:800;margin-top:6px;letter-spacing:.5px}
+.calc-display.pass{border-color:rgba(34,197,94,.3)}
+.calc-display.fail{border-color:rgba(224,82,82,.3)}
+.zs-row{display:flex;gap:8px;margin-bottom:8px;align-items:center}
+.zs-badge{background:var(--s2);border:1px solid var(--border2);border-radius:8px;padding:8px 12px;flex:1;text-align:center}
+.zs-badge-val{font-family:'Orbitron',monospace;font-size:15px;font-weight:700;color:var(--acc)}
+.zs-badge-lbl{font-size:9px;color:var(--txt3);margin-top:2px;letter-spacing:.5px}
+.zs-result{padding:12px;border-radius:10px;text-align:center;font-weight:800;font-size:14px;margin-top:10px}
+.zs-pass{background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.3);color:#22c55e}
+.zs-fail{background:rgba(224,82,82,.12);border:1px solid rgba(224,82,82,.3);color:#e05252}
+.zs-none{background:var(--s2);border:1px solid var(--border);color:var(--txt3)}
+.conduit-wrap{display:flex;flex-direction:column;align-items:center;gap:12px;margin-top:10px}
+#conduit-svg{cursor:pointer;transition:filter .2s}
+.omw-card{background:var(--s2);border:1px solid var(--border2);border-radius:10px;padding:12px;margin-bottom:10px}
+.omw-row{display:flex;gap:8px;margin-bottom:8px}
+.omw-row .calc-input{flex:1}
+.omw-btn{width:100%;padding:13px;border:none;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer;font-family:var(--font);transition:all .15s;display:flex;align-items:center;justify-content:center;gap:8px}
+.omw-btn:active{transform:scale(.97)}
+.omw-btn-client{background:#25d366;color:#fff}
+.omw-btn-office{background:var(--acc);color:#fff}
+
+/* ── FX: Circuit Connect (Completed) ── */
+@keyframes neonFlash{
+  0%{opacity:0;transform:translate(-50%,-50%) scale(0.6)}
+  45%{opacity:1;transform:translate(-50%,-50%) scale(1.05);box-shadow:0 0 60px #22c55e,inset 0 0 40px rgba(34,197,94,.3)}
+  100%{opacity:0;transform:translate(-50%,-50%) scale(1.6)}
+}
+@keyframes sparkFly{
+  0%{opacity:1;transform:translate(-50%,-50%) rotate(var(--ang)) translateY(-55px) scale(1)}
+  100%{opacity:0;transform:translate(-50%,-50%) rotate(var(--ang)) translateY(-160px) scale(0.3)}
+}
+.fx-ring{position:absolute;top:50%;left:50%;width:220px;height:220px;border-radius:50%;border:3px solid #22c55e;animation:neonFlash .7s cubic-bezier(.2,0,.4,1) forwards}
+.fx-spark{position:absolute;top:50%;left:50%;width:4px;height:16px;background:#22c55e;border-radius:3px;transform-origin:50% 50%;animation:sparkFly .55s cubic-bezier(.1,0,.3,1) forwards}
+
+/* ── FX: Fuse Blown (Cancelled/No Access) ── */
+@keyframes redFlash{
+  0%{background:rgba(240,68,68,0)}
+  8%{background:rgba(240,68,68,0.45)}
+  100%{background:rgba(240,68,68,0)}
+}
+@keyframes shakeIt{
+  0%,100%{transform:translate(0,0) rotate(0deg)}
+  20%{transform:translate(-6px,4px) rotate(-.8deg)}
+  40%{transform:translate(6px,-4px) rotate(.8deg)}
+  60%{transform:translate(-5px,3px) rotate(-.5deg)}
+  80%{transform:translate(4px,-3px) rotate(.4deg)}
+}
+.fx-fuse{animation:redFlash .5s ease-out forwards}
+.fx-shake{animation:shakeIt .32s ease-in-out}
+
+/* ── FX: Power Surge (In Progress) ── */
+@keyframes surgeRipple{
+  0%{width:0;height:0;top:50%;left:50%;opacity:.9;border-width:6px}
+  100%{width:110vmax;height:110vmax;top:50%;left:50%;opacity:0;border-width:1px}
+}
+.fx-surge{position:absolute;border:4px solid #4f8fff;border-radius:50%;transform:translate(-50%,-50%);animation:surgeRipple .9s cubic-bezier(.1,0,.3,1) forwards}
+
+/* ── FX: completion full-screen flash ── */
+@keyframes greenFlash{
+  0%{background:rgba(34,197,94,0)}
+  12%{background:rgba(34,197,94,0.18)}
+  100%{background:rgba(34,197,94,0)}
+}
+.fx-green-flash{animation:greenFlash .6s ease-out forwards}
+</style>
 </head>
 <body>
-  <!-- Placeholder — see apps/office/index.html for the explanation. -->
-  <h1>DeepFlow Employee App — build pipeline scaffold</h1>
-  <p>Migration in progress. See <code>ARCHITECTURE_REDESIGN_PROPOSAL.md</code>.</p>
-  <script type="module" src="./main.js"></script>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-bolt">⚡</div>
+  <div class="login-brand">DeepFlow</div>
+  <div class="login-role">Engineer Portal</div>
+  <div class="login-box">
+    <input class="fi" type="email" id="login-email" placeholder="your@email.com" autocomplete="email" autocorrect="off" autocapitalize="off" spellcheck="false" onkeydown="if(event.key==='Enter')document.getElementById('login-password').focus()">
+    <div style="position:relative;margin-bottom:0">
+      <input class="fi" type="password" id="login-password" placeholder="Password" autocomplete="current-password" style="padding-right:44px;margin-bottom:0" onkeydown="if(event.key==='Enter')doLogin()">
+      <button onclick="const e=document.getElementById('login-password');e.type=e.type==='password'?'text':'password';this.textContent=e.type==='password'?'👁':'🙈'" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;color:var(--txt3);padding:0">👁</button>
+    </div>
+    <div style="text-align:right;margin:4px 0 8px">
+      <a href="#" onclick="doResetPw();return false" style="font-size:11px;color:var(--acc);text-decoration:none">Forgot password?</a>
+    </div>
+    <button class="btn-login" onclick="doLogin()">Sign In →</button>
+    <div class="login-err" id="login-err"></div>
+    <div class="login-hint">Contact your manager if you need access help</div>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<!-- OFFICE BROADCAST ALERT OVERLAY -->
+<div id="alert-overlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);align-items:center;justify-content:center;flex-direction:column;padding:20px">
+  <div id="alert-box" style="background:#1a1a1a;border:2px solid #f5a623;border-radius:20px;padding:32px 28px;max-width:400px;width:100%;text-align:center;box-shadow:0 0 80px rgba(245,166,35,.3)">
+    <div id="alert-icon" style="font-size:48px;margin-bottom:12px">⚠️</div>
+    <div id="alert-type-label" style="font-size:10px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:#f5a623;margin-bottom:8px">OFFICE ALERT</div>
+    <div id="alert-title" style="font-size:20px;font-weight:900;color:#fff;margin-bottom:12px;font-family:sans-serif">—</div>
+    <div id="alert-msg" style="font-size:14px;color:#ccc;line-height:1.6;margin-bottom:24px">—</div>
+    <div id="alert-from" style="font-size:11px;color:#888;margin-bottom:20px">From: Office</div>
+    <button onclick="dismissAlert()" style="background:#f5a623;color:#1a1a1a;border:none;border-radius:10px;padding:14px 32px;font-size:15px;font-weight:800;cursor:pointer;width:100%">✓ Understood — Dismiss</button>
+  </div>
+</div>
+
+<!-- ELECTRICAL BACKGROUND -->
+<canvas id="elec-bg" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;opacity:.32"></canvas>
+
+<div id="fx-overlay" style="pointer-events:none;position:fixed;inset:0;z-index:9999;overflow:hidden;display:none"></div>
+<div id="app" style="position:relative;z-index:1">
+  <div class="topbar">
+    <div class="topbar-left" onclick="openUserMenu()" style="cursor:pointer;padding:2px 6px 2px 0">
+      <div style="display:flex;align-items:center;gap:6px">
+        <div class="topbar-name" id="topbar-name">Engineer</div>
+        <span style="font-size:10px;color:var(--txt3)">▾</span>
+      </div>
+      <div class="topbar-date" id="topbar-date"></div>
+    </div>
+    <div class="topbar-right">
+      <div id="office-status-pill" onclick="checkOfficeConnection()" style="display:flex;align-items:center;gap:5px;background:var(--s2);border:1px solid var(--border);border-radius:20px;padding:5px 10px;cursor:pointer;transition:all .2s">
+        <span id="office-dot" style="width:7px;height:7px;border-radius:50%;background:#888;flex-shrink:0;transition:background .4s"></span>
+        <span id="office-label" style="font-size:10px;font-weight:700;color:var(--txt3);white-space:nowrap">Office</span>
+      </div>
+      <button class="btn-icon" onclick="toggleTheme()" id="theme-btn" title="Toggle theme">🌙</button>
+    </div>
+  </div>
+
+  <!-- USER MENU SHEET -->
+  <div id="user-menu-sheet" style="display:none;position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.6)" onclick="if(event.target===this)closeUserMenu()">
+    <div style="position:absolute;bottom:0;left:0;right:0;background:var(--s1);border-radius:20px 20px 0 0;padding:20px 20px 40px;box-shadow:0 -8px 40px rgba(0,0,0,.4)">
+      <div style="width:36px;height:4px;background:var(--border2);border-radius:2px;margin:0 auto 20px"></div>
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;padding-bottom:20px;border-bottom:1px solid var(--border)">
+        <div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,var(--acc),var(--acc2));display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;color:#fff" id="user-avatar-letter">J</div>
+        <div>
+          <div style="font-size:17px;font-weight:800" id="user-menu-name">Engineer</div>
+          <div style="font-size:12px;color:var(--txt3)">Electrician · DeepFlow</div>
+        </div>
+      </div>
+      <div onclick="refreshAll();closeUserMenu()" style="display:flex;align-items:center;gap:14px;padding:14px 4px;cursor:pointer;border-bottom:1px solid var(--border)">
+        <span style="font-size:22px">↺</span>
+        <div>
+          <div style="font-size:14px;font-weight:700">Refresh Jobs</div>
+          <div style="font-size:11px;color:var(--txt3)" id="user-menu-last-refresh">Pull down or tap here to sync</div>
+        </div>
+      </div>
+      <div onclick="toggleTheme();closeUserMenu()" style="display:flex;align-items:center;gap:14px;padding:14px 4px;cursor:pointer;border-bottom:1px solid var(--border)">
+        <span style="font-size:22px" id="user-menu-theme-icon">🌙</span>
+        <div>
+          <div style="font-size:14px;font-weight:700">Toggle Theme</div>
+          <div style="font-size:11px;color:var(--txt3)">Switch dark / light mode</div>
+        </div>
+      </div>
+      <div onclick="doLogout()" style="display:flex;align-items:center;gap:14px;padding:14px 4px;cursor:pointer;margin-top:4px">
+        <span style="font-size:22px">🚪</span>
+        <div>
+          <div style="font-size:14px;font-weight:700;color:var(--red)">Sign Out</div>
+          <div style="font-size:11px;color:var(--txt3)">Log out of your account</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TODAY -->
+  <div class="page active" id="page-today">
+    <div style="padding:6px 14px 0;display:flex;align-items:center;justify-content:space-between">
+      <div style="font-size:11px;color:var(--txt3)" id="refresh-ts"></div>
+      <button onclick="toggleSort()" id="sort-btn" style="background:none;border:none;color:var(--acc);font-size:11px;font-weight:700;cursor:pointer;padding:4px 0;font-family:var(--font)">⬇ Time</button>
+    </div>
+    <div id="jobs-today" class="page-scroll"><div class="loading-center"><div class="spin"></div></div></div>
+  </div>
+
+  <!-- UPCOMING -->
+  <div class="page" id="page-upcoming">
+    <div id="jobs-upcoming" class="page-scroll"><div class="loading-center"><div class="spin"></div></div></div>
+  </div>
+
+  <!-- DONE -->
+  <div class="page" id="page-done">
+    <div id="jobs-done" class="page-scroll"><div class="loading-center"><div class="spin"></div></div></div>
+  </div>
+
+  <!-- MAP -->
+  <div class="page" id="page-map">
+    <div class="map-toolbar">
+      <button class="map-tool-btn active" onclick="setMapView('today',this)">📅 Today's Jobs</button>
+      <button class="map-tool-btn" onclick="setMapView('route',this)">🗺 My Route</button>
+      <button class="map-tool-btn" onclick="setMapView('all',this)">📍 All My Jobs</button>
+    </div>
+    <div id="map-status" style="padding:8px 14px;font-size:11px;color:var(--txt3);background:var(--s2);border-bottom:1px solid var(--border)">Select a view to load map</div>
+    <div id="map-container" style="height:calc(100vh - 260px);background:var(--s2);display:flex;align-items:center;justify-content:center">
+      <div style="text-align:center;color:var(--txt3);padding:30px">
+        <div style="font-size:40px;margin-bottom:10px">🗺</div>
+        <div style="font-size:14px;font-weight:700">Tap a view above to load your jobs</div>
+        <div style="font-size:11px;margin-top:6px">Terrain map · Traffic overlay · Free</div>
+      </div>
+    </div>
+    <div class="map-legend">
+      <div class="map-legend-item"><div class="map-legend-dot" style="background:#22c55e"></div>Completed</div>
+      <div class="map-legend-item"><div class="map-legend-dot" style="background:#4f8fff"></div>Pending/Progress</div>
+      <div class="map-legend-item"><div class="map-legend-dot" style="background:#f04444"></div>Emergency</div>
+      <div class="map-legend-item"><div class="map-legend-dot" style="background:#f97316"></div>No Access</div>
+    </div>
+  </div>
+
+  <!-- STATS -->
+  <div class="page" id="page-dash">
+    <div id="dash-body"><div class="loading-center" style="padding-top:60px"><div class="spin"></div></div></div>
+  </div>
+
+  <!-- REQUESTS -->
+  <div class="page" id="page-requests">
+    <div class="page-scroll">
+      <div style="margin-bottom:14px;display:flex;flex-direction:column;gap:8px">
+        <button class="save-btn orange" onclick="openOvertimeForm()">⏱ Request Overtime Hours</button>
+        <button class="save-btn purple" onclick="openLeaveForm()">📆 Request Time Off</button>
+      </div>
+      <div class="sec-hd">My Requests <div class="sec-hd-line"></div></div>
+      <div id="requests-list"><div class="loading-center"><div class="spin"></div></div></div>
+    </div>
+  </div>
+
+  <!-- TOOLS PAGE -->
+  <div class="page" id="page-tools">
+    <div class="page-scroll">
+      <div style="padding:14px 0 4px">
+        <div style="font-size:18px;font-weight:900;margin-bottom:2px">🔧 Engineer Tools</div>
+        <div style="font-size:12px;color:var(--txt3);margin-bottom:12px">Calculators &amp; on-site helpers</div>
+        <div class="tool-tab-row" id="tool-tabs">
+          <button class="tool-tab active" onclick="showTool('voltage-drop',this)">⚡ Voltage Drop</button>
+          <button class="tool-tab" onclick="showTool('max-zs',this)">🔌 Max Zs</button>
+          <button class="tool-tab" onclick="showTool('conduit',this)">🔵 Conduit Fill</button>
+          <button class="tool-tab" onclick="showTool('on-my-way',this)">🚗 On My Way</button>
+        </div>
+      </div>
+
+      <!-- VOLTAGE DROP CALC -->
+      <div id="tool-voltage-drop">
+        <div class="calc-card">
+          <div class="calc-title">⚡ Voltage Drop Calculator</div>
+          <div class="calc-sub">Checks cable run meets the 5% limit (11.5V on 230V). Enter your values and it calculates instantly.</div>
+          <span class="calc-label">Load Current (Amps)</span>
+          <input type="number" class="calc-input" id="vd-amps" placeholder="e.g. 32" inputmode="decimal" oninput="calcVD()">
+          <span class="calc-label">Cable Length: <span id="vd-len-display">10</span>m</span>
+          <input type="range" class="calc-slider" id="vd-len-slider" min="1" max="150" value="10" oninput="document.getElementById('vd-len').value=this.value;document.getElementById('vd-len-display').textContent=this.value;calcVD()">
+          <input type="number" class="calc-input" id="vd-len" value="10" inputmode="decimal" oninput="document.getElementById('vd-len-slider').value=this.value;document.getElementById('vd-len-display').textContent=this.value;calcVD()" style="margin-top:6px">
+          <span class="calc-label">Cable Size</span>
+          <select class="calc-select" id="vd-type" onchange="calcVD()">
+            <option value="29">1.5mm² — 29 mV/A/m (lighting)</option>
+            <option value="18" selected>2.5mm² — 18 mV/A/m (sockets)</option>
+            <option value="11">4.0mm² — 11 mV/A/m</option>
+            <option value="7.3">6.0mm² — 7.3 mV/A/m</option>
+            <option value="4.4">10mm² — 4.4 mV/A/m</option>
+            <option value="2.8">16mm² — 2.8 mV/A/m</option>
+          </select>
+          <span class="calc-label">Circuit Type</span>
+          <select class="calc-select" id="vd-circuit" onchange="calcVD()">
+            <option value="11.5">Power / Sockets (5% = 11.5V max)</option>
+            <option value="6.9">Lighting (3% = 6.9V max)</option>
+          </select>
+          <div class="calc-display" id="vd-display">
+            <div class="calc-display-label">VOLTAGE DROP</div>
+            <div class="calc-display-val" id="vd-result" style="color:#4f8fff">0.00 V</div>
+            <div class="calc-display-status" id="vd-status" style="color:var(--txt3)">Enter values above</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MAX ZS LOOKUP -->
+      <div id="tool-max-zs" style="display:none">
+        <div class="calc-card">
+          <div class="calc-title">🔌 Max Zs Lookup</div>
+          <div class="calc-sub">Select your breaker type and rating to instantly see the maximum permitted Zs value. Enter your measured Zs to check if it passes.</div>
+          <span class="calc-label">System Type</span>
+          <select class="calc-select" id="zs-system" onchange="calcZs()">
+            <option value="tn">TN-C-S / TN-S (0.4s disconnect)</option>
+            <option value="tt">TT System (0.2s disconnect)</option>
+          </select>
+          <span class="calc-label">Breaker Type &amp; Rating</span>
+          <select class="calc-select" id="zs-breaker" onchange="calcZs()">
+            <optgroup label="Type B">
+              <option value="B6">Type B 6A</option><option value="B10">Type B 10A</option>
+              <option value="B16">Type B 16A</option><option value="B20">Type B 20A</option>
+              <option value="B25">Type B 25A</option><option value="B32" selected>Type B 32A</option>
+              <option value="B40">Type B 40A</option><option value="B50">Type B 50A</option>
+            </optgroup>
+            <optgroup label="Type C">
+              <option value="C6">Type C 6A</option><option value="C10">Type C 10A</option>
+              <option value="C16">Type C 16A</option><option value="C20">Type C 20A</option>
+              <option value="C25">Type C 25A</option><option value="C32">Type C 32A</option>
+              <option value="C40">Type C 40A</option><option value="C50">Type C 50A</option>
+            </optgroup>
+            <optgroup label="Type D">
+              <option value="D6">Type D 6A</option><option value="D10">Type D 10A</option>
+              <option value="D16">Type D 16A</option><option value="D20">Type D 20A</option>
+              <option value="D32">Type D 32A</option>
+            </optgroup>
+          </select>
+          <div id="zs-max-display" class="zs-row" style="margin-top:12px">
+            <div class="zs-badge"><div class="zs-badge-val" id="zs-max-val">—</div><div class="zs-badge-lbl">MAX Zs (Ω)</div></div>
+            <div class="zs-badge"><div class="zs-badge-val" id="zs-ia-val">—</div><div class="zs-badge-lbl">Ia (A)</div></div>
+            <div class="zs-badge"><div class="zs-badge-val" id="zs-uf-val">—</div><div class="zs-badge-lbl">U0/Ia (Ω)</div></div>
+          </div>
+          <span class="calc-label">Your Measured Zs (Ω) — optional</span>
+          <input type="number" class="calc-input" id="zs-measured" placeholder="e.g. 0.85" inputmode="decimal" step="0.01" oninput="calcZs()">
+          <div id="zs-result" class="zs-result zs-none" style="margin-top:10px">Enter measured Zs to check</div>
+        </div>
+      </div>
+
+      <!-- CONDUIT FILL VISUALISER -->
+      <div id="tool-conduit" style="display:none">
+        <div class="calc-card">
+          <div class="calc-title">🔵 Conduit Fill Visualiser</div>
+          <div class="calc-sub">Max 45% fill rule. Tap the conduit to add wires. It turns red when you exceed the limit.</div>
+          <span class="calc-label">Conduit Size</span>
+          <select class="calc-select" id="cf-size" onchange="updateConduit()">
+            <option value="16">16mm conduit</option>
+            <option value="20" selected>20mm conduit</option>
+            <option value="25">25mm conduit</option>
+            <option value="32">32mm conduit</option>
+            <option value="40">40mm conduit</option>
+          </select>
+          <span class="calc-label">Wire Size</span>
+          <select class="calc-select" id="cf-wire" onchange="updateConduit()">
+            <option value="1.5">1.5mm² (dia ~2.9mm)</option>
+            <option value="2.5" selected>2.5mm² (dia ~3.6mm)</option>
+            <option value="4">4.0mm² (dia ~4.5mm)</option>
+            <option value="6">6.0mm² (dia ~5.6mm)</option>
+            <option value="10">10mm² (dia ~7.0mm)</option>
+          </select>
+          <div class="conduit-wrap">
+            <svg id="conduit-svg" width="160" height="160" viewBox="0 0 160 160" onclick="addWire()">
+              <circle cx="80" cy="80" r="72" fill="#1a1d2a" stroke="#3a4255" stroke-width="8"/>
+              <circle cx="80" cy="80" r="72" fill="none" stroke="#252a3a" stroke-width="16" opacity=".5"/>
+              <g id="conduit-wires"></g>
+              <text x="80" y="85" text-anchor="middle" font-size="13" font-weight="800" fill="#fff" id="conduit-pct-txt">0%</text>
+            </svg>
+            <div style="text-align:center">
+              <div style="font-size:13px;color:var(--txt3)" id="conduit-wire-count">0 wires — tap circle to add</div>
+              <div style="font-size:11px;color:var(--txt3);margin-top:4px" id="conduit-rule">Max 45% fill rule</div>
+              <button onclick="clearConduit()" style="margin-top:8px;padding:6px 16px;border-radius:8px;border:1px solid var(--border);background:var(--s2);color:var(--txt3);font-size:12px;cursor:pointer;font-family:var(--font)">Clear</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ON MY WAY -->
+      <div id="tool-on-my-way" style="display:none">
+        <div class="calc-card">
+          <div class="calc-title">🚗 On My Way Messages</div>
+          <div class="calc-sub">Generates a WhatsApp message to the client and the office with your ETA. No switching apps needed.</div>
+          <span class="calc-label">Your Address / Current Location</span>
+          <input type="text" class="calc-input" id="omw-from" placeholder="e.g. SE1 7PB or current street" style="margin-bottom:8px">
+          <span class="calc-label">Job Address</span>
+          <input type="text" class="calc-input" id="omw-to" placeholder="Auto-filled from job" style="margin-bottom:8px">
+          <span class="calc-label">ETA (minutes)</span>
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">
+            <input type="range" class="calc-slider" id="omw-eta-slider" min="5" max="90" value="20" style="flex:1" oninput="document.getElementById('omw-eta').value=this.value;updateOmwPreview()">
+            <input type="number" class="calc-input" id="omw-eta" value="20" inputmode="numeric" style="width:70px" oninput="document.getElementById('omw-eta-slider').value=this.value;updateOmwPreview()">
+            <span style="font-size:13px;color:var(--txt3)">min</span>
+          </div>
+          <span class="calc-label">Message Preview</span>
+          <div id="omw-preview" style="background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:12px;font-size:12px;line-height:1.6;color:var(--txt2);white-space:pre-wrap;margin-bottom:14px;min-height:60px"></div>
+          <button class="omw-btn omw-btn-client" onclick="sendOmwClient()" style="margin-bottom:8px">
+            💬 WhatsApp Client
+          </button>
+          <button class="omw-btn omw-btn-office" onclick="sendOmwOffice()">
+            📨 Notify Office
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- GUIDE -->
+  <div class="page" id="page-guide">
+    <div id="guide-header" style="padding:16px 14px 4px">
+      <div style="font-size:18px;font-weight:900;margin-bottom:4px">📖 Help &amp; Guide</div>
+      <div style="font-size:12px;color:var(--txt3)">Step-by-step guides for using DeepFlow</div>
+    </div>
+    <div id="guide-body" style="padding-bottom:20px"></div>
+    <div class="sec-hd" style="padding:16px 14px 8px">Active Features <div class="sec-hd-line"></div></div>
+    <div id="guide-api-cards"></div>
+    <div style="height:20px"></div>
+  </div>
+
+  <!-- BOTTOM NAV -->
+  <div class="bottom-nav">
+    <div class="nav-item active" onclick="switchTab('today')" id="nav-today">
+      <span class="nav-icon">⚡</span>Today
+      <span class="nav-badge" id="badge-today" style="display:none"></span>
+    </div>
+    <div class="nav-item" onclick="switchTab('upcoming')" id="nav-upcoming">
+      <span class="nav-icon">📋</span>Upcoming
+    </div>
+    <div class="nav-item" onclick="switchTab('done')" id="nav-done">
+      <span class="nav-icon">✅</span>Done
+    </div>
+    <div class="nav-item" onclick="switchTab('tools')" id="nav-tools">
+      <span class="nav-icon">⚙️</span>More
+      <span class="nav-badge" id="badge-requests" style="display:none"></span>
+    </div>
+  </div>
+
+  <!-- FAB — Add Job (shown on today/upcoming tabs) -->
+  <button class="fab" id="fab-add" onclick="openAddJobModal()" title="Report a job">+</button>
+</div>
+
+<!-- JOB DETAIL MODAL -->
+<div class="overlay" id="job-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-hd">
+      <div style="flex:1;min-width:0">
+        <div class="modal-jobnum" id="modal-jobnum"></div>
+        <div class="modal-addr" id="modal-addr">Loading…</div>
+        <div id="modal-status-pill" style="margin-top:8px"></div>
+      </div>
+      <button class="modal-close" onclick="closeModal('job-modal')">✕</button>
+    </div>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<!-- ADD JOB MODAL (engineer reports a new job / site issue) -->
+<div class="overlay" id="addjob-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-hd">
+      <div><div class="modal-addr">📋 Report Job / Issue</div><div style="font-size:12px;color:var(--txt3);margin-top:4px">Office will be notified immediately</div></div>
+      <button class="modal-close" onclick="closeModal('addjob-modal')">✕</button>
+    </div>
+    <div style="padding:18px">
+      <label class="form-label">Address / Site</label>
+      <input class="fi-sm" type="text" id="aj-address" placeholder="Full address or site name">
+      <label class="form-label">Trade</label>
+      <select class="fi-sm" id="aj-trade">
+        <option>Electrical</option>
+        <option>Gas</option>
+        <option>Fire Alarm</option>
+        <option>Plumbing</option>
+        <option>General</option>
+      </select>
+      <label class="form-label">Description / Issue Found</label>
+      <textarea class="fi-sm" id="aj-desc" rows="4" placeholder="Describe the job or issue…" style="resize:none"></textarea>
+      <label class="form-label">Priority</label>
+      <select class="fi-sm" id="aj-priority">
+        <option value="Normal">Normal</option>
+        <option value="Urgent">Urgent</option>
+        <option value="Emergency">Emergency</option>
+      </select>
+      <div style="background:rgba(79,143,255,.08);border:1px solid rgba(79,143,255,.2);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--txt2);margin-bottom:14px">
+        📬 Office will receive a WhatsApp notification instantly when you submit this.
+      </div>
+      <button class="save-btn" onclick="submitAddJob()">📤 Submit to Office</button>
+    </div>
+  </div>
+</div>
+
+<!-- OVERTIME MODAL -->
+<div class="overlay" id="ot-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-hd"><div><div class="modal-addr">⏱ Request Overtime</div></div><button class="modal-close" onclick="closeModal('ot-modal')">✕</button></div>
+    <div style="padding:20px">
+      <label class="form-label">Date of Work</label>
+      <input class="fi-sm" type="date" id="ot-date">
+      <label class="form-label">Extra Hours</label>
+      <div class="form-row">
+        <input class="fi-sm" type="number" id="ot-hours" placeholder="Hours" min="0.5" step="0.5" inputmode="decimal">
+        <select class="fi-sm" id="ot-rate">
+          <option value="standard">Standard Rate</option>
+          <option value="overtime">Overtime (1.5×)</option>
+          <option value="double">Double Time (2×)</option>
+        </select>
+      </div>
+      <label class="form-label">Job / Reason</label>
+      <input class="fi-sm" type="text" id="ot-job" placeholder="Job address or reason">
+      <label class="form-label">Notes (optional)</label>
+      <textarea class="fi-sm" id="ot-notes" rows="3" placeholder="Any additional details…" style="resize:none"></textarea>
+      <button class="save-btn orange" onclick="submitOvertimeRequest()">📤 Submit Request</button>
+    </div>
+  </div>
+</div>
+
+<!-- LEAVE MODAL -->
+<div class="overlay" id="leave-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-hd"><div><div class="modal-addr">📆 Request Time Off</div></div><button class="modal-close" onclick="closeModal('leave-modal')">✕</button></div>
+    <div style="padding:20px">
+      <label class="form-label">Type</label>
+      <select class="fi-sm" id="leave-type">
+        <option>Annual Leave</option><option>Sick Leave</option><option>Personal Day</option><option>Emergency</option><option>Other</option>
+      </select>
+      <div class="form-row">
+        <div><label class="form-label">From</label><input class="fi-sm" type="date" id="leave-from"></div>
+        <div><label class="form-label">To</label><input class="fi-sm" type="date" id="leave-to"></div>
+      </div>
+      <label class="form-label">Reason</label>
+      <textarea class="fi-sm" id="leave-notes" rows="3" placeholder="Brief reason…" style="resize:none"></textarea>
+      <button class="save-btn purple" onclick="submitLeaveRequest()">📤 Submit Request</button>
+    </div>
+  </div>
+</div>
+
+<!-- QUICK NOTES PICKER -->
+<div class="qn-overlay" id="qn-overlay">
+  <div class="qn-sheet">
+    <div class="qn-hd">
+      <div class="qn-hd-title">⚡ Quick Issue Notes</div>
+      <button class="modal-close" onclick="closeQN()">✕</button>
+    </div>
+    <div class="qn-tabs" id="qn-tabs"></div>
+    <div class="qn-list" id="qn-list"></div>
+    <div class="qn-footer">
+      <button class="save-btn" onclick="applyQN()" style="font-size:14px">✓ Add Selected Notes</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script type="module" src="./main.js"></script>
 </body>
 </html>
