@@ -1,0 +1,15 @@
+{
+  "name": "deepflow",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "DeepFlow — Office App, Employee App, and Client Portal for GB Electrical. See ARCHITECTURE_REDESIGN_PROPOSAL.md for the migration this scaffold is part of.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^8.1.5"
+  }
+}
