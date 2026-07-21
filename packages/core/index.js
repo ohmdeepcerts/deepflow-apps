@@ -1,2 +1,2 @@
-// Placeholder — see README.md. Populated in Phase 1.
-export {};
+export { SB_URL, SB_KEY, createSupaAuthClient, makeJwtResolver, restFetch } from './supabase.js';
+
