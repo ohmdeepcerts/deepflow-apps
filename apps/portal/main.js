@@ -6,6 +6,7 @@
 import { SB_KEY, restFetch } from '@core';
 import { escText as e, escAttr as ea } from '@ui';
 import { FROM_DB } from '@data';
+import { calcLineItemsTotal, portalVatRate } from '@business';
 
 async function sb(path,opts={}){
   const r=await restFetch(path,opts,SB_KEY);
@@ -43,17 +44,17 @@ function _fix(j){
 function dd(d){return d?Math.ceil((new Date(d)-new Date())/86400000):null}
 function fd(d){return d?new Date(d+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):''}
 function fgbp(n){return'£'+(n||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}
-// Mirrors the Office App's getVatRate() — must also respect vatEnabled,
-// not just fall back to a default rate, or a company that isn't
-// VAT-registered (vatEnabled:false) shows VAT here that the office side
-// correctly shows as £0.
-function _portalVatRate(){ return (_S?.vatEnabled!==false)?(_S?.vatRate??20):0; }
+// Thin wrappers — now in @business as portalVatRate()/calcLineItemsTotal(),
+// shared with the Office App's calcInvTotal(). Kept as their original
+// names (10 and 4 call sites respectively). Note: this app's VAT-rate
+// resolution (??) genuinely differs from the Office App's (||) for an
+// explicit 0% rate — documented and preserved exactly in
+// tests/unit/business.test.js, not unified, since that would change one
+// app's real behavior.
+function _portalVatRate(){ return portalVatRate(_S); }
 function calcTotal(inv){
   const it=typeof inv.items==='string'?JSON.parse(inv.items||'[]'):(inv.items||[]);
-  let sub=0,vat=0;
-  const vr=_portalVatRate();
-  it.forEach(x=>{const l=(x.qty||1)*(x.unit||0);sub+=l;if(x.vat)vat+=l*vr/100;});
-  return{sub,vat,grand:sub+vat};
+  return calcLineItemsTotal(it, _portalVatRate());
 }
 
 // ── STATE ─────────────────────────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 import { SB_URL, SB_KEY, restFetch, createSupaAuthClient, makeJwtResolver } from '@core';
 import { escHtml } from '@ui';
 import { toDb as _toDb, fromDb as _fromDb, createRepository, TO_DB as _TO_DB } from '@data';
+import { STATUS, calcLineItemsTotal, officeVatRate } from '@business';
 
 // ════════════════════════════════════════════════════════════════
 //  DATABASE — Supabase
@@ -32,11 +33,8 @@ window.onerror = (msg, src, line) => {
 const _supaAuth = createSupaAuthClient();
 if(!_supaAuth){console.error('[DeepFlow] Supabase client failed to load. Check internet connection.');}
 
-// ── STATUS CONSTANTS ─────────────────────────────────────────
-const STATUS = Object.freeze({
-  PENDING:'Pending', IN_PROGRESS:'In Progress', COMPLETED:'Completed',
-  INVOICED:'Invoiced', CANNOT_ACCESS:'Cannot Access', CANCELLED:'Cancelled',
-});
+// STATUS now lives in @business (Phase 3) — was byte-identical to the
+// Employee App's own copy before this extraction.
 
 // ── FIELD MAPPING: camelCase JS ↔ lowercase Supabase columns ─
 // Now lives in @data (Phase 2 — see ARCHITECTURE_REDESIGN_PROPOSAL.md);
@@ -3199,7 +3197,12 @@ async function nextJobNum(prefix){
 }
 
 // ── VAT helper ──
-function getVatRate(){return (S.vatEnabled!==false)?(S.vatRate||20):0;}
+// Thin wrapper — the actual rate logic (including the `S.vatRate||20`
+// quirk that treats an explicit 0% as falsy, documented and preserved
+// exactly in tests/unit/business.test.js) now lives in @business as
+// officeVatRate(). 13 call sites throughout this file reference
+// getVatRate() by this name, so kept as a wrapper rather than renaming them.
+function getVatRate(){return officeVatRate(S);}
 
 // In-progress guard for autoInvoice() — prevents the same job from being
 // auto-invoiced twice if it's called twice in quick succession within this
@@ -7854,10 +7857,11 @@ function setInvFilter(val){
 }
 
 
+// Thin wrapper — the math itself now lives in @business as
+// calcLineItemsTotal(), shared with Client Portal's calcTotal(). 84 call
+// sites throughout this file reference calcInvTotal() by this name.
 function calcInvTotal(inv){
-  const vr=getVatRate();let sub=0,vat=0;
-  (inv.items||[]).forEach(i=>{const l=(i.qty||1)*(i.unit||0);sub+=l;if(i.vat)vat+=l*vr/100});
-  return{sub,vat,grand:sub+vat};
+  return calcLineItemsTotal(inv.items||[], getVatRate());
 }
 
 async function viewInv(id){

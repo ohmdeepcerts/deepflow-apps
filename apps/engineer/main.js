@@ -177,6 +177,7 @@ draw();
 import { SB_URL, SB_KEY, restFetch, createSupaAuthClient, makeJwtResolver } from '@core';
 import { escHtml } from '@ui';
 import { fromDb } from '@data';
+import { STATUS } from '@business';
 
 const _supaAuth = createSupaAuthClient();
 if(!_supaAuth){
@@ -184,10 +185,8 @@ if(!_supaAuth){
   throw new Error('Supabase client failed to initialize');
 }
 
-const STATUS = Object.freeze({
-  PENDING:'Pending', IN_PROGRESS:'In Progress', COMPLETED:'Completed',
-  INVOICED:'Invoiced', CANNOT_ACCESS:'Cannot Access', CANCELLED:'Cancelled',
-});
+// STATUS now lives in @business (Phase 3) — was byte-identical to the
+// Office App's own copy before this extraction.
 
 // The jobs-only mapping now comes from @data's unified table (Phase 2 —
 // see ARCHITECTURE_REDESIGN_PROPOSAL.md). sb() used to run every result
