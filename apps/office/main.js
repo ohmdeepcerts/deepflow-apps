@@ -2313,11 +2313,6 @@ async function bulkSetPriority(priority){
   }
 }
 
-async function forceSyncUsers(){
-  // Placeholder function - can be implemented later for user sync
-  console.log('Force sync users called');
-}
-
 async function _getJobs(forceRefresh=false){
   const now = Date.now();
   if(!forceRefresh && _jobCache && (now - _jobCacheTs) < JOB_CACHE_TTL){
@@ -8270,13 +8265,7 @@ async function downloadInvPDFById(id){
   
   // CRITICAL: Determine invoice type from SAVED data, not temporary variables
   const isAgency = inv.invoiceType === 'agency';
-  
-  console.log('📄 PDF Generation:');
-  console.log('  invoiceType:', inv.invoiceType);
-  console.log('  isAgency:', isAgency);
-  console.log('  billToName:', inv.billToName);
-  console.log('  jobAddress:', inv.jobAddress);
-  
+
   // BILL TO header
   doc.setFillColor(...light);doc.rect(M,y,colW,6,'F');
   doc.setFont('helvetica','bold');doc.setFontSize(7.5);doc.setTextColor(...mid);
@@ -16554,13 +16543,6 @@ async function saveInvWithJobSync(){
     propertyAddress: invoiceData.propertyAddress || '',
     jobNum: document.getElementById('if-jobref')?.value || invoiceData.jobNum || ''
   };
-  
-  console.log('💾 Saving invoice with complete data:', {
-    invoiceType: inv.invoiceType,
-    billToName: inv.billToName,
-    jobAddress: inv.jobAddress,
-    agentName: inv.agentName
-  });
   
   await dPut('invoices', inv);
 
