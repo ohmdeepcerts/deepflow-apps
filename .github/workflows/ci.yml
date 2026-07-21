@@ -1,0 +1,35 @@
+name: CI
+
+# Validation only — build + every test suite. Does NOT deploy anywhere.
+# Deployment (Phase 6/7 of ARCHITECTURE_REDESIGN_PROPOSAL.md) is a
+# deliberately separate, later step once the old root-level apps have been
+# formally retired — this workflow exists first so every change from here
+# on is checked automatically, well before that cutover happens.
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - run: npm run test:unit
+
+      - run: npm run test:integration
+
+      - run: npx playwright install --with-deps chromium
+
+      - run: npm run test:e2e
