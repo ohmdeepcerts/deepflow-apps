@@ -45,3 +45,14 @@ test.describe('Employee App — old vs. new (Phase 1 migration)', () => {
     expect(errors, `console errors: ${errors.join('\n')}`).toHaveLength(0);
   });
 });
+
+test.describe('Office App — old vs. new (Phase 1 migration)', () => {
+  test('the login screen renders with the same fields, no console errors', async ({ page }) => {
+    const errors = collectPageErrors(page);
+    await page.goto('http://localhost:4175/office/');
+    await expect(page.locator('#login-email')).toBeVisible();
+    await expect(page.locator('#login-password')).toBeVisible();
+    await expect(page.locator('#login-btn')).toBeVisible();
+    expect(errors, `console errors: ${errors.join('\n')}`).toHaveLength(0);
+  });
+});
