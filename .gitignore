@@ -1,0 +1,24 @@
+# Dependencies & build output (introduced in the architecture migration)
+node_modules/
+dist/
+.vite/
+
+# Environment / secrets
+.env
+.env.local
+.env.*.local
+
+# Claude Code local settings (machine-specific, not project source)
+.claude/settings.local.json
+
+# Manual backup snapshots — superseded by real git history from this point on
+*.bak
+*.bak-*
+
+# Accidental artifacts
+nul
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.log
