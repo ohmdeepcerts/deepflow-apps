@@ -23,7 +23,8 @@
 // assignment.
 
 import { escText as e } from '@ui';
-import { _d, _S, dd, fd, jobCard, certCard, empty } from './main.js';
+import { _d, _S, dd, fd, jobCard, empty } from './main.js';
+import { certCard } from './certs.js';
 
 let _propSearch='',_propSort='jobs';
 
