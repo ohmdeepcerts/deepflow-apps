@@ -396,14 +396,11 @@ let curPg='dash';
 //  CLIENT PORTAL SHARING
 // ════════════════════════════════════════════════════════════════
 export function _portalBaseUrl() {
-  // Auto-detect: works on GitHub Pages or local file
-  const loc = window.location.href;
-  // If on GitHub Pages
-  if (loc.includes('github.io')) {
-    return loc.substring(0, loc.lastIndexOf('/') + 1) + 'client-portal.html';
-  }
-  // If running locally, use same folder
-  return loc.substring(0, loc.lastIndexOf('/') + 1) + 'client-portal.html';
+  // The three apps are deployed as siblings — .../office/, .../engineer/,
+  // .../portal/ (see vite.config.js rollupOptions.input) — so the portal
+  // lives one directory up from this app, not next to it as a flat file.
+  const dir = window.location.pathname.replace(/[^/]*$/, ''); // .../office/
+  return window.location.origin + dir.replace(/office\/$/, 'portal/');
 }
 
 function _buildPortalUrl(id, type, name) {

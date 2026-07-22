@@ -364,7 +364,7 @@ async function init(){
 
             <div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;padding:14px 16px;text-align:left;margin-bottom:24px">
               <div style="font-size:10px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">💡 Your link looks like</div>
-              <div style="font-size:10px;font-family:monospace;color:#1d6fad;word-break:break-all;line-height:1.7">client-portal.html?id=YOUR-ID<br>&type=landlord</div>
+              <div style="font-size:10px;font-family:monospace;color:#1d6fad;word-break:break-all;line-height:1.7">portal/?id=YOUR-ID<br>&type=landlord</div>
             </div>
 
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
