@@ -6,10 +6,15 @@ import { defineConfig } from 'vite';
 // (static output only — GitHub Pages hosting doesn't change).
 export default defineConfig({
   root: 'apps',
-  // Served from a GitHub Pages *project* site (github.io/<repo>/), not the
-  // domain root — every asset URL Vite emits needs this prefix or they'd
-  // 404 once deployed.
-  base: '/deepflow-apps/',
+  // The production build is served from a GitHub Pages *project* site
+  // (github.io/deepflow-apps/), not the domain root — every asset URL Vite
+  // emits needs that prefix there or they'd 404. But the Playwright
+  // migration-parity suite (tests/e2e/migration-parity.spec.js) and local
+  // dev/preview all assume root-relative paths, matching how the site is
+  // served everywhere except the real Pages deploy — so the prefix is opt-in
+  // via GH_PAGES, set only in that one CI deploy step, never for local
+  // builds or the build-and-test job.
+  base: process.env.GH_PAGES ? '/deepflow-apps/' : '/',
   build: {
     outDir: '../dist',
     emptyOutDir: true,

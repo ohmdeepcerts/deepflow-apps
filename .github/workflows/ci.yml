@@ -60,6 +60,8 @@ jobs:
       - run: npm ci
 
       - run: npm run build
+        env:
+          GH_PAGES: true
 
       - uses: actions/configure-pages@v5
 
