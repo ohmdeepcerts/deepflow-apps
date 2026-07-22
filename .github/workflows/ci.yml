@@ -1,15 +1,23 @@
 name: CI
 
-# Validation only — build + every test suite. Does NOT deploy anywhere.
-# Deployment (Phase 6/7 of ARCHITECTURE_REDESIGN_PROPOSAL.md) is a
-# deliberately separate, later step once the old root-level apps have been
-# formally retired — this workflow exists first so every change from here
-# on is checked automatically, well before that cutover happens.
+# build-and-test: validation only, on every push and PR.
+# deploy: publishes dist/ to GitHub Pages, but only on push to main and only
+# after build-and-test passes — nothing broken ever reaches the live site.
+# This is Phase 6 of ARCHITECTURE_REDESIGN_PROPOSAL.md.
 
 on:
   push:
-    branches: [main, master]
+    branches: [main]
   pull_request:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
 
 jobs:
   build-and-test:
@@ -33,3 +41,31 @@ jobs:
       - run: npx playwright install --with-deps chromium
 
       - run: npm run test:e2e
+
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
