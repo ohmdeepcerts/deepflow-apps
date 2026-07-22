@@ -3,29 +3,349 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DeepFlow</title>
+<title>DeepFlow — Smart Property Compliance Suite</title>
+<meta name="description" content="One platform to manage jobs, compliance certificates, invoicing and your team — for the office, your field engineers, and your clients.">
 <style>
-  :root{color-scheme:dark light}
-  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
-    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-    background:#0a1628;color:#e5e7eb}
-  .card{max-width:420px;width:100%;padding:32px 28px}
-  h1{font-size:22px;margin:0 0 6px}
-  p{color:#9ca3af;font-size:13px;margin:0 0 24px}
-  a{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;margin-bottom:10px;
-    border-radius:10px;background:#111f38;border:1px solid #1e3a5f;color:#e5e7eb;
-    text-decoration:none;font-weight:600;font-size:14px}
-  a:hover{border-color:#4f8fff}
-  span.arr{color:#4f8fff}
+  :root{
+    --navy1:#0d1f3c; --navy2:#1e3a5f; --navy3:#0a1628;
+    --cyan:#7dd3fc; --cyan2:#38bdf8; --gold:#fde68a; --amber:#f59e0b;
+    --ink:#0f172a; --sub:#64748b;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    background:var(--navy3);
+    color:#fff;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:inherit}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 24px}
+
+  /* ── NAV ── */
+  nav{position:fixed;top:0;left:0;right:0;z-index:50;display:flex;align-items:center;justify-content:space-between;
+    padding:16px 24px;backdrop-filter:blur(16px);background:rgba(10,22,40,.55);border-bottom:1px solid rgba(125,211,252,.1)}
+  .brand{font-size:18px;font-weight:900;letter-spacing:1.5px;font-family:Arial Black,Impact,sans-serif;
+    background:linear-gradient(135deg,var(--cyan) 0%,var(--cyan2) 35%,var(--gold) 65%,var(--amber) 100%);
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+  .nav-links{display:flex;gap:28px;font-size:13px;font-weight:600;color:rgba(255,255,255,.6)}
+  .nav-links a{text-decoration:none;transition:color .15s}
+  .nav-links a:hover{color:var(--cyan)}
+  .nav-links{display:none}
+  @media(min-width:720px){.nav-links{display:flex}}
+  .nav-cta{padding:9px 18px;border-radius:999px;background:var(--cyan);color:#04121f;font-weight:800;font-size:12.5px;
+    text-decoration:none;white-space:nowrap;transition:transform .15s,box-shadow .15s}
+  .nav-cta:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(125,211,252,.35)}
+
+  /* ── HERO ── */
+  .hero{position:relative;min-height:100vh;display:flex;align-items:center;justify-content:center;overflow:hidden;
+    background:linear-gradient(155deg,var(--navy1) 0%,var(--navy2) 50%,var(--navy3) 100%)}
+  #bg-canvas{position:absolute;inset:0;width:100%;height:100%}
+  .hero-inner{position:relative;z-index:2;text-align:center;padding:120px 24px 80px;max-width:760px}
+  .eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:11px;font-weight:700;letter-spacing:2px;
+    text-transform:uppercase;color:rgba(125,211,252,.7);padding:7px 16px;border:1px solid rgba(125,211,252,.25);
+    border-radius:999px;background:rgba(125,211,252,.06);margin-bottom:28px;opacity:0;animation:fadeUp .7s ease forwards}
+  .wordmark{font-size:clamp(48px,9vw,88px);font-weight:900;letter-spacing:4px;line-height:1;
+    font-family:Arial Black,Impact,sans-serif;
+    background:linear-gradient(135deg,var(--cyan) 0%,var(--cyan2) 35%,var(--gold) 65%,var(--amber) 100%);
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+    opacity:0;animation:fadeUp .8s ease .1s forwards}
+  .tagline{font-size:clamp(15px,2.2vw,19px);color:rgba(255,255,255,.55);line-height:1.6;margin:22px auto 40px;
+    max-width:540px;opacity:0;animation:fadeUp .8s ease .22s forwards}
+  .cta-row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;opacity:0;animation:fadeUp .8s ease .34s forwards}
+  .btn{padding:14px 28px;border-radius:12px;font-weight:800;font-size:14px;text-decoration:none;
+    transition:transform .15s,box-shadow .15s,background .15s;display:inline-flex;align-items:center;gap:8px}
+  .btn-primary{background:linear-gradient(135deg,var(--cyan),var(--cyan2));color:#04121f;
+    box-shadow:0 8px 28px rgba(56,189,248,.28)}
+  .btn-primary:hover{transform:translateY(-2px);box-shadow:0 12px 36px rgba(56,189,248,.4)}
+  .btn-ghost{background:rgba(255,255,255,.06);color:#fff;border:1px solid rgba(255,255,255,.16);backdrop-filter:blur(10px)}
+  .btn-ghost:hover{background:rgba(255,255,255,.1);border-color:rgba(125,211,252,.4)}
+  .scroll-hint{position:absolute;bottom:28px;left:50%;transform:translateX(-50%);z-index:2;
+    font-size:10px;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,.3);
+    display:flex;flex-direction:column;align-items:center;gap:8px;opacity:0;animation:fadeUp .8s ease .5s forwards}
+  .scroll-hint .dot{width:5px;height:5px;border-radius:50%;background:rgba(125,211,252,.5);animation:bob 1.8s ease-in-out infinite}
+
+  @keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(6px)}}
+
+  /* ── SECTIONS ── */
+  section{padding:96px 24px}
+  .section-eyebrow{font-size:11px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--cyan2);margin-bottom:12px;text-align:center}
+  .section-title{font-size:clamp(26px,4vw,38px);font-weight:900;text-align:center;margin:0 0 16px;letter-spacing:-.5px}
+  .section-sub{text-align:center;color:rgba(255,255,255,.5);font-size:15px;max-width:520px;margin:0 auto 56px;line-height:1.7}
+
+  /* Feature grid */
+  .feat-grid{display:grid;grid-template-columns:1fr;gap:16px;max-width:1120px;margin:0 auto}
+  @media(min-width:640px){.feat-grid{grid-template-columns:1fr 1fr}}
+  @media(min-width:960px){.feat-grid{grid-template-columns:repeat(4,1fr)}}
+  .feat-card{padding:26px 22px;background:rgba(255,255,255,.04);border:1px solid rgba(125,211,252,.12);
+    border-radius:16px;backdrop-filter:blur(16px);transition:transform .2s,border-color .2s,background .2s}
+  .feat-card:hover{transform:translateY(-4px);border-color:rgba(125,211,252,.35);background:rgba(255,255,255,.06)}
+  .feat-ic{font-size:26px;margin-bottom:14px}
+  .feat-t{font-size:15px;font-weight:800;margin-bottom:8px}
+  .feat-d{font-size:13px;color:rgba(255,255,255,.45);line-height:1.6}
+
+  /* Apps section */
+  .apps-sec{background:linear-gradient(180deg,transparent,rgba(13,31,60,.5),transparent)}
+  .app-grid{display:grid;grid-template-columns:1fr;gap:18px;max-width:1000px;margin:0 auto}
+  @media(min-width:820px){.app-grid{grid-template-columns:repeat(3,1fr)}}
+  .app-card{position:relative;padding:30px 26px;border-radius:20px;text-decoration:none;color:#fff;
+    background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);backdrop-filter:blur(16px);
+    display:flex;flex-direction:column;gap:14px;transition:transform .22s,border-color .22s,box-shadow .22s;overflow:hidden}
+  .app-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--accent-grad)}
+  .app-card:hover{transform:translateY(-6px);box-shadow:0 20px 50px rgba(0,0,0,.35)}
+  .app-card.office{--accent-grad:linear-gradient(90deg,#7dd3fc,#38bdf8)}
+  .app-card.office:hover{border-color:rgba(56,189,248,.45)}
+  .app-card.engineer{--accent-grad:linear-gradient(90deg,#86efac,#22c55e)}
+  .app-card.engineer:hover{border-color:rgba(34,197,94,.45)}
+  .app-card.portal{--accent-grad:linear-gradient(90deg,#fde68a,#f59e0b)}
+  .app-card.portal:hover{border-color:rgba(245,158,11,.45)}
+  .app-ic{width:48px;height:48px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:22px;background:rgba(255,255,255,.08)}
+  .app-name{font-size:19px;font-weight:800}
+  .app-who{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:rgba(255,255,255,.4)}
+  .app-desc{font-size:13px;color:rgba(255,255,255,.5);line-height:1.6;flex:1}
+  .app-go{font-size:13px;font-weight:800;color:var(--cyan);display:flex;align-items:center;gap:6px}
+  .app-card:hover .app-go{gap:10px}
+  .app-go span{transition:transform .2s}
+
+  /* Trust strip */
+  .trust{display:flex;flex-wrap:wrap;justify-content:center;gap:40px;padding:40px 24px;
+    border-top:1px solid rgba(255,255,255,.07);border-bottom:1px solid rgba(255,255,255,.07)}
+  .trust-item{text-align:center}
+  .trust-num{font-size:26px;font-weight:900;background:linear-gradient(135deg,var(--cyan),var(--gold));
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+  .trust-lbl{font-size:11px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:1px;margin-top:4px}
+
+  /* Footer */
+  footer{padding:48px 24px 32px;text-align:center;border-top:1px solid rgba(255,255,255,.07)}
+  .foot-brand{font-size:16px;font-weight:900;letter-spacing:1px;font-family:Arial Black,Impact,sans-serif;
+    background:linear-gradient(135deg,var(--cyan),var(--gold));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:10px}
+  .foot-links{display:flex;justify-content:center;gap:22px;font-size:12px;color:rgba(255,255,255,.45);margin-bottom:18px;flex-wrap:wrap}
+  .foot-links a{text-decoration:none;transition:color .15s}
+  .foot-links a:hover{color:var(--cyan)}
+  .foot-copy{font-size:11px;color:rgba(255,255,255,.25)}
 </style>
 </head>
 <body>
-  <div class="card">
-    <h1>⚡ DeepFlow</h1>
-    <p>Select an app</p>
-    <a href="office/">Office App <span class="arr">→</span></a>
-    <a href="engineer/">Employee App <span class="arr">→</span></a>
-    <a href="portal/">Client Portal <span class="arr">→</span></a>
+
+<nav>
+  <div class="brand">DEEPFLOW</div>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#apps">Apps</a>
   </div>
+  <a class="nav-cta" href="#apps">Sign In →</a>
+</nav>
+
+<div class="hero">
+  <canvas id="bg-canvas"></canvas>
+  <div class="hero-inner">
+    <div class="eyebrow">✦ Smart Property Compliance Suite</div>
+    <div class="wordmark">DEEPFLOW</div>
+    <div class="tagline">One platform to manage jobs, compliance certificates, invoicing and your team — built for the office, your field engineers, and your clients.</div>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="#apps">Open an App <span>→</span></a>
+      <a class="btn btn-ghost" href="#features">See what it does</a>
+    </div>
+  </div>
+  <div class="scroll-hint"><span class="dot"></span>Scroll</div>
+</div>
+
+<section id="features">
+  <div class="section-eyebrow">What DeepFlow does</div>
+  <h2 class="section-title">Everything compliance work needs,<br>in one place</h2>
+  <p class="section-sub">Replace the spreadsheets, group chats and paper certificates with a single system your whole team already knows how to use.</p>
+  <div class="feat-grid">
+    <div class="feat-card">
+      <div class="feat-ic">🔧</div>
+      <div class="feat-t">Job Management</div>
+      <div class="feat-d">Schedule, track and manage every job from one live view — no more double-booked engineers or lost paperwork.</div>
+    </div>
+    <div class="feat-card">
+      <div class="feat-ic">📜</div>
+      <div class="feat-t">Compliance</div>
+      <div class="feat-d">Gas, EICR, EPC and more — every certificate tracked with automatic expiry alerts before anything lapses.</div>
+    </div>
+    <div class="feat-card">
+      <div class="feat-ic">💰</div>
+      <div class="feat-t">Invoicing</div>
+      <div class="feat-d">Create, send and track invoices in seconds, with payment status and outstanding balances always visible.</div>
+    </div>
+    <div class="feat-card">
+      <div class="feat-ic">📱</div>
+      <div class="feat-t">Multi-Portal</div>
+      <div class="feat-d">Separate, purpose-built portals for the office, field engineers and clients — everyone sees exactly what they need.</div>
+    </div>
+  </div>
+</section>
+
+<section id="apps" class="apps-sec">
+  <div class="section-eyebrow">Choose your portal</div>
+  <h2 class="section-title">Three apps. One system.</h2>
+  <p class="section-sub">Each portal is purpose-built for who's using it — office staff, engineers on-site, or your clients checking on a job.</p>
+  <div class="app-grid">
+    <a class="app-card office" href="office/">
+      <div class="app-ic">🏢</div>
+      <div>
+        <div class="app-name">Office App</div>
+        <div class="app-who">For office staff</div>
+      </div>
+      <div class="app-desc">The full dashboard — jobs, certificates, invoicing, directories, reports and team management, all in one place.</div>
+      <div class="app-go">Open Office App <span>→</span></div>
+    </a>
+    <a class="app-card engineer" href="engineer/">
+      <div class="app-ic">👷</div>
+      <div>
+        <div class="app-name">Employee App</div>
+        <div class="app-who">For field engineers</div>
+      </div>
+      <div class="app-desc">Today's jobs, photo uploads with auto-stamping, quick issue notes, and a live map — built for on-site, on the move.</div>
+      <div class="app-go">Open Employee App <span>→</span></div>
+    </a>
+    <a class="app-card portal" href="portal/">
+      <div class="app-ic">🔑</div>
+      <div>
+        <div class="app-name">Client Portal</div>
+        <div class="app-who">For your clients</div>
+      </div>
+      <div class="app-desc">Clients see job progress, download certificates and invoices, and raise new requests — no phone call needed.</div>
+      <div class="app-go">Open Client Portal <span>→</span></div>
+    </a>
+  </div>
+</section>
+
+<div class="trust">
+  <div class="trust-item"><div class="trust-num">3</div><div class="trust-lbl">Purpose-built portals</div></div>
+  <div class="trust-item"><div class="trust-num">24/7</div><div class="trust-lbl">Client self-service</div></div>
+  <div class="trust-item"><div class="trust-num">0</div><div class="trust-lbl">Missed cert renewals</div></div>
+</div>
+
+<footer>
+  <div class="foot-brand">DEEPFLOW</div>
+  <div class="foot-links">
+    <a href="office/">Office App</a>
+    <a href="engineer/">Employee App</a>
+    <a href="portal/">Client Portal</a>
+    <a href="mailto:mandeepnain222@gmail.com">Support</a>
+  </div>
+  <div class="foot-copy">© 2026 DeepFlow — Smart Property Compliance Suite</div>
+</footer>
+
+<script>
+(function(){
+  var canvas = document.getElementById('bg-canvas');
+  var ctx = canvas.getContext('2d');
+  var W, H, nodes, packets, stars, raf = null;
+
+  function resize(){
+    var hero = canvas.parentElement;
+    W = canvas.width = hero.offsetWidth;
+    H = canvas.height = hero.offsetHeight;
+  }
+
+  function build(){
+    resize();
+    nodes = Array.from({length: 55}, function(){
+      return {
+        x: Math.random()*W, y: Math.random()*H,
+        vx: (Math.random()-.5)*.05, vy: (Math.random()-.5)*.05,
+        r: Math.random()<.12 ? 3.2 : 1.5, pulse: Math.random()*Math.PI*2
+      };
+    });
+    packets = Array.from({length: 16}, function(){
+      return {
+        fi: Math.floor(Math.random()*nodes.length),
+        ti: Math.floor(Math.random()*nodes.length),
+        t: Math.random(), speed: .0012 + Math.random()*.0025
+      };
+    });
+    stars = Array.from({length: 60}, function(){
+      return {
+        x: Math.random()*W, y: Math.random()*H,
+        sz: .8 + Math.random()*2.6,
+        phase: Math.random()*Math.PI*2,
+        speed: .002 + Math.random()*.005
+      };
+    });
+  }
+
+  function drawStar(x, y, r, a){
+    ctx.save();
+    var g = ctx.createRadialGradient(x, y, 0, x, y, r*5);
+    g.addColorStop(0, 'rgba(255,215,60,'+(a*.7)+')');
+    g.addColorStop(1, 'rgba(212,175,55,0)');
+    ctx.beginPath(); ctx.arc(x, y, r*5, 0, Math.PI*2); ctx.fillStyle = g; ctx.fill();
+    ctx.fillStyle = 'rgba(255,235,100,'+Math.min(1, a*1.3)+')';
+    ctx.beginPath();
+    for (var i=0;i<8;i++){
+      var angle = i*Math.PI/4 - Math.PI/8;
+      var rad = i%2===0 ? r : r*.28;
+      var px = x+Math.cos(angle)*rad, py = y+Math.sin(angle)*rad;
+      if (i===0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.arc(x, y, r*.3, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(255,248,200,'+Math.min(1, a*1.4)+')'; ctx.fill();
+    ctx.restore();
+  }
+
+  function draw(){
+    if (!document.body.contains(canvas)) { raf = null; return; }
+    ctx.clearRect(0, 0, W, H);
+    for (var i=0;i<nodes.length;i++) for (var j=i+1;j<nodes.length;j++){
+      var n = nodes[i], m = nodes[j], d = Math.hypot(n.x-m.x, n.y-m.y);
+      if (d < W*.16){
+        ctx.beginPath(); ctx.moveTo(n.x, n.y); ctx.lineTo(m.x, m.y);
+        ctx.strokeStyle = 'rgba(125,211,252,.18)'; ctx.lineWidth = .8; ctx.stroke();
+      }
+    }
+    nodes.forEach(function(n){
+      n.pulse += .01; n.x += n.vx; n.y += n.vy;
+      if (n.x<0||n.x>W) n.vx *= -1;
+      if (n.y<0||n.y>H) n.vy *= -1;
+      var a = .5 + Math.sin(n.pulse)*.25;
+      ctx.beginPath(); ctx.arc(n.x, n.y, n.r, 0, Math.PI*2);
+      ctx.fillStyle = 'rgba(125,211,252,'+a+')'; ctx.fill();
+      if (n.r > 2){
+        ctx.beginPath(); ctx.arc(n.x, n.y, n.r*3, 0, Math.PI*2);
+        ctx.fillStyle = 'rgba(125,211,252,'+(a*.15)+')'; ctx.fill();
+      }
+    });
+    packets.forEach(function(p){
+      p.t += p.speed;
+      if (p.t >= 1){ p.t = 0; p.fi = p.ti; p.ti = Math.floor(Math.random()*nodes.length); }
+      var n = nodes[p.fi], m = nodes[p.ti];
+      if (!n||!m) return;
+      var x = n.x+(m.x-n.x)*p.t, y = n.y+(m.y-n.y)*p.t;
+      var g = ctx.createRadialGradient(x, y, 0, x, y, 8);
+      g.addColorStop(0, 'rgba(180,240,255,.85)'); g.addColorStop(1, 'rgba(125,211,252,0)');
+      ctx.beginPath(); ctx.arc(x, y, 8, 0, Math.PI*2); ctx.fillStyle = g; ctx.fill();
+      ctx.beginPath(); ctx.arc(x, y, 1.8, 0, Math.PI*2); ctx.fillStyle = 'rgba(220,245,255,.9)'; ctx.fill();
+    });
+    stars.forEach(function(s){
+      s.phase += s.speed;
+      var a = Math.max(0, .4 + Math.sin(s.phase)*.5);
+      if (a > .03) drawStar(s.x, s.y, s.sz, Math.min(1, a*1.3));
+    });
+    raf = requestAnimationFrame(draw);
+  }
+
+  function start(){ if (raf) return; build(); draw(); }
+  start();
+
+  var t = null;
+  window.addEventListener('resize', function(){
+    clearTimeout(t);
+    t = setTimeout(function(){
+      var hero = canvas.parentElement;
+      if (Math.abs(hero.offsetWidth - W) < 2) return;
+      if (raf) { cancelAnimationFrame(raf); raf = null; }
+      start();
+    }, 150);
+  });
+})();
+</script>
+
 </body>
 </html>
