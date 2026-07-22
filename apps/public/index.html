@@ -13,15 +13,28 @@
   }
   *{box-sizing:border-box}
   html{scroll-behavior:smooth}
+  html,body{overflow-x:hidden}
   body{
-    margin:0;
+    margin:0;min-height:100vh;
     font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
-    background:var(--navy3);
+    background:linear-gradient(155deg,var(--navy1) 0%,var(--navy2) 50%,var(--navy3) 100%);
     color:#fff;
     -webkit-font-smoothing:antialiased;
   }
   a{color:inherit}
   .wrap{max-width:1120px;margin:0 auto;padding:0 24px}
+
+  /* ── PERSISTENT BACKGROUND (fixed — stays put through the whole scroll) ── */
+  #bg-canvas{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none}
+  .bg-overlay{position:fixed;inset:0;z-index:1;pointer-events:none;
+    background:
+      radial-gradient(ellipse 120% 55% at 50% 0%, rgba(125,211,252,.07), transparent 60%),
+      linear-gradient(180deg, rgba(10,22,40,.1) 0%, rgba(10,22,40,.5) 55%, rgba(6,14,26,.8) 100%);}
+  .hero, section, footer, .trust{position:relative;z-index:2}
+
+  /* Floating gradient orbs — drift slowly inside sections for parallax depth */
+  .orb{position:absolute;border-radius:50%;filter:blur(70px);pointer-events:none;z-index:0;opacity:.28}
+  @keyframes drift{0%,100%{transform:translate(0,0)}50%{transform:translate(30px,-24px)}}
 
   /* ── NAV ── */
   nav{position:fixed;top:0;left:0;right:0;z-index:50;display:flex;align-items:center;justify-content:space-between;
@@ -39,9 +52,7 @@
   .nav-cta:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(125,211,252,.35)}
 
   /* ── HERO ── */
-  .hero{position:relative;min-height:100vh;display:flex;align-items:center;justify-content:center;overflow:hidden;
-    background:linear-gradient(155deg,var(--navy1) 0%,var(--navy2) 50%,var(--navy3) 100%)}
-  #bg-canvas{position:absolute;inset:0;width:100%;height:100%}
+  .hero{min-height:100vh;display:flex;align-items:center;justify-content:center;overflow:hidden}
   .hero-inner{position:relative;z-index:2;text-align:center;padding:120px 24px 80px;max-width:760px}
   .eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:11px;font-weight:700;letter-spacing:2px;
     text-transform:uppercase;color:rgba(125,211,252,.7);padding:7px 16px;border:1px solid rgba(125,211,252,.25);
@@ -50,7 +61,8 @@
     font-family:Arial Black,Impact,sans-serif;
     background:linear-gradient(135deg,var(--cyan) 0%,var(--cyan2) 35%,var(--gold) 65%,var(--amber) 100%);
     -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
-    opacity:0;animation:fadeUp .8s ease .1s forwards}
+    opacity:0;animation:fadeUp .8s ease .1s forwards;
+    filter:drop-shadow(0 0 40px rgba(56,189,248,.25))}
   .tagline{font-size:clamp(15px,2.2vw,19px);color:rgba(255,255,255,.55);line-height:1.6;margin:22px auto 40px;
     max-width:540px;opacity:0;animation:fadeUp .8s ease .22s forwards}
   .cta-row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;opacity:0;animation:fadeUp .8s ease .34s forwards}
@@ -75,19 +87,65 @@
   .section-title{font-size:clamp(26px,4vw,38px);font-weight:900;text-align:center;margin:0 0 16px;letter-spacing:-.5px}
   .section-sub{text-align:center;color:rgba(255,255,255,.5);font-size:15px;max-width:520px;margin:0 auto 56px;line-height:1.7}
 
+  /* ── PRODUCT PREVIEW MOCKUP ── */
+  .mockup-wrap{max-width:900px;margin:0 auto;position:relative}
+  .mockup{border-radius:18px;overflow:hidden;background:rgba(255,255,255,.05);border:1px solid rgba(125,211,252,.16);
+    backdrop-filter:blur(20px);box-shadow:0 30px 80px rgba(0,0,0,.45),0 0 0 1px rgba(255,255,255,.03);
+    opacity:0;transform:translateY(24px);transition:opacity .7s ease,transform .7s ease}
+  .mockup.in{opacity:1;transform:translateY(0)}
+  .mockup-bar{display:flex;align-items:center;gap:8px;padding:12px 16px;background:rgba(0,0,0,.25);border-bottom:1px solid rgba(255,255,255,.06)}
+  .mockup-bar .dot{width:10px;height:10px;border-radius:50%}
+  .mockup-bar .dot.r{background:#ef4444}.mockup-bar .dot.y{background:#f59e0b}.mockup-bar .dot.g{background:#22c55e}
+  .mockup-url{margin-left:10px;font-size:11px;color:rgba(255,255,255,.35);background:rgba(255,255,255,.05);
+    padding:4px 12px;border-radius:6px;font-family:monospace}
+  .mockup-body{display:flex;min-height:340px}
+  .mockup-side{width:150px;flex-shrink:0;padding:18px 10px;border-right:1px solid rgba(255,255,255,.06);display:none}
+  @media(min-width:640px){.mockup-side{display:block}}
+  .mside-item{font-size:12.5px;padding:10px 12px;border-radius:8px;color:rgba(255,255,255,.5);margin-bottom:4px}
+  .mside-item.active{background:rgba(125,211,252,.12);color:var(--cyan);font-weight:700}
+  .mockup-main{flex:1;padding:22px;min-width:0}
+  .mockup-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px}
+  .mstat{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:12px 8px;text-align:center}
+  .mstat-n{font-size:18px;font-weight:900;color:#fff}
+  .mstat-l{font-size:9.5px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px;margin-top:3px}
+  .mockup-chart{display:flex;align-items:flex-end;gap:6px;height:70px;margin-bottom:20px;padding:0 2px}
+  .mbar{flex:1;border-radius:4px 4px 0 0;background:linear-gradient(180deg,var(--cyan2),rgba(56,189,248,.15));
+    animation:growBar 1s ease forwards;transform-origin:bottom;transform:scaleY(0)}
+  .mockup.in .mbar{animation-play-state:running}
+  @keyframes growBar{to{transform:scaleY(1)}}
+  .mockup-rows{display:flex;flex-direction:column;gap:8px}
+  .mrow{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px;
+    background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.05);border-radius:8px;padding:10px 12px;color:rgba(255,255,255,.65)}
+  .pill{font-size:10px;font-weight:800;padding:3px 9px;border-radius:999px;white-space:nowrap}
+  .pill-g{background:rgba(34,197,94,.15);color:#4ade80}
+  .pill-a{background:rgba(245,158,11,.15);color:#fbbf24}
+  .pill-r{background:rgba(239,68,68,.15);color:#f87171}
+
   /* Feature grid */
   .feat-grid{display:grid;grid-template-columns:1fr;gap:16px;max-width:1120px;margin:0 auto}
   @media(min-width:640px){.feat-grid{grid-template-columns:1fr 1fr}}
   @media(min-width:960px){.feat-grid{grid-template-columns:repeat(4,1fr)}}
   .feat-card{padding:26px 22px;background:rgba(255,255,255,.04);border:1px solid rgba(125,211,252,.12);
-    border-radius:16px;backdrop-filter:blur(16px);transition:transform .2s,border-color .2s,background .2s}
-  .feat-card:hover{transform:translateY(-4px);border-color:rgba(125,211,252,.35);background:rgba(255,255,255,.06)}
-  .feat-ic{font-size:26px;margin-bottom:14px}
+    border-radius:16px;backdrop-filter:blur(16px);transition:transform .2s,border-color .2s,background .2s,box-shadow .2s}
+  .feat-card:hover{transform:translateY(-4px);border-color:rgba(125,211,252,.35);background:rgba(255,255,255,.06);
+    box-shadow:0 16px 40px rgba(56,189,248,.15)}
+  .feat-ic{width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:24px;
+    background:linear-gradient(135deg,rgba(125,211,252,.18),rgba(253,230,138,.14));border:1px solid rgba(125,211,252,.2);margin-bottom:16px}
   .feat-t{font-size:15px;font-weight:800;margin-bottom:8px}
   .feat-d{font-size:13px;color:rgba(255,255,255,.45);line-height:1.6}
 
+  /* How it works */
+  .steps{display:grid;grid-template-columns:1fr;gap:16px;max-width:960px;margin:0 auto;counter-reset:step}
+  @media(min-width:760px){.steps{grid-template-columns:repeat(3,1fr)}}
+  .step{position:relative;padding:28px 22px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);
+    border-radius:16px;backdrop-filter:blur(14px)}
+  .step-n{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:14px;
+    background:linear-gradient(135deg,var(--cyan),var(--cyan2));color:#04121f;margin-bottom:16px}
+  .step-t{font-size:15px;font-weight:800;margin-bottom:8px}
+  .step-d{font-size:13px;color:rgba(255,255,255,.45);line-height:1.6}
+
   /* Apps section */
-  .apps-sec{background:linear-gradient(180deg,transparent,rgba(13,31,60,.5),transparent)}
+  .apps-sec{background:linear-gradient(180deg,transparent,rgba(13,31,60,.35),transparent)}
   .app-grid{display:grid;grid-template-columns:1fr;gap:18px;max-width:1000px;margin:0 auto}
   @media(min-width:820px){.app-grid{grid-template-columns:repeat(3,1fr)}}
   .app-card{position:relative;padding:30px 26px;border-radius:20px;text-decoration:none;color:#fff;
@@ -129,9 +187,13 @@
 </head>
 <body>
 
+<canvas id="bg-canvas"></canvas>
+<div class="bg-overlay"></div>
+
 <nav>
   <div class="brand">DEEPFLOW</div>
   <div class="nav-links">
+    <a href="#preview">Product</a>
     <a href="#features">Features</a>
     <a href="#apps">Apps</a>
   </div>
@@ -139,18 +201,63 @@
 </nav>
 
 <div class="hero">
-  <canvas id="bg-canvas"></canvas>
   <div class="hero-inner">
     <div class="eyebrow">✦ Smart Property Compliance Suite</div>
     <div class="wordmark">DEEPFLOW</div>
     <div class="tagline">One platform to manage jobs, compliance certificates, invoicing and your team — built for the office, your field engineers, and your clients.</div>
     <div class="cta-row">
       <a class="btn btn-primary" href="#apps">Open an App <span>→</span></a>
-      <a class="btn btn-ghost" href="#features">See what it does</a>
+      <a class="btn btn-ghost" href="#preview">See what it does</a>
     </div>
   </div>
   <div class="scroll-hint"><span class="dot"></span>Scroll</div>
 </div>
+
+<section id="preview">
+  <div class="section-eyebrow">See it in action</div>
+  <h2 class="section-title">A dashboard your team will actually use</h2>
+  <p class="section-sub">Live job boards, certificate expiry tracking and invoicing — all in a clean, fast interface built for daily use, not just demos.</p>
+  <div class="mockup-wrap">
+    <div class="orb" style="width:280px;height:280px;top:-60px;left:-100px;background:radial-gradient(circle,rgba(125,211,252,.5),transparent 70%);animation:drift 14s ease-in-out infinite"></div>
+    <div class="orb" style="width:220px;height:220px;bottom:-60px;right:-80px;background:radial-gradient(circle,rgba(253,230,138,.4),transparent 70%);animation:drift 18s ease-in-out infinite reverse"></div>
+    <div class="mockup" id="mockup">
+      <div class="mockup-bar">
+        <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+        <div class="mockup-url">deepflow.co.uk</div>
+      </div>
+      <div class="mockup-body">
+        <div class="mockup-side">
+          <div class="mside-item active">📋 Jobs</div>
+          <div class="mside-item">📜 Certificates</div>
+          <div class="mside-item">💰 Invoices</div>
+          <div class="mside-item">👥 Team</div>
+          <div class="mside-item">📍 Live Map</div>
+        </div>
+        <div class="mockup-main">
+          <div class="mockup-stats">
+            <div class="mstat"><div class="mstat-n">128</div><div class="mstat-l">Open Jobs</div></div>
+            <div class="mstat"><div class="mstat-n">42</div><div class="mstat-l">Due This Week</div></div>
+            <div class="mstat"><div class="mstat-n">£18.4k</div><div class="mstat-l">Outstanding</div></div>
+          </div>
+          <div class="mockup-chart">
+            <div class="mbar" style="height:40%;animation-delay:.05s"></div>
+            <div class="mbar" style="height:65%;animation-delay:.1s"></div>
+            <div class="mbar" style="height:50%;animation-delay:.15s"></div>
+            <div class="mbar" style="height:80%;animation-delay:.2s"></div>
+            <div class="mbar" style="height:60%;animation-delay:.25s"></div>
+            <div class="mbar" style="height:95%;animation-delay:.3s"></div>
+            <div class="mbar" style="height:70%;animation-delay:.35s"></div>
+          </div>
+          <div class="mockup-rows">
+            <div class="mrow"><span>221 Baker Street — EICR Renewal</span><span class="pill pill-g">Active</span></div>
+            <div class="mrow"><span>14 Elm Court — Gas Safety Check</span><span class="pill pill-a">Expiring</span></div>
+            <div class="mrow"><span>9 Riverside Ave — Full Rewire</span><span class="pill pill-r">Overdue</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
 
 <section id="features">
   <div class="section-eyebrow">What DeepFlow does</div>
@@ -177,6 +284,17 @@
       <div class="feat-t">Multi-Portal</div>
       <div class="feat-d">Separate, purpose-built portals for the office, field engineers and clients — everyone sees exactly what they need.</div>
     </div>
+  </div>
+</section>
+
+<section id="how" style="padding-top:0">
+  <div class="section-eyebrow">How it works</div>
+  <h2 class="section-title">From job to paid, in three steps</h2>
+  <p class="section-sub">No training manuals — if you've used a spreadsheet, you already know how to use DeepFlow.</p>
+  <div class="steps">
+    <div class="step"><div class="step-n">1</div><div class="step-t">Log the job</div><div class="step-d">Office staff create a job in seconds — property, engineer, date, and certificate type auto-suggested from history.</div></div>
+    <div class="step"><div class="step-n">2</div><div class="step-t">Track it live</div><div class="step-d">Engineers update status and upload photos from site; the office sees it change in real time, no phone calls needed.</div></div>
+    <div class="step"><div class="step-n">3</div><div class="step-t">Invoice & renew</div><div class="step-d">Job completion auto-generates the invoice and files the certificate — with renewal reminders already scheduled.</div></div>
   </div>
 </section>
 
@@ -216,9 +334,9 @@
 </section>
 
 <div class="trust">
-  <div class="trust-item"><div class="trust-num">3</div><div class="trust-lbl">Purpose-built portals</div></div>
+  <div class="trust-item"><div class="trust-num" data-count="3">0</div><div class="trust-lbl">Purpose-built portals</div></div>
   <div class="trust-item"><div class="trust-num">24/7</div><div class="trust-lbl">Client self-service</div></div>
-  <div class="trust-item"><div class="trust-num">0</div><div class="trust-lbl">Missed cert renewals</div></div>
+  <div class="trust-item"><div class="trust-num" data-count="0">0</div><div class="trust-lbl">Missed cert renewals</div></div>
 </div>
 
 <footer>
@@ -239,28 +357,27 @@
   var W, H, nodes, packets, stars, raf = null;
 
   function resize(){
-    var hero = canvas.parentElement;
-    W = canvas.width = hero.offsetWidth;
-    H = canvas.height = hero.offsetHeight;
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
   }
 
   function build(){
     resize();
-    nodes = Array.from({length: 55}, function(){
+    nodes = Array.from({length: 70}, function(){
       return {
         x: Math.random()*W, y: Math.random()*H,
         vx: (Math.random()-.5)*.05, vy: (Math.random()-.5)*.05,
         r: Math.random()<.12 ? 3.2 : 1.5, pulse: Math.random()*Math.PI*2
       };
     });
-    packets = Array.from({length: 16}, function(){
+    packets = Array.from({length: 20}, function(){
       return {
         fi: Math.floor(Math.random()*nodes.length),
         ti: Math.floor(Math.random()*nodes.length),
         t: Math.random(), speed: .0012 + Math.random()*.0025
       };
     });
-    stars = Array.from({length: 60}, function(){
+    stars = Array.from({length: 80}, function(){
       return {
         x: Math.random()*W, y: Math.random()*H,
         sz: .8 + Math.random()*2.6,
@@ -295,9 +412,9 @@
     ctx.clearRect(0, 0, W, H);
     for (var i=0;i<nodes.length;i++) for (var j=i+1;j<nodes.length;j++){
       var n = nodes[i], m = nodes[j], d = Math.hypot(n.x-m.x, n.y-m.y);
-      if (d < W*.16){
+      if (d < W*.14){
         ctx.beginPath(); ctx.moveTo(n.x, n.y); ctx.lineTo(m.x, m.y);
-        ctx.strokeStyle = 'rgba(125,211,252,.18)'; ctx.lineWidth = .8; ctx.stroke();
+        ctx.strokeStyle = 'rgba(125,211,252,.16)'; ctx.lineWidth = .8; ctx.stroke();
       }
     }
     nodes.forEach(function(n){
@@ -338,12 +455,41 @@
   window.addEventListener('resize', function(){
     clearTimeout(t);
     t = setTimeout(function(){
-      var hero = canvas.parentElement;
-      if (Math.abs(hero.offsetWidth - W) < 2) return;
+      if (Math.abs(window.innerWidth - W) < 2 && Math.abs(window.innerHeight - H) < 2) return;
       if (raf) { cancelAnimationFrame(raf); raf = null; }
       start();
     }, 150);
   });
+})();
+
+// Reveal the product mockup + count up trust stats once scrolled into view
+(function(){
+  var mockup = document.getElementById('mockup');
+  var counters = document.querySelectorAll('.trust-num[data-count]');
+
+  function countUp(el){
+    var target = parseInt(el.getAttribute('data-count'), 10);
+    var start = performance.now(), dur = 900;
+    function tick(now){
+      var p = Math.min(1, (now-start)/dur);
+      var eased = 1 - Math.pow(1-p, 3);
+      el.textContent = Math.round(target*eased);
+      if (p < 1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  }
+
+  var io = new IntersectionObserver(function(entries){
+    entries.forEach(function(entry){
+      if (!entry.isIntersecting) return;
+      if (entry.target === mockup) entry.target.classList.add('in');
+      if (entry.target.hasAttribute('data-count')) countUp(entry.target);
+      io.unobserve(entry.target);
+    });
+  }, { threshold: .35 });
+
+  if (mockup) io.observe(mockup);
+  counters.forEach(function(c){ io.observe(c); });
 })();
 </script>
 
