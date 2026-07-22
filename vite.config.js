@@ -6,6 +6,10 @@ import { defineConfig } from 'vite';
 // (static output only — GitHub Pages hosting doesn't change).
 export default defineConfig({
   root: 'apps',
+  // Served from a GitHub Pages *project* site (github.io/<repo>/), not the
+  // domain root — every asset URL Vite emits needs this prefix or they'd
+  // 404 once deployed.
+  base: '/deepflow-apps/',
   build: {
     outDir: '../dist',
     emptyOutDir: true,
