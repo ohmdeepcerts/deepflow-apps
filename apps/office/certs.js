@@ -1187,6 +1187,7 @@ export async function uploadCertPdf(inputEl){
   if(!file) return;
   const looksLikePdf=(file.type==='application/pdf')||file.name.toLowerCase().endsWith('.pdf');
   if(!looksLikePdf){ toast('Please choose a PDF file','error'); return; }
+  if(file.size>25*1024*1024){ toast(`File too large (${(file.size/1024/1024).toFixed(1)}MB) — 25MB max`,'error'); return; }
   const wraps=['cf-pdf-wrap','cf2-pdf-wrap'].map(id=>document.getElementById(id)).filter(Boolean);
   wraps.forEach(wrap=>wrap.innerHTML=`<span style="color:var(--txt3);font-size:12px">Uploading…</span>`);
   try{

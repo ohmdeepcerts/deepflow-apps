@@ -3917,9 +3917,10 @@ ALTER TABLE invoices ADD COLUMN IF NOT EXISTS duecate text;
 ALTER TABLE invoices ADD COLUMN IF NOT EXISTS terms text;
 ALTER TABLE invoices ADD COLUMN IF NOT EXISTS notes text;
 
--- Also fix RLS if invoice saves are being blocked
-DROP POLICY IF EXISTS "invoices_office_only" ON invoices;
-CREATE POLICY "invoices_auth" ON invoices FOR ALL TO authenticated USING (true) WITH CHECK (true);</div>
+-- If invoice saves are blocked by RLS, the account isn't recognised as
+-- office staff. Don't reopen invoices to every authenticated user to fix
+-- this — check the user's row in `users` has the right auth_id/role instead:
+-- SELECT id, name, role, auth_id FROM users WHERE email = 'THEIR-EMAIL';</div>
           </div>
 
           <!-- FIX: Users table RLS policy if create account is failing -->
@@ -3927,13 +3928,18 @@ CREATE POLICY "invoices_auth" ON invoices FOR ALL TO authenticated USING (true) 
           <div class="set-card" style="margin-bottom:12px;background:rgba(240,68,68,.04);border-color:rgba(240,68,68,.2)">
             <div style="font-size:12px;color:var(--txt2);margin-bottom:10px;line-height:1.6">If creating office staff or engineers fails with an RLS error, run this SQL once in Supabase.</div>
             <div class="sql-block" onclick="copySql(this)">-- Fix users table RLS policy (run if Create Account fails)
+-- Scoped to office/admin staff only -- NOT open to every authenticated
+-- user, since this table holds login credentials (the pin column) for
+-- every member of staff.
 DROP POLICY IF EXISTS "auth_users_write" ON users;
 DROP POLICY IF EXISTS "auth_users_read" ON users;
+DROP POLICY IF EXISTS "users_read" ON users;
+DROP POLICY IF EXISTS "users_insert" ON users;
 
-CREATE POLICY "users_read" ON users
-  FOR SELECT TO authenticated USING (true);
-CREATE POLICY "users_insert" ON users
-  FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "users_office_read" ON users
+  FOR SELECT TO authenticated USING (is_office());
+CREATE POLICY "users_office_insert" ON users
+  FOR INSERT TO authenticated WITH CHECK (is_office());
 CREATE POLICY "users_update" ON users
   FOR UPDATE TO authenticated
   USING (EXISTS (SELECT 1 FROM users u WHERE u.auth_id = auth.uid() AND u.role = 'admin' AND u.active = true))
@@ -3944,83 +3950,19 @@ CREATE POLICY "users_delete" ON users
           </div>
 
 
-          <!-- get_auth_users function for Sync -->
-          <div class="set-title" style="margin-top:18px">🔄 Enable "Sync from Supabase" button</div>
+          <!-- get_auth_users -- already set up, locked to office staff only -->
+          <div class="set-title" style="margin-top:18px">🔄 "Sync from Supabase" button</div>
           <div class="set-card" style="margin-bottom:12px;background:rgba(79,143,255,.04);border-color:rgba(79,143,255,.2)">
-            <div style="font-size:12px;color:var(--txt2);margin-bottom:10px;line-height:1.6">
-              Run this SQL once to enable the <strong>Sync from Supabase</strong> button. It creates a safe function that lets DeepFlow read your Supabase Auth users list.
+            <div style="font-size:12px;color:var(--txt2);line-height:1.6">
+              Already set up and restricted to office staff. If <strong>Sync from Supabase</strong> stops working, contact an admin rather than re-running old setup SQL — recreating this function without the office-only check would let any authenticated account list every staff email address.
             </div>
-            <div class="sql-block" onclick="copySql(this)">-- Run ONCE — enables Sync from Supabase button in Settings → Users
-CREATE OR REPLACE FUNCTION get_auth_users()
-RETURNS TABLE(id uuid, email text, created_at timestamptz)
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = auth, public AS $$
-BEGIN
-  RETURN QUERY
-  SELECT u.id, u.email::text, u.created_at
-  FROM auth.users u
-  ORDER BY u.created_at DESC;
-END; $$;</div>
           </div>
 
-          <!-- PERMANENT FIX: create_confirmed_user function -->
-          <div class="set-title" style="margin-top:18px">✅ Fix 2 — Staff can't log in (email confirmation required)?</div>
+          <!-- create_confirmed_user -- intentionally NOT reproduced here anymore -->
+          <div class="set-title" style="margin-top:18px">✅ Staff can't log in (email confirmation required)?</div>
           <div class="set-card" style="margin-bottom:12px;background:rgba(34,197,94,.04);border-color:rgba(34,197,94,.2)">
-            <div style="font-size:12px;color:var(--txt2);margin-bottom:10px;line-height:1.6">
-              Run this SQL <strong>once</strong>. It creates a function that makes new staff accounts <strong>instantly active — no email confirmation ever needed</strong>. After this, every new staff member you create can log in immediately.
-            </div>
-            <div class="sql-block" onclick="copySql(this)" style="font-size:11px;line-height:1.6">-- ══ Create confirmed user function (run ONCE — permanent fix) ══
--- After this, all new office staff accounts work immediately with no email confirmation.
-CREATE OR REPLACE FUNCTION create_confirmed_user(p_email text, p_password text)
-RETURNS uuid
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = auth, public
-AS $$
-DECLARE
-  v_user_id uuid;
-  v_encrypted_pw text;
-BEGIN
-  v_user_id := gen_random_uuid();
-  v_encrypted_pw := crypt(p_password, gen_salt('bf'));
-
-  INSERT INTO auth.users (
-    instance_id, id, aud, role, email,
-    encrypted_password, email_confirmed_at, recovery_sent_at,
-    last_sign_in_at, raw_app_meta_data, raw_user_meta_data,
-    created_at, updated_at, confirmation_token, email_change,
-    email_change_token_new, recovery_token
-  ) VALUES (
-    '00000000-0000-0000-0000-000000000000',
-    v_user_id,
-    'authenticated',
-    'authenticated',
-    p_email,
-    v_encrypted_pw,
-    now(),   -- email_confirmed_at = NOW = pre-confirmed, no email needed
-    now(),
-    now(),
-    '{"provider":"email","providers":["email"]}',
-    '{}',
-    now(), now(), '', '', '', ''
-  );
-
-  INSERT INTO auth.identities (
-    id, user_id, provider_id, identity_data, provider,
-    last_sign_in_at, created_at, updated_at
-  ) VALUES (
-    gen_random_uuid(),
-    v_user_id,
-    p_email,
-    json_build_object('sub', v_user_id::text, 'email', p_email),
-    'email',
-    now(), now(), now()
-  );
-
-  RETURN v_user_id;
-END;
-$$;</div>
-            <div style="margin-top:10px;font-size:12px;color:var(--acc);line-height:1.6">
-              After running this SQL, go to <strong>Settings → Users & Access</strong> and use the "🔑 Create Login" button on any existing "⚠ No login yet" users to fix them instantly too.
+            <div style="font-size:12px;color:var(--txt2);line-height:1.6">
+              Use the <strong>Settings → Users &amp; Access → "🔑 Create Login"</strong> button on the affected user instead of running SQL. This panel used to walk you through recreating an account-creation function directly here — that function is real but is deliberately restricted to admin use via the Supabase SQL editor now, not something to recreate from the app, since a public copy of it would let anyone on the internet create their own confirmed login.
             </div>
           </div>
 

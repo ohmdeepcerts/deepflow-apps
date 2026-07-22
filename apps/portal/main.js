@@ -490,7 +490,7 @@ async function init(){
       entity=_fix(rows[0]);
       document.getElementById('portal-badge').textContent='Agency';
       document.title=`${e(entity.name)} — Portal`;
-      jobs=await fetchJobs('agencyname',entity.name,entity.id);
+      jobs=await fetchJobs('agency',entity.id);
 
       // Load ALL agents under this agency for the filter bar
       try{
@@ -509,14 +509,14 @@ async function init(){
       entity={name:decodeURIComponent(agentName),type:'agent',id:token};
       document.getElementById('portal-badge').textContent='Agent';
       document.title=`${e(entity.name)} — Portal`;
-      jobs=await fetchJobs('agentname',entity.name,entity.id);
+      jobs=await fetchJobs('agent',entity.id);
     } else {
       const rows=await sb(`rpc/portal_get_person`,{method:'POST',body:{p_id:token}});
       if(!rows?.length){showErr('Not Found','This link is invalid or has expired. Contact your service provider.');return;}
       entity=_fix(rows[0]);
       document.getElementById('portal-badge').textContent='Landlord';
       document.title=`${e(entity.name)} — Portal`;
-      jobs=await fetchJobs('landlordname',entity.name,entity.id);
+      jobs=await fetchJobs('landlord',entity.id);
     }
 
     let attachments=[],certs=[],invoices=[],ratings=[];
@@ -525,11 +525,10 @@ async function init(){
       // jobIds passed as a plain array to the RPCs below — replaces the old
       // hand-built `"id1","id2"` string used for a raw `jobid=in.(...)` filter.
       const jobIds=jobs.map(j=>j.id);
-      const nL=(entity.name||'').toLowerCase();
       const [ra,rc,ri,rr]=await Promise.all([
         sb(`rpc/portal_get_attachments`,{method:'POST',body:{p_job_ids:jobIds}}).catch(()=>[]),
         sb(`rpc/portal_get_certs`,{method:'POST',body:{p_job_ids:jobIds}}).catch(()=>[]),
-        fetchInvoicesByName(nL),
+        fetchInvoices(ptype,token),
         Promise.resolve([]), // no `ratings` table exists in the live database — this call always failed before; removed rather than left silently broken
       ]);
       attachments=(ra||[]).map(_fix);
@@ -596,12 +595,15 @@ async function init(){
   }
 }
 
-async function fetchInvoicesByName(nameLower){
-  // Was a direct, unscoped `invoices?or=(...)` read (anyone could read every
-  // invoice in the business) — now a SECURITY DEFINER function doing the same
-  // five-field partial match server-side. See PHASE1_PORTAL_RPC_SQL.md.
+async function fetchInvoices(type,id){
+  // Was matched by a client-supplied name (ILIKE across five columns) --
+  // anyone with the anon key could pass a wildcard and read every invoice
+  // in the business. portal_get_invoices now resolves the real
+  // landlord/agency/agent identity server-side from p_id alone; the client
+  // no longer supplies or controls the match value. See the Production
+  // Readiness Audit, finding C-2.
   try{
-    const raw=await sb(`rpc/portal_get_invoices`,{method:'POST',body:{p_name:nameLower}});
+    const raw=await sb(`rpc/portal_get_invoices`,{method:'POST',body:{p_type:type,p_id:id?String(id).trim():null}});
     if(Array.isArray(raw)){
       const seen=new Set();
       return raw.map(_fix).filter(inv=>{
@@ -614,13 +616,14 @@ async function fetchInvoicesByName(nameLower){
   return [];
 }
 
-async function fetchJobs(col,name,id){
-  // Was two sequential direct table reads (name match, then a client_person_id
-  // fallback) against an unscoped anon policy — now one call to a
-  // SECURITY DEFINER function that does the exact same matching server-side.
-  // See PHASE1_PORTAL_RPC_SQL.md.
+async function fetchJobs(type,id){
+  // Was matched by a client-supplied name with p_id only as a fallback --
+  // anyone with the anon key could pass a wildcard and read every job in
+  // the business. portal_get_jobs now resolves the real landlord/agency/
+  // agent identity server-side from p_id alone. See the Production
+  // Readiness Audit, finding C-2.
   try{
-    const raw=await sb(`rpc/portal_get_jobs`,{method:'POST',body:{p_col:col,p_name:name,p_id:id?String(id).trim():null}});
+    const raw=await sb(`rpc/portal_get_jobs`,{method:'POST',body:{p_type:type,p_id:id?String(id).trim():null}});
     if(Array.isArray(raw)) return raw.map(_fix);
   }catch(e){console.warn('[Portal] jobs fetch failed',e);}
   return [];

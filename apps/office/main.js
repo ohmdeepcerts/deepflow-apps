@@ -6542,12 +6542,13 @@ async function viewInv(id){
       ${!isPaid&&inv.type!=='proforma'?`<button class="btn btn-green btn-sm" onclick="markInvPaid('${id}')">✓ Mark Paid</button>`:''}
       ${!isPaid&&inv.type!=='proforma'?`<button class="btn btn-blue btn-sm" onclick="openPaymentModal('${id}')">💳 Record Payment</button>`:''}
       ${isPaid?`<button class="btn btn-ghost btn-sm" onclick="markInvUnpaid('${id}')">↩ Unpaid</button>`:''}
+      ${isPaid&&getUserPerm('canManageUsers')?`<button class="btn btn-ghost btn-sm" onclick="unlockPaidInv('${id}')" title="Admin only — logs to audit trail">🔓 Unlock for correction</button>`:''}
       ${inv.status==='Draft'&&inv.type!=='proforma'?`<button class="btn btn-ghost btn-sm" onclick="markInvSent('${id}')">Mark Sent</button>`:''}
       <button class="btn btn-wa btn-sm" onclick="openInvSendModal('${id}')">📱 Send / Share</button>
       <button class="btn btn-ghost btn-sm" onclick="downloadInvPDFById('${id}')">⬇ PDF</button>
       ${inv.type!=='proforma'?`<button class="btn btn-ghost btn-sm" onclick="createRecurringInv('${id}')">↻ Recurring</button>`:''}
       ${inv.type==='proforma'?`<button class="btn btn-ghost btn-sm" onclick="printProforma('${id}')">🖨 Print</button>`:''}
-      <button class="btn btn-red btn-sm" style="margin-left:auto" onclick="deleteInv('${id}')">Delete</button>
+      ${!isPaid&&getUserPerm('canDelete')?`<button class="btn btn-red btn-sm" style="margin-left:auto" onclick="deleteInv('${id}')">Delete</button>`:''}
     </div>
 
     <!-- PAYMENT STATUS -->
@@ -7071,12 +7072,35 @@ async function markInvSent(id){
   toast('Marked as Awaiting Payment','info');
 }
 async function deleteInv(id){
+  if(!getUserPerm('canDelete')){ toast('You do not have permission to delete invoices','error'); return; }
+  const inv=await dGet('invoices',id);
+  if(inv?.status==='Paid'){
+    toast('This invoice has a recorded payment — contact an admin to unlock it first','error');
+    return;
+  }
   confirm2('Delete Invoice','Permanently delete this invoice?',async()=>{
     await dDel('invoices',id);
     curInvId=null;
     renderInvList();
     document.getElementById('inv-detail-box').innerHTML='<div class="empty"><div class="ei">◎</div><p>Select an invoice</p></div>';
     updateBadges();toast('Invoice deleted','warn');
+  });
+}
+
+// Admin-only escape hatch for the rare legitimate correction on a paid
+// invoice — reverts status to Draft (clearing the lock) and logs it, rather
+// than silently allowing edits/deletes on a reconciled record. See the
+// Production Readiness Audit, finding C-3.
+async function unlockPaidInv(id){
+  if(!getUserPerm('canManageUsers')){ toast('Admin only','error'); return; }
+  const inv=await dGet('invoices',id);
+  if(!inv||inv.status!=='Paid') return;
+  confirm2('Unlock Invoice',`Unlock invoice ${inv.number||id} for correction? This will be recorded in the audit trail.`,async()=>{
+    inv.status='Awaiting Payment';
+    await dPut('invoices',inv);
+    await logActivity(`Invoice ${inv.number} unlocked for correction by ${_appUser?.name||'Admin'}`,'invoice');
+    toast('Invoice unlocked','warn');
+    renderInvList();viewInv(id);
   });
 }
 
@@ -10645,8 +10669,11 @@ const _ALERTS_SQL=`CREATE TABLE IF NOT EXISTS engineer_alerts (
 );
 ALTER TABLE engineer_alerts ENABLE ROW LEVEL SECURITY;
 DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='engineer_alerts' AND policyname='allow_all') THEN
-    CREATE POLICY "allow_all" ON engineer_alerts FOR ALL USING (true) WITH CHECK (true);
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='engineer_alerts' AND policyname='engineer_alerts_office_all') THEN
+    CREATE POLICY "engineer_alerts_office_all" ON engineer_alerts FOR ALL TO authenticated USING (is_office()) WITH CHECK (is_office());
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='engineer_alerts' AND policyname='engineer_alerts_token') THEN
+    CREATE POLICY "engineer_alerts_token" ON engineer_alerts FOR ALL USING (is_valid_engineer_token()) WITH CHECK (is_valid_engineer_token());
   END IF;
 END $$;`;
 
@@ -10849,24 +10876,13 @@ async function createAllTables(){
   created bigint
 );
 ALTER TABLE engineer_requests ENABLE ROW LEVEL SECURITY;
-DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='engineer_requests' AND policyname='allow_all') THEN CREATE POLICY "allow_all" ON engineer_requests FOR ALL USING (true) WITH CHECK (true); END IF; END $$;`
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='engineer_requests' AND policyname='eng_requests_office_all') THEN CREATE POLICY "eng_requests_office_all" ON engineer_requests FOR ALL TO authenticated USING (is_office()) WITH CHECK (is_office()); END IF; END $$;
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='engineer_requests' AND policyname='eng_requests_engineer_token') THEN CREATE POLICY "eng_requests_engineer_token" ON engineer_requests FOR ALL USING (is_valid_engineer_token()) WITH CHECK (is_valid_engineer_token()); END IF; END $$;`
     },
     {
       name:'engineer_alerts',
       check:'engineer_alerts?limit=1&select=id',
-      sql:`CREATE TABLE IF NOT EXISTS engineer_alerts (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  target text DEFAULT 'all',
-  type text DEFAULT 'info',
-  title text,
-  message text,
-  sent_by text,
-  created bigint,
-  expires bigint,
-  status text DEFAULT 'active'
-);
-ALTER TABLE engineer_alerts ENABLE ROW LEVEL SECURITY;
-DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='engineer_alerts' AND policyname='allow_all') THEN CREATE POLICY "allow_all" ON engineer_alerts FOR ALL USING (true) WITH CHECK (true); END IF; END $$;`
+      sql:_ALERTS_SQL
     }
   ];
 
@@ -11824,6 +11840,10 @@ async function saveInvWithJobSync(){
   const cl = ps.find(p=>p.id===cid)||{};
   const invId = editInvId || uid();
   const existingInv = editInvId ? await dGet('invoices',editInvId) : null;
+  if(existingInv?.status==='Paid'){
+    toast('This invoice has a recorded payment — use "Unlock for correction" (admin only) before editing','error',6000);
+    return;
+  }
   // ══════════════════════════════════════════════════════════════
   // PROPER INVOICE OBJECT - Complete data structure saved to DB
   // ══════════════════════════════════════════════════════════════
@@ -11951,7 +11971,7 @@ async function saveInvWithJobSync(){
   }catch(err){
     let msg = err.message||'Save failed';
     if(msg.includes('42501')||msg.includes('row-level security')){
-      msg = 'Permission denied — check Supabase RLS. Run: CREATE POLICY "invoices_auth" ON invoices FOR ALL TO authenticated USING (true) WITH CHECK (true);';
+      msg = 'Permission denied — this account is not recognised as office staff. Contact an admin to check your user record.';
     } else if(msg.includes('Failed to fetch')||msg.includes('NetworkError')){
       msg = 'No internet connection. Check your network and try again.';
     } else if(msg.includes('duplicate')||msg.includes('unique')){

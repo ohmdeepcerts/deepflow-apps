@@ -59,7 +59,8 @@ ORDER BY c.expirydate;` },
   status text DEFAULT 'active'
 );
 ALTER TABLE engineer_alerts ENABLE ROW LEVEL SECURITY;
-CREATE POLICY IF NOT EXISTS "allow_all" ON engineer_alerts FOR ALL USING (true) WITH CHECK (true);` },
+CREATE POLICY IF NOT EXISTS "engineer_alerts_office_all" ON engineer_alerts FOR ALL TO authenticated USING (is_office()) WITH CHECK (is_office());
+CREATE POLICY IF NOT EXISTS "engineer_alerts_token" ON engineer_alerts FOR ALL USING (is_valid_engineer_token()) WITH CHECK (is_valid_engineer_token());` },
     { title:'Approve an overtime request (replace ID)', sql:`UPDATE engineer_requests SET status = 'approved', office_reply = 'Approved - will be on next payslip' WHERE id = 'REPLACE-WITH-REQUEST-ID';` },
   ];
 
@@ -70,12 +71,20 @@ ALTER TABLE attachments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE certs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE invoices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE engineer_requests ENABLE ROW LEVEL SECURITY;` },
-    { title:'Fix: Add allow_all policy (if locked out)', sql:`CREATE POLICY IF NOT EXISTS "allow_all" ON jobs FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY IF NOT EXISTS "allow_all" ON users FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY IF NOT EXISTS "allow_all" ON attachments FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY IF NOT EXISTS "allow_all" ON engineer_requests FOR ALL USING (true) WITH CHECK (true);` },
-    { title:'Fix: Storage bucket public access', sql:`INSERT INTO storage.buckets (id, name, public) VALUES ('deepflow', 'deepflow', true)
-ON CONFLICT (id) DO UPDATE SET public = true;` },
+    { title:'Locked out? Check your account, don\'t reopen tables', sql:`-- If jobs/users/attachments/engineer_requests are inaccessible, the almost
+-- always correct cause is your own user row, not the RLS policy. Run this
+-- first — it should return exactly one row with role IN ('admin','manager',
+-- 'staff','engineer') and active = true, matching your Supabase Auth email:
+SELECT id, name, role, auth_id, active FROM users WHERE email = 'YOUR-EMAIL-HERE';
+-- If that looks right and you're still locked out, contact whoever manages
+-- the Supabase project directly rather than granting FOR ALL USING (true) on
+-- these tables — that reopens them to every authenticated account, not just
+-- yours.` },
+    { title:'Storage: fetching a known file fails', sql:`-- The deepflow bucket intentionally does not allow listing/browsing all
+-- files (Production Readiness Audit, finding C-5) -- only fetching a file
+-- you already have the URL for. If a specific upload/download is failing,
+-- check the storage.objects policies for the deepflow bucket rather than
+-- marking the whole bucket public.` },
     { title:'Maintenance: Delete old completed jobs (older than 2 years)', sql:`DELETE FROM jobs WHERE status = 'Completed' AND date < (current_date - interval '2 years')::text RETURNING jobnum, address;` },
     { title:'Maintenance: Clear engineer location data', sql:`UPDATE users SET last_lat = null, last_lng = null, last_seen = null WHERE role = 'engineer';` },
   ];

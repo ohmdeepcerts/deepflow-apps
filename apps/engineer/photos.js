@@ -131,6 +131,24 @@ function _baPairHTML(slot, before, after){
   </div>`;
 }
 
+// C-5 (Production Readiness Audit): uploads had no file-type or size
+// validation anywhere — a renamed executable or a huge file would upload
+// without complaint. Checked client-side before compression/upload starts.
+const _ALLOWED_UPLOAD_MIME = new Set(['image/jpeg','image/jpg','image/png','image/heic','image/heif','application/pdf']);
+const _ALLOWED_UPLOAD_EXT  = new Set(['jpg','jpeg','png','heic','heif','pdf']);
+const _MAX_UPLOAD_BYTES    = 25*1024*1024; // 25MB
+function _validateUploadFile(file){
+  if(file.size > _MAX_UPLOAD_BYTES){
+    return `${file.name} is too large (${(file.size/1024/1024).toFixed(1)}MB) — 25MB max`;
+  }
+  const type=(file.type||'').toLowerCase();
+  const ext=(file.name.split('.').pop()||'').toLowerCase();
+  if(!_ALLOWED_UPLOAD_MIME.has(type) && !_ALLOWED_UPLOAD_EXT.has(ext)){
+    return `${file.name} isn't a supported file type — photos (JPEG/PNG/HEIC) or PDF only`;
+  }
+  return null;
+}
+
 export function _triggerBAUpload(slot, role){
   _baPendingSlot = slot;
   _baPendingRole = role;
@@ -151,6 +169,8 @@ export async function _handleBAUpload(input, role){
 
   try{
     let file = files[0]; // B/A is always 1 photo at a time per slot
+    const _valErr = _validateUploadFile(file);
+    if(_valErr){ toast(`❌ ${_valErr}`,'error',6000); _baPendingSlot=null; _baPendingRole=null; return; }
     // EXIF
     const exif  = await _readExif(file);
     let captureTime = null;
@@ -220,6 +240,8 @@ export async function handleUpload(input,type){
   let ok=0;
   for(let i=0;i<files.length;i++){
     let file=files[i];
+    const _valErr = _validateUploadFile(file);
+    if(_valErr){ toast(`❌ ${_valErr}`,'error',6000); continue; }
     toast(`⬆️ ${type==='photo'?'Processing':'Uploading'} ${i+1}/${files.length}…`,'info');
     try{
       if(type==='photo'){
