@@ -6,6 +6,12 @@
       "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
       "runtimeArgs": ["D:\\DEEPFLOW\\node_modules\\vite\\bin\\vite.js"],
       "port": 5173
+    },
+    {
+      "name": "gbelectricals",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["--yes", "serve", "sites/gbelectricals", "-l", "4321"],
+      "port": 4321
     }
   ]
 }

@@ -296,6 +296,37 @@ async function ensurePortalPin(){
   return false;
 }
 
+// A reset in the office only clears the PIN server-side — an already-open
+// tab has no way to find that out on its own, since ensurePortalPin() above
+// only ever checks once, at load, and then trusts sessionStorage for the
+// rest of the tab's life. Without this, "reset PIN" wouldn't take effect
+// until the client happened to close and reopen their link. Poll instead of
+// a realtime channel to match how lightweight the rest of this anon-only
+// page is kept — a client viewing jobs/certs doesn't need a websocket open
+// for this, and a 20s window is more than tight enough for a portal that
+// isn't guarding anything transactional.
+function _startPinWatchdog(){
+  if(sessionStorage.getItem(_pinSessionKey())!=='1') return;
+
+  async function check(){
+    if(sessionStorage.getItem(_pinSessionKey())!=='1') return; // already logged out
+    let status;
+    try{
+      const rows=await sb('rpc/portal_pin_status',{method:'POST',body:{p_table:_pinTableFor(),p_id:token}});
+      status=Array.isArray(rows)?rows[0]:rows;
+    }catch(e){
+      return; // transient network issue — don't punish the client for it
+    }
+    if(status && status.has_pin===false){
+      sessionStorage.removeItem(_pinSessionKey());
+      await _pinRenderSetup();
+    }
+  }
+
+  setInterval(check,20000);
+  document.addEventListener('visibilitychange',()=>{ if(!document.hidden) check(); });
+}
+
 // ── INIT ──────────────────────────────────────────────────────────────────────
 async function init(){
   if(!token){
@@ -441,6 +472,7 @@ async function init(){
   }
   try{
     if(!(await ensurePortalPin())) return;
+    _startPinWatchdog();
 
     let entity,jobs=[];
 

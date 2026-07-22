@@ -1,0 +1,1205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GB Electricals Engineering Ltd | NICEIC Approved Electricians London & Essex</title>
+    <meta name="description" content="NICEIC approved electrical contractors serving London & Essex. Landlord certificates, rewiring, fire alarms, CCTV, 24/7 emergency callouts.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            /* GB Electricals' own identity — red + charcoal — is the primary
+               brand throughout. Blue is kept only where the original template
+               used it: to mark the DeepFlow-powered portal specifically. */
+            --red: #dc2626; --red-dark: #b91c1c; --red-light: #fca5a5;
+            --charcoal: #1a1a1a; --charcoal-light: #2d2d2d; --charcoal-deep: #0c0c0c;
+            --blue: #2563eb; --blue-light: #3b82f6; --blue-glow: rgba(37, 99, 235, 0.3);
+            --gold: #f59e0b;
+            --gray-100: #f3f4f6; --gray-200: #e5e7eb; --gray-300: #d1d5db;
+            --gray-400: #9ca3af; --gray-500: #6b7280; --gray-600: #4b5563;
+            --gray-700: #374151; --gray-800: #1f2937; --gray-900: #111827;
+            --white: #ffffff; --green: #10b981;
+            --font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+        html, body { overflow-x: hidden; }
+        body {
+            font-family: var(--font); color: var(--white);
+            background: linear-gradient(155deg, var(--charcoal) 0%, var(--charcoal-light) 55%, var(--charcoal-deep) 100%);
+            line-height: 1.6; -webkit-font-smoothing: antialiased;
+        }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: var(--charcoal); }
+        ::-webkit-scrollbar-thumb { background: var(--gray-600); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--gray-500); }
+
+        /* ── PERSISTENT BACKGROUND — the same floating network/star canvas as
+           the DeepFlow Office App login screen, fixed behind the ENTIRE page
+           (not just the hero) so every section shares one continuous
+           backdrop, recolored to GB Electricals' red/gold instead of
+           DeepFlow's cyan/gold. ── */
+        #bg-canvas { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+        .bg-overlay { position: fixed; inset: 0; z-index: 1; pointer-events: none;
+            background: radial-gradient(ellipse 120% 55% at 50% 0%, rgba(220,38,38,0.06), transparent 60%),
+                        linear-gradient(180deg, rgba(12,12,12,0.1) 0%, rgba(12,12,12,0.55) 55%, rgba(12,12,12,0.85) 100%); }
+        nav, .hero, section, footer { position: relative; z-index: 2; }
+
+        /* NAV */
+        .nav { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; padding: 20px 0; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+        .nav.scrolled { padding: 12px 0; background: rgba(12,12,12,0.85); backdrop-filter: blur(20px); box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+        .nav-inner { max-width: 1280px; margin: 0 auto; padding: 0 24px; display: flex; align-items: center; justify-content: space-between; }
+        .logo { display: flex; align-items: center; gap: 12px; text-decoration: none; font-weight: 800; font-size: 1.25rem; color: white; transition: transform 0.3s ease; }
+        .logo:hover { transform: scale(1.02); }
+        .logo-icon { width: 40px; height: 40px; background: linear-gradient(135deg, var(--red) 50%, var(--charcoal) 50%); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 900; font-size: 1.1rem; position: relative; overflow: hidden; }
+        .logo-icon::after { content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: linear-gradient(45deg, transparent, rgba(255,255,255,0.2), transparent); transform: rotate(45deg); animation: logoShine 3s infinite; }
+        @keyframes logoShine { 0% { transform: translateX(-100%) rotate(45deg); } 100% { transform: translateX(100%) rotate(45deg); } }
+        .nav-links { display: flex; align-items: center; gap: 32px; }
+        .nav-link { text-decoration: none; color: var(--gray-300); font-weight: 500; font-size: 0.95rem; position: relative; padding: 4px 0; transition: color 0.3s ease; }
+        .nav-link::after { content: ''; position: absolute; bottom: 0; left: 50%; width: 0; height: 2px; background: var(--red); transition: all 0.3s ease; transform: translateX(-50%); }
+        .nav-link:hover { color: white; }
+        .nav-link:hover::after { width: 100%; }
+        .nav-actions { display: flex; align-items: center; gap: 16px; }
+        .phone-btn { display: flex; align-items: center; gap: 8px; color: var(--red-light); font-weight: 700; font-size: 0.95rem; text-decoration: none; transition: all 0.3s ease; }
+        .phone-btn:hover { transform: scale(1.05); }
+        .portal-btn { padding: 10px 20px; border: 2px solid var(--blue); color: var(--blue-light); background: transparent; border-radius: 8px; font-weight: 600; font-size: 0.9rem; cursor: pointer; transition: all 0.3s ease; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+        .portal-btn:hover { background: var(--blue); color: white; box-shadow: 0 4px 15px var(--blue-glow); }
+        .mobile-menu-btn { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: white; }
+
+        /* HERO */
+        .hero { min-height: 100vh; display: flex; align-items: center; overflow: hidden; }
+        .hero-bg { position: absolute; inset: 0; background: url('https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=1920&q=80') center/cover; opacity: 0.28; }
+        .hero-photo-overlay { position: absolute; inset: 0; background: linear-gradient(135deg, rgba(12,12,12,0.85) 0%, rgba(26,26,26,0.6) 50%, rgba(220,38,38,0.08) 100%); }
+        .hero-content { position: relative; z-index: 2; max-width: 1280px; margin: 0 auto; padding: 140px 24px 80px; width: 100%; }
+        .hero-badge { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; background: rgba(220,38,38,0.15); border: 1px solid rgba(220,38,38,0.3); border-radius: 100px; color: var(--red-light); font-size: 0.85rem; font-weight: 600; margin-bottom: 24px; opacity: 0; animation: fadeInUp 0.6s ease 0.2s both; }
+        .hero-badge .pulse { width: 8px; height: 8px; background: var(--red); border-radius: 50%; animation: pulse 2s infinite; }
+        @keyframes pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(1.2); } }
+        .hero-title { font-size: clamp(2.5rem, 5vw, 4.5rem); font-weight: 900; color: white; line-height: 1.1; margin-bottom: 20px; max-width: 700px; }
+        .hero-title .line { display: block; opacity: 0; transform: translateY(30px); animation: fadeInUp 0.8s ease forwards; }
+        .hero-title .line:nth-child(1) { animation-delay: 0.3s; }
+        .hero-title .line:nth-child(2) { animation-delay: 0.5s; }
+        .hero-title .highlight { color: var(--red); position: relative; }
+        .hero-subtitle { font-size: clamp(1rem, 2vw, 1.25rem); color: var(--gray-300); max-width: 560px; margin-bottom: 40px; opacity: 0; animation: fadeInUp 0.8s ease 0.9s both; }
+        .hero-ctas { display: flex; gap: 16px; flex-wrap: wrap; opacity: 0; animation: fadeInUp 0.8s ease 1.1s both; }
+        .btn { padding: 16px 32px; border-radius: 12px; font-weight: 700; font-size: 1rem; cursor: pointer; transition: all 0.3s ease; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; border: none; position: relative; overflow: hidden; }
+        .btn-primary { background: var(--red); color: white; box-shadow: 0 4px 20px rgba(220,38,38,0.4); }
+        .btn-primary:hover { background: var(--red-dark); transform: translateY(-2px); box-shadow: 0 8px 30px rgba(220,38,38,0.5); }
+        .btn-primary::after { content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: linear-gradient(45deg, transparent, rgba(255,255,255,0.15), transparent); transform: translateX(-100%) rotate(45deg); transition: transform 0.6s ease; }
+        .btn-primary:hover::after { transform: translateX(100%) rotate(45deg); }
+        .btn-secondary { background: transparent; color: white; border: 2px solid rgba(255,255,255,0.3); }
+        .btn-secondary:hover { border-color: white; background: rgba(255,255,255,0.05); transform: translateY(-2px); }
+        .hero-trust { margin-top: 60px; padding-top: 30px; border-top: 1px solid rgba(255,255,255,0.1); opacity: 0; animation: fadeInUp 0.8s ease 1.3s both; }
+        .trust-label { color: var(--gray-400); font-size: 0.85rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 16px; }
+        .trust-items { display: flex; gap: 40px; flex-wrap: wrap; }
+        .trust-item { display: flex; align-items: center; gap: 12px; }
+        .trust-icon { width: 44px; height: 44px; background: rgba(255,255,255,0.08); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: var(--red-light); }
+        .trust-text { color: white; }
+        .trust-number { font-size: 1.5rem; font-weight: 800; line-height: 1; }
+        .trust-label-small { font-size: 0.8rem; color: var(--gray-400); }
+        .scroll-indicator { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--gray-400); font-size: 0.8rem; animation: bounce 2s infinite; }
+        @keyframes bounce { 0%,100% { transform: translateX(-50%) translateY(0); } 50% { transform: translateX(-50%) translateY(10px); } }
+
+        /* SECTION BASE — every section is a transparent/glass layer over the
+           one fixed background, never an opaque block, so the same backdrop
+           shows through everywhere. */
+        section { padding: 100px 24px; max-width: 1280px; margin: 0 auto; }
+        .section-header { text-align: center; margin-bottom: 60px; }
+        .section-label { display: inline-flex; align-items: center; gap: 8px; color: var(--red-light); font-weight: 700; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 12px; }
+        .section-title { font-size: clamp(2rem, 4vw, 3rem); font-weight: 800; color: white; line-height: 1.2; }
+        .section-subtitle { color: var(--gray-400); font-size: 1.1rem; max-width: 600px; margin: 16px auto 0; }
+
+        /* SERVICES BENTO */
+        .bento-grid { display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(3, 200px); gap: 20px; }
+        .bento-card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.09); border-radius: 20px; padding: 28px; position: relative; overflow: hidden; cursor: pointer; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); backdrop-filter: blur(16px); }
+        .bento-card::before { content: ''; position: absolute; bottom: 0; left: 0; width: 0; height: 4px; background: var(--red); transition: width 0.4s ease; }
+        .bento-card:hover { transform: translateY(-8px); border-color: rgba(220,38,38,0.35); box-shadow: 0 20px 40px rgba(0,0,0,0.35); }
+        .bento-card:hover::before { width: 100%; }
+        .bento-card.large { grid-column: span 2; grid-row: span 2; }
+        .bento-card.medium { grid-column: span 2; }
+        .bento-icon { width: 52px; height: 52px; background: rgba(220,38,38,0.12); border-radius: 14px; display: flex; align-items: center; justify-content: center; color: var(--red-light); margin-bottom: 16px; transition: all 0.3s ease; }
+        .bento-card:hover .bento-icon { background: var(--red); color: white; transform: scale(1.1) rotate(-5deg); }
+        .bento-title { font-size: 1.25rem; font-weight: 700; color: white; margin-bottom: 8px; }
+        .bento-desc { color: var(--gray-400); font-size: 0.9rem; line-height: 1.5; }
+        .bento-card.large .bento-title { font-size: 1.5rem; }
+        .bento-card.large .bento-desc { font-size: 1rem; }
+        .portal-badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: rgba(37,99,235,0.12); border: 1px solid rgba(37,99,235,0.3); border-radius: 100px; color: var(--blue-light); font-size: 0.75rem; font-weight: 600; margin-top: 12px; }
+
+        /* ABOUT */
+        .about-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: center; }
+        .about-image { position: relative; border-radius: 24px; overflow: hidden; border: 1px solid rgba(255,255,255,0.09); }
+        .about-image img { width: 100%; height: 500px; object-fit: cover; transition: transform 0.6s ease; }
+        .about-image:hover img { transform: scale(1.05); }
+        .about-image::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 60%, rgba(12,12,12,0.5)); }
+        .about-content h2 { font-size: 2.5rem; font-weight: 800; margin-bottom: 20px; color: white; }
+        .about-content p { color: var(--gray-300); margin-bottom: 16px; font-size: 1.05rem; }
+        .about-highlight { padding: 20px; background: rgba(37,99,235,0.06); border-radius: 16px; border-left: 4px solid var(--blue); margin: 24px 0; }
+        .about-highlight p { margin: 0; color: var(--gray-200); font-size: 0.95rem; }
+        .about-highlight strong { color: var(--blue-light); }
+        .stats-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; margin-top: 40px; }
+        .stat-item { text-align: center; padding: 24px; background: rgba(255,255,255,0.04); border-radius: 16px; border: 1px solid rgba(255,255,255,0.09); transition: all 0.3s ease; backdrop-filter: blur(16px); }
+        .stat-item:hover { transform: translateY(-4px); box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+        .stat-icon { width: 48px; height: 48px; background: rgba(220,38,38,0.12); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: var(--red-light); margin: 0 auto 12px; }
+        .stat-number { font-size: 2.5rem; font-weight: 900; color: white; line-height: 1; }
+        .stat-label { color: var(--gray-400); font-size: 0.9rem; margin-top: 8px; }
+
+        /* PROCESS */
+        .process-timeline { position: relative; padding: 40px 0; }
+        .timeline-line { position: absolute; top: 80px; left: 0; right: 0; height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; }
+        .timeline-progress { position: absolute; top: 0; left: 0; height: 100%; width: 0; background: linear-gradient(90deg, var(--red), var(--blue)); border-radius: 2px; transition: width 1.5s ease; }
+        .timeline-progress.active { width: 100%; }
+        .process-steps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 24px; position: relative; z-index: 2; }
+        .process-step { text-align: center; opacity: 0; transform: translateY(30px); transition: all 0.6s ease; }
+        .process-step.visible { opacity: 1; transform: translateY(0); }
+        .step-node { width: 64px; height: 64px; background: var(--charcoal); border: 4px solid rgba(255,255,255,0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; font-weight: 800; color: var(--gray-400); transition: all 0.4s ease; position: relative; }
+        .step-node.active { border-color: var(--red); color: var(--red-light); box-shadow: 0 0 0 8px rgba(220,38,38,0.12); }
+        .step-node.portal { border-color: var(--blue); color: var(--blue-light); box-shadow: 0 0 0 8px rgba(37,99,235,0.12); }
+        .step-title { font-weight: 700; color: white; margin-bottom: 8px; }
+        .step-desc { color: var(--gray-400); font-size: 0.9rem; }
+
+        /* ACCREDITATIONS */
+        .accred-section { padding: 60px 24px; overflow: hidden; }
+        .accred-marquee { display: flex; gap: 60px; animation: marquee 20s linear infinite; width: max-content; }
+        .accred-marquee:hover { animation-play-state: paused; }
+        @keyframes marquee { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+        .accred-item { display: flex; align-items: center; gap: 12px; padding: 16px 32px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.09); border-radius: 12px; filter: grayscale(1); opacity: 0.65; transition: all 0.3s ease; backdrop-filter: blur(10px); }
+        .accred-item:hover { filter: grayscale(0); opacity: 1; transform: scale(1.05); }
+        .accred-item span { font-weight: 700; color: var(--gray-200); }
+
+        /* WHY US — feature marquee (a placeholder testimonials carousel with
+           fake names was here originally; real client quotes can go back in
+           once you've collected some). */
+        .why-marquee-wrap { overflow: hidden; position: relative; max-width: 1120px; margin: 0 auto;
+            -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+            mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); }
+        .why-marquee-track { display: flex; gap: 14px; width: max-content; animation: whyMarquee 26s linear infinite; margin-bottom: 14px; }
+        .why-marquee-track.reverse { animation-name: whyMarqueeReverse; animation-duration: 32s; }
+        .why-marquee-wrap:hover .why-marquee-track { animation-play-state: paused; }
+        @keyframes whyMarquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+        @keyframes whyMarqueeReverse { from { transform: translateX(-50%); } to { transform: translateX(0); } }
+        .why-chip { white-space: nowrap; padding: 14px 22px; border-radius: 999px; background: rgba(255,255,255,0.05); border: 1px solid rgba(220,38,38,0.2); font-size: 14px; font-weight: 600; color: rgba(255,255,255,0.85); backdrop-filter: blur(10px); transition: border-color .3s ease, background .3s ease; }
+        .why-chip:hover { border-color: rgba(220,38,38,0.5); background: rgba(255,255,255,0.09); }
+
+        /* EMERGENCY */
+        .emergency-section { position: relative; }
+        .emergency-section::before { content: ''; position: absolute; top: -50%; right: -20%; width: 600px; height: 600px; background: radial-gradient(circle, rgba(220,38,38,0.18) 0%, transparent 70%); animation: emergencyGlow 4s ease-in-out infinite; pointer-events: none; }
+        @keyframes emergencyGlow { 0%,100% { transform: scale(1); opacity: 0.5; } 50% { transform: scale(1.2); opacity: 0.8; } }
+        .emergency-content { text-align: center; position: relative; z-index: 2; }
+        .emergency-phones { display: flex; justify-content: center; gap: 40px; margin: 40px 0; flex-wrap: wrap; }
+        .emergency-phone { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+        .emergency-phone a { font-size: 2rem; font-weight: 900; color: white; text-decoration: none; transition: all 0.3s ease; text-shadow: 0 0 20px rgba(220,38,38,0.5); }
+        .emergency-phone a:hover { color: var(--red-light); transform: scale(1.05); }
+        .emergency-phone span { color: var(--gray-400); font-size: 0.9rem; }
+        .emergency-btn { background: var(--red); color: white; padding: 18px 40px; border-radius: 12px; font-weight: 700; font-size: 1.1rem; text-decoration: none; display: inline-flex; align-items: center; gap: 10px; animation: emergencyPulse 2s infinite; transition: all 0.3s ease; }
+        .emergency-btn:hover { background: var(--red-dark); }
+        @keyframes emergencyPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(220,38,38,0.4); } 50% { box-shadow: 0 0 0 15px rgba(220,38,38,0); } }
+
+        /* PORTAL (DeepFlow) — the one place blue leads, exactly like the
+           original: this is the DeepFlow-powered part, so it earns its own
+           accent, without pulling the rest of the site off-brand. */
+        .portal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: center; position: relative; z-index: 2; }
+        .portal-mockup { position: relative; animation: float 6s ease-in-out infinite; }
+        @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-15px); } }
+        .portal-mockup-frame { background: linear-gradient(145deg, #1e1e1e, #0c0c0c); border-radius: 20px; padding: 20px; box-shadow: 0 25px 50px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.06), inset 0 1px 0 rgba(255,255,255,0.05); transform: perspective(1000px) rotateY(-5deg) rotateX(5deg); transition: transform 0.4s ease; }
+        .portal-mockup:hover .portal-mockup-frame { transform: perspective(1000px) rotateY(0deg) rotateX(0deg); }
+        .mockup-header { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .mockup-dot { width: 10px; height: 10px; border-radius: 50%; }
+        .mockup-dot.red { background: #ef4444; }
+        .mockup-dot.yellow { background: #f59e0b; }
+        .mockup-dot.green { background: #10b981; }
+        .mockup-content { display: grid; gap: 12px; }
+        .mockup-row { display: flex; align-items: center; gap: 12px; padding: 12px; background: rgba(255,255,255,0.03); border-radius: 10px; border: 1px solid rgba(255,255,255,0.06); }
+        .mockup-status { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); }
+        .mockup-text { flex: 1; }
+        .mockup-text-line { height: 10px; background: rgba(255,255,255,0.1); border-radius: 4px; margin-bottom: 6px; }
+        .mockup-text-line.short { width: 60%; }
+        .mockup-action { padding: 6px 12px; background: rgba(37,99,235,0.2); border-radius: 6px; color: var(--blue-light); font-size: 0.75rem; font-weight: 600; }
+        .portal-content h2 { font-size: 2.5rem; font-weight: 800; color: white; margin-bottom: 16px; }
+        .portal-content > p { color: var(--gray-400); font-size: 1.1rem; margin-bottom: 32px; }
+        .portal-features { display: grid; gap: 16px; margin-bottom: 32px; }
+        .portal-feature { display: flex; align-items: flex-start; gap: 16px; padding: 16px; background: rgba(255,255,255,0.03); border-radius: 12px; border: 1px solid rgba(255,255,255,0.06); transition: all 0.3s ease; }
+        .portal-feature:hover { background: rgba(255,255,255,0.06); transform: translateX(8px); }
+        .portal-feature-icon { width: 44px; height: 44px; background: rgba(37,99,235,0.15); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: var(--blue-light); flex-shrink: 0; }
+        .portal-feature-text h4 { color: white; font-weight: 600; margin-bottom: 4px; }
+        .portal-feature-text p { color: var(--gray-500); font-size: 0.9rem; }
+        .portal-cta { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
+        .portal-login-btn { padding: 14px 32px; background: var(--blue); color: white; border-radius: 10px; font-weight: 700; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; transition: all 0.3s ease; box-shadow: 0 4px 20px rgba(37,99,235,0.3); }
+        .portal-login-btn:hover { background: var(--blue-light); transform: translateY(-2px); box-shadow: 0 8px 30px rgba(37,99,235,0.4); }
+        .portal-help { color: var(--gray-400); font-size: 0.9rem; margin-top: 16px; }
+        .portal-help a { color: var(--blue-light); text-decoration: none; }
+        .portal-help a:hover { text-decoration: underline; }
+        .powered-by { position: absolute; bottom: 20px; right: 24px; color: var(--gray-600); font-size: 0.75rem; z-index: 2; }
+
+        /* CONTACT */
+        .contact-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 60px; }
+        .contact-form { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.09); padding: 40px; border-radius: 24px; backdrop-filter: blur(16px); }
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; font-weight: 600; color: var(--gray-300); margin-bottom: 8px; font-size: 0.9rem; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 14px 16px; border: 2px solid rgba(255,255,255,0.12); border-radius: 12px; font-family: var(--font); font-size: 1rem; transition: all 0.3s ease; background: rgba(255,255,255,0.04); color: white; }
+        .form-group select option { background: var(--charcoal); color: white; }
+        .form-group input::placeholder, .form-group textarea::placeholder { color: var(--gray-500); }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: var(--red); box-shadow: 0 0 0 4px rgba(220,38,38,0.15); }
+        .form-group textarea { min-height: 120px; resize: vertical; }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .submit-btn { width: 100%; padding: 16px; background: var(--red); color: white; border: none; border-radius: 12px; font-weight: 700; font-size: 1rem; cursor: pointer; transition: all 0.3s ease; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .submit-btn:hover { background: var(--red-dark); transform: translateY(-2px); box-shadow: 0 8px 25px rgba(220,38,38,0.3); }
+        .submit-btn.loading { pointer-events: none; }
+        .submit-btn.success { background: var(--green); }
+        .contact-info { display: flex; flex-direction: column; gap: 24px; }
+        .info-card { padding: 24px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.09); border-radius: 16px; transition: all 0.3s ease; backdrop-filter: blur(16px); }
+        .info-card:hover { transform: translateY(-4px); box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+        .info-card h4 { display: flex; align-items: center; gap: 10px; color: white; margin-bottom: 12px; }
+        .info-card h4 svg { color: var(--red-light); }
+        .info-card p, .info-card a { color: var(--gray-400); text-decoration: none; transition: color 0.3s ease; }
+        .info-card a:hover { color: var(--red-light); }
+        .map-container { height: 250px; background: var(--charcoal-light); border-radius: 16px; overflow: hidden; position: relative; border: 1px solid rgba(255,255,255,0.09); filter: grayscale(0.3) invert(0.92) contrast(0.9); }
+        .map-container iframe { width: 100%; height: 100%; border: none; }
+
+        /* FOOTER */
+        .footer { padding: 80px 24px 40px; border-top: 1px solid rgba(255,255,255,0.08); }
+        .footer-grid { max-width: 1280px; margin: 0 auto; display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr; gap: 40px; margin-bottom: 60px; }
+        .footer-brand { max-width: 300px; }
+        .footer-brand .logo { color: white; margin-bottom: 16px; }
+        .footer-brand p { color: var(--gray-400); font-size: 0.95rem; line-height: 1.6; }
+        .footer-column h5 { color: white; font-weight: 700; margin-bottom: 20px; font-size: 1rem; }
+        .footer-column a { display: block; color: var(--gray-400); text-decoration: none; padding: 6px 0; font-size: 0.9rem; transition: all 0.3s ease; }
+        .footer-column a:hover { color: white; transform: translateX(4px); }
+        .footer-social { display: flex; gap: 12px; margin-top: 20px; }
+        .social-link { width: 40px; height: 40px; background: rgba(255,255,255,0.06); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: var(--gray-400); transition: all 0.3s ease; }
+        .social-link:hover { background: var(--red); color: white; transform: translateY(-4px); }
+        .footer-bottom { max-width: 1280px; margin: 0 auto; padding-top: 30px; border-top: 1px solid rgba(255,255,255,0.08); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
+        .footer-bottom p, .footer-bottom a { color: var(--gray-500); text-decoration: none; font-size: 0.85rem; transition: color 0.3s ease; }
+        .footer-bottom a:hover { color: var(--gray-300); }
+
+        /* ANIMATIONS */
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* MODAL */
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.65); backdrop-filter: blur(8px); z-index: 2000; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+        .modal-overlay.active { opacity: 1; pointer-events: all; }
+        .modal { background: var(--charcoal-light); border: 1px solid rgba(255,255,255,0.1); border-radius: 24px; padding: 40px; max-width: 440px; width: 90%; transform: scale(0.9) translateY(20px); transition: transform 0.3s ease; }
+        .modal-overlay.active .modal { transform: scale(1) translateY(0); }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .modal-header h3 { font-size: 1.4rem; font-weight: 800; color: white; }
+        .modal-close { background: none; border: none; cursor: pointer; padding: 8px; color: var(--gray-400); transition: color 0.3s ease; }
+        .modal-close:hover { color: white; }
+        .modal-icon { width: 56px; height: 56px; background: var(--blue); border-radius: 16px; display: flex; align-items: center; justify-content: center; color: white; margin-bottom: 20px; box-shadow: 0 8px 20px rgba(37,99,235,0.3); }
+        .modal p { color: var(--gray-300); font-size: 0.95rem; line-height: 1.7; margin-bottom: 24px; }
+        .modal-portal-btn { width: 100%; padding: 14px; background: var(--blue); color: white; border-radius: 12px; font-weight: 700; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.3s ease; box-shadow: 0 4px 20px rgba(37,99,235,0.3); }
+        .modal-portal-btn:hover { background: var(--blue-light); transform: translateY(-2px); box-shadow: 0 8px 30px rgba(37,99,235,0.4); }
+        .modal-help { text-align: center; margin-top: 16px; }
+        .modal-help a { color: var(--red-light); text-decoration: none; font-size: 0.9rem; }
+        .modal-help a:hover { text-decoration: underline; }
+
+        /* MOBILE */
+        @media (max-width: 1024px) {
+            .bento-grid { grid-template-columns: repeat(2, 1fr); grid-template-rows: auto; }
+            .bento-card.large { grid-column: span 2; grid-row: span 2; }
+            .about-grid, .portal-grid, .contact-grid { grid-template-columns: 1fr; }
+            .process-steps { grid-template-columns: repeat(3, 1fr); }
+            .footer-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (max-width: 768px) {
+            .nav-links { display: none; }
+            .mobile-menu-btn { display: block; }
+            .phone-btn span { display: none; }
+            .hero-ctas { flex-direction: column; }
+            .btn { width: 100%; justify-content: center; }
+            .bento-grid { grid-template-columns: 1fr; }
+            .bento-card.large, .bento-card.medium { grid-column: span 1; grid-row: span 1; }
+            .stats-bar { grid-template-columns: repeat(2, 1fr); }
+            .process-steps { grid-template-columns: 1fr; }
+            .timeline-line { display: none; }
+            .emergency-phones { flex-direction: column; gap: 20px; }
+            .footer-grid { grid-template-columns: 1fr; }
+            .trust-items { gap: 20px; }
+            .form-row { grid-template-columns: 1fr; }
+        }
+        .mobile-menu { position: fixed; top: 0; right: -100%; width: 80%; max-width: 400px; height: 100vh; background: var(--charcoal-light); z-index: 3000; padding: 80px 32px 32px; transition: right 0.4s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: -10px 0 40px rgba(0,0,0,0.3); }
+        .mobile-menu.active { right: 0; }
+        .mobile-menu-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 2500; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+        .mobile-menu-overlay.active { opacity: 1; pointer-events: all; }
+        .mobile-menu a { display: block; padding: 16px 0; color: white; text-decoration: none; font-weight: 600; font-size: 1.1rem; border-bottom: 1px solid rgba(255,255,255,0.1); transition: color 0.3s ease; }
+        .mobile-menu a:hover { color: var(--red-light); }
+        .mobile-menu-close { position: absolute; top: 20px; right: 20px; background: none; border: none; cursor: pointer; padding: 8px; color: white; }
+    </style>
+</head>
+<body>
+
+<canvas id="bg-canvas"></canvas>
+<div class="bg-overlay"></div>
+
+    <!-- Navigation -->
+    <nav class="nav" id="nav">
+        <div class="nav-inner">
+            <a href="#" class="logo">
+                <div class="logo-icon">GB</div>
+                <span>GB Electricals</span>
+            </a>
+            <div class="nav-links">
+                <a href="#services" class="nav-link">Services</a>
+                <a href="#about" class="nav-link">About</a>
+                <a href="#process" class="nav-link">How We Work</a>
+                <a href="#portal" class="nav-link">Client Portal</a>
+                <a href="#contact" class="nav-link">Contact</a>
+            </div>
+            <div class="nav-actions">
+                <a href="tel:+447510615022" class="phone-btn">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                    <span>07510 615022</span>
+                </a>
+                <a href="#" class="portal-btn" onclick="openPortalModal(); return false;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+                    Client Login
+                </a>
+            </div>
+            <button class="mobile-menu-btn" onclick="toggleMobileMenu()">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Mobile Menu -->
+    <div class="mobile-menu-overlay" id="mobileOverlay" onclick="toggleMobileMenu()"></div>
+    <div class="mobile-menu" id="mobileMenu">
+        <button class="mobile-menu-close" onclick="toggleMobileMenu()">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+        <a href="#services" onclick="toggleMobileMenu()">Services</a>
+        <a href="#about" onclick="toggleMobileMenu()">About</a>
+        <a href="#process" onclick="toggleMobileMenu()">How We Work</a>
+        <a href="#portal" onclick="toggleMobileMenu()">Client Portal</a>
+        <a href="#contact" onclick="toggleMobileMenu()">Contact</a>
+        <a href="tel:+447510615022" style="color: var(--red-light);">07510 615022</a>
+    </div>
+
+    <!-- Hero -->
+    <section class="hero" id="hero">
+        <div class="hero-bg"></div>
+        <div class="hero-photo-overlay"></div>
+        <div class="hero-content">
+            <div class="hero-badge">
+                <span class="pulse"></span>
+                NICEIC Approved Contractors
+            </div>
+            <h1 class="hero-title">
+                <span class="line">Powering Your</span>
+                <span class="line">Property with <span class="highlight">Confidence</span></span>
+            </h1>
+            <p class="hero-subtitle">
+                Professional, reliable & certified electrical services across London & Essex.
+                From landlord safety certificates to full rewiring — we keep your property safe and compliant.
+            </p>
+            <div class="hero-ctas">
+                <a href="#contact" class="btn btn-primary">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="m9 16 2 2 4-4"/></svg>
+                    Book an Inspection
+                </a>
+                <a href="#portal" class="btn btn-secondary">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
+                    Check Job Status
+                </a>
+            </div>
+            <div class="hero-trust">
+                <div class="trust-label">Trusted by property managers across London & Essex</div>
+                <div class="trust-items">
+                    <div class="trust-item">
+                        <div class="trust-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg>
+                        </div>
+                        <div class="trust-text">
+                            <div class="trust-number" data-count="10">0</div>
+                            <div class="trust-label-small">Years Experience</div>
+                        </div>
+                    </div>
+                    <div class="trust-item">
+                        <div class="trust-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                        </div>
+                        <div class="trust-text">
+                            <div class="trust-number" data-count="500">0</div>
+                            <div class="trust-label-small">Properties Served</div>
+                        </div>
+                    </div>
+                    <div class="trust-item">
+                        <div class="trust-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                        </div>
+                        <div class="trust-text">
+                            <div class="trust-number">NICEIC</div>
+                            <div class="trust-label-small">Approved</div>
+                        </div>
+                    </div>
+                    <div class="trust-item">
+                        <div class="trust-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        </div>
+                        <div class="trust-text">
+                            <div class="trust-number">24/7</div>
+                            <div class="trust-label-small">Emergency</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="scroll-indicator">
+            <span>Scroll to explore</span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+    </section>
+
+    <!-- Services -->
+    <section id="services">
+        <div class="section-header">
+            <div class="section-label">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                Our Services
+            </div>
+            <h2 class="section-title">Complete Electrical Solutions</h2>
+            <p class="section-subtitle">From safety certificates to smart home installations — everything your property needs.</p>
+        </div>
+        <div class="bento-grid">
+            <div class="bento-card large">
+                <div class="bento-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="m9 15 2 2 4-4"/></svg>
+                </div>
+                <h3 class="bento-title">Landlord Safety Certificates</h3>
+                <p class="bento-desc">EICR, Gas Safety, and EPC certificates — all issued with full compliance documentation. We handle everything from inspection to certification.</p>
+                <div class="portal-badge">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    Track & download certificates in your client portal
+                </div>
+            </div>
+            <div class="bento-card medium">
+                <div class="bento-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/></svg>
+                </div>
+                <h3 class="bento-title">Rewiring & Installations</h3>
+                <p class="bento-desc">Full and partial rewiring for new builds, refurbishments, and upgrades. Modern, safe, and energy-efficient solutions.</p>
+            </div>
+            <div class="bento-card medium">
+                <div class="bento-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
+                </div>
+                <h3 class="bento-title">Fire & Smoke Alarms</h3>
+                <p class="bento-desc">Installation, testing, and certification of fire detection systems. Full compliance with current regulations.</p>
+            </div>
+            <div class="bento-card">
+                <div class="bento-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 8-6 4 6 4V8Z"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg>
+                </div>
+                <h3 class="bento-title">CCTV & Security</h3>
+                <p class="bento-desc">CCTV and door entry system installations with remote monitoring setup.</p>
+            </div>
+            <div class="bento-card">
+                <div class="bento-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                </div>
+                <h3 class="bento-title">Maintenance</h3>
+                <p class="bento-desc">Planned maintenance and 24/7 emergency repairs. Keep your electrics running safely.</p>
+            </div>
+            <div class="bento-card">
+                <div class="bento-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                </div>
+                <h3 class="bento-title">Periodic Testing</h3>
+                <p class="bento-desc">Regular electrical testing and inspection schedules to maintain compliance.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- About -->
+    <section id="about">
+        <div class="about-grid">
+            <div class="about-content">
+                <div class="section-label" style="justify-content:flex-start;margin-bottom:12px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    About Us
+                </div>
+                <h2>Who We Are</h2>
+                <p>GB Electricals is a trusted and approved electrical contractor delivering a comprehensive range of high-standard electrical services. We pride ourselves on skilled workmanship, technical expertise, and completing every project efficiently.</p>
+                <p>Our team of experienced, fully qualified electricians has provided professional services to domestic and commercial clients for over 10 years. We've successfully supported landlords, property managers, and businesses across London and Essex.</p>
+                <div class="about-highlight">
+                    <p>Powered by our internal <strong>DeepFlow</strong> system, we track every job, certificate, and invoice in real-time — so nothing gets lost and you always know exactly where things stand.</p>
+                </div>
+                <div class="stats-bar">
+                    <div class="stat-item">
+                        <div class="stat-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                        </div>
+                        <div class="stat-number" data-count="10">0</div>
+                        <div class="stat-label">Years Experience</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                        </div>
+                        <div class="stat-number" data-count="500">0</div>
+                        <div class="stat-label">Properties Served</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg>
+                        </div>
+                        <div class="stat-number">NICEIC</div>
+                        <div class="stat-label">Approved</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                        </div>
+                        <div class="stat-number">24/7</div>
+                        <div class="stat-label">Support</div>
+                    </div>
+                </div>
+            </div>
+            <div class="about-image">
+                <img src="https://images.unsplash.com/photo-1504328345606-18bbc8c9d7d1?w=800&q=80" alt="GB Electricals Office">
+            </div>
+        </div>
+    </section>
+
+    <!-- How We Work -->
+    <section id="process">
+        <div class="section-header">
+            <div class="section-label">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                Our Process
+            </div>
+            <h2 class="section-title">From Booking to Certificate</h2>
+            <p class="section-subtitle">A simple, transparent process that keeps you informed every step of the way.</p>
+        </div>
+        <div class="process-timeline">
+            <div class="timeline-line">
+                <div class="timeline-progress" id="timelineProgress"></div>
+            </div>
+            <div class="process-steps">
+                <div class="process-step" data-delay="0">
+                    <div class="step-node active">1</div>
+                    <h4 class="step-title">Book</h4>
+                    <p class="step-desc">Call or fill our form to schedule your service</p>
+                </div>
+                <div class="process-step" data-delay="1">
+                    <div class="step-node active">2</div>
+                    <h4 class="step-title">Schedule</h4>
+                    <p class="step-desc">We confirm and assign a qualified engineer</p>
+                </div>
+                <div class="process-step" data-delay="2">
+                    <div class="step-node active">3</div>
+                    <h4 class="step-title">Complete</h4>
+                    <p class="step-desc">On-site work with photo documentation</p>
+                </div>
+                <div class="process-step" data-delay="3">
+                    <div class="step-node active">4</div>
+                    <h4 class="step-title">Certify</h4>
+                    <p class="step-desc">Certificates issued and uploaded</p>
+                </div>
+                <div class="process-step" data-delay="4">
+                    <div class="step-node portal">5</div>
+                    <h4 class="step-title">Access</h4>
+                    <p class="step-desc">Download from your Client Portal</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Accreditations -->
+    <section class="accred-section" id="accreditations">
+        <div class="section-header" style="margin-bottom:40px;">
+            <div class="section-label">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                Accreditations
+            </div>
+            <h2 class="section-title">Fully Certified & Insured</h2>
+        </div>
+        <div style="overflow:hidden;">
+            <div class="accred-marquee">
+                <div class="accred-item"><span style="color:var(--red-light);font-size:1.5rem;font-weight:900;">NICEIC</span><span>Approved Contractor</span></div>
+                <div class="accred-item"><span style="color:var(--green);font-size:1.5rem;font-weight:900;">Part P</span><span>Registered Installer</span></div>
+                <div class="accred-item"><span style="color:var(--blue-light);font-size:1.5rem;font-weight:900;">Code</span><span>Assessor</span></div>
+                <div class="accred-item"><span style="color:white;font-size:1.5rem;font-weight:900;">GB</span><span>Electricals Ltd</span></div>
+                <div class="accred-item"><span style="color:var(--red-light);font-size:1.5rem;font-weight:900;">NICEIC</span><span>Approved Contractor</span></div>
+                <div class="accred-item"><span style="color:var(--green);font-size:1.5rem;font-weight:900;">Part P</span><span>Registered Installer</span></div>
+                <div class="accred-item"><span style="color:var(--blue-light);font-size:1.5rem;font-weight:900;">Code</span><span>Assessor</span></div>
+                <div class="accred-item"><span style="color:white;font-size:1.5rem;font-weight:900;">GB</span><span>Electricals Ltd</span></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Why Choose Us -->
+    <section id="why-us">
+        <div class="section-header">
+            <div class="section-label">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg>
+                Why Choose Us
+            </div>
+            <h2 class="section-title">Built for Landlords & Property Managers</h2>
+            <p class="section-subtitle">Everything that makes managing electrical compliance across a portfolio straightforward, not stressful.</p>
+        </div>
+        <div class="why-marquee-wrap">
+            <div class="why-marquee-track">
+                <span class="why-chip">🏆 NICEIC Approved Contractor</span>
+                <span class="why-chip">⏱️ Over 10 years serving London &amp; Essex</span>
+                <span class="why-chip">🏢 500+ properties under management</span>
+                <span class="why-chip">📄 Certificates in your portal same day</span>
+                <span class="why-chip">🚨 24/7 genuine emergency callout</span>
+                <span class="why-chip">📱 Real-time job tracking via DeepFlow</span>
+                <span class="why-chip">🏆 NICEIC Approved Contractor</span>
+                <span class="why-chip">⏱️ Over 10 years serving London &amp; Essex</span>
+                <span class="why-chip">🏢 500+ properties under management</span>
+                <span class="why-chip">📄 Certificates in your portal same day</span>
+                <span class="why-chip">🚨 24/7 genuine emergency callout</span>
+                <span class="why-chip">📱 Real-time job tracking via DeepFlow</span>
+            </div>
+            <div class="why-marquee-track reverse">
+                <span class="why-chip">✅ Part P Registered Installer</span>
+                <span class="why-chip">🔌 EICR, Gas Safety &amp; EPC in one place</span>
+                <span class="why-chip">📸 Photo-documented on-site work</span>
+                <span class="why-chip">💬 No more chasing paperwork by phone</span>
+                <span class="why-chip">🧾 Invoices you can view any time</span>
+                <span class="why-chip">🛠️ Qualified engineers, every job</span>
+                <span class="why-chip">✅ Part P Registered Installer</span>
+                <span class="why-chip">🔌 EICR, Gas Safety &amp; EPC in one place</span>
+                <span class="why-chip">📸 Photo-documented on-site work</span>
+                <span class="why-chip">💬 No more chasing paperwork by phone</span>
+                <span class="why-chip">🧾 Invoices you can view any time</span>
+                <span class="why-chip">🛠️ Qualified engineers, every job</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- Emergency CTA -->
+    <section class="emergency-section" id="emergency">
+        <div class="emergency-content">
+            <div class="section-label">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                24/7 Emergency
+            </div>
+            <h2 class="section-title">Electrical Emergency?<br>We're Here 24/7</h2>
+            <div class="emergency-phones">
+                <div class="emergency-phone">
+                    <a href="tel:+447510615022">07510 615022</a>
+                    <span>Primary Emergency Line</span>
+                </div>
+                <div class="emergency-phone">
+                    <a href="tel:+447878192278">07878 192278</a>
+                    <span>Secondary Line</span>
+                </div>
+            </div>
+            <a href="tel:+447510615022" class="emergency-btn">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                Call Now — Emergency Response
+            </a>
+        </div>
+    </section>
+
+    <!-- Client Portal (DeepFlow Integration) -->
+    <section id="portal">
+        <div class="portal-grid">
+            <div class="portal-mockup">
+                <div class="portal-mockup-frame">
+                    <div class="mockup-header">
+                        <div class="mockup-dot red"></div>
+                        <div class="mockup-dot yellow"></div>
+                        <div class="mockup-dot green"></div>
+                        <span style="color:rgba(255,255,255,0.5);font-size:0.8rem;margin-left:auto;">GB Electricals — Client Portal</span>
+                    </div>
+                    <div class="mockup-content">
+                        <div class="mockup-row">
+                            <div class="mockup-status"></div>
+                            <div class="mockup-text">
+                                <div class="mockup-text-line"></div>
+                                <div class="mockup-text-line short"></div>
+                            </div>
+                            <div class="mockup-action">View</div>
+                        </div>
+                        <div class="mockup-row">
+                            <div class="mockup-status" style="background:var(--gold);box-shadow:0 0 8px var(--gold);"></div>
+                            <div class="mockup-text">
+                                <div class="mockup-text-line"></div>
+                                <div class="mockup-text-line short"></div>
+                            </div>
+                            <div class="mockup-action">Track</div>
+                        </div>
+                        <div class="mockup-row">
+                            <div class="mockup-status" style="background:var(--green);box-shadow:0 0 8px var(--green);"></div>
+                            <div class="mockup-text">
+                                <div class="mockup-text-line"></div>
+                                <div class="mockup-text-line short"></div>
+                            </div>
+                            <div class="mockup-action">Download</div>
+                        </div>
+                        <div class="mockup-row">
+                            <div class="mockup-status" style="background:var(--blue-light);box-shadow:0 0 8px var(--blue-light);"></div>
+                            <div class="mockup-text">
+                                <div class="mockup-text-line"></div>
+                                <div class="mockup-text-line short"></div>
+                            </div>
+                            <div class="mockup-action">Pay</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="portal-content">
+                <div class="section-label" style="color:var(--blue-light);justify-content:flex-start;margin-bottom:12px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
+                    Client Portal
+                </div>
+                <h2>Your Job Dashboard</h2>
+                <p>Track your jobs, download certificates, and view invoices — all in one place. No phone calls needed.</p>
+                <div class="portal-features">
+                    <div class="portal-feature">
+                        <div class="portal-feature-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        </div>
+                        <div class="portal-feature-text">
+                            <h4>View Live Job Status</h4>
+                            <p>See exactly where your job is — scheduled, in progress, or complete.</p>
+                        </div>
+                    </div>
+                    <div class="portal-feature">
+                        <div class="portal-feature-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        </div>
+                        <div class="portal-feature-text">
+                            <h4>Download Certificates</h4>
+                            <p>EICR, Gas Safety, EPC — instant access to all your compliance documents.</p>
+                        </div>
+                    </div>
+                    <div class="portal-feature">
+                        <div class="portal-feature-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+                        </div>
+                        <div class="portal-feature-text">
+                            <h4>View & Pay Invoices</h4>
+                            <p>See outstanding balances and payment history at a glance.</p>
+                        </div>
+                    </div>
+                    <div class="portal-feature">
+                        <div class="portal-feature-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+                        </div>
+                        <div class="portal-feature-text">
+                            <h4>Get Notified</h4>
+                            <p>Automatic alerts when work is complete or certificates are ready.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="portal-cta">
+                    <a href="#" class="portal-login-btn" onclick="openPortalModal(); return false;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+                        Client Login
+                    </a>
+                </div>
+                <p class="portal-help">There's no password — your portal is accessed via a personal link we send you after your first booking. Lost it? <a href="#contact">Contact us →</a></p>
+            </div>
+        </div>
+        <div class="powered-by">Powered by DeepFlow</div>
+    </section>
+
+    <!-- Contact -->
+    <section id="contact">
+        <div class="section-header">
+            <div class="section-label">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                Contact Us
+            </div>
+            <h2 class="section-title">Book Your Electrical Service</h2>
+            <p class="section-subtitle">Get a free quote or schedule an inspection. We respond within 2 hours.</p>
+        </div>
+        <div class="contact-grid">
+            <div class="contact-form">
+                <form id="contactForm" onsubmit="handleSubmit(event)">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="name">Full Name</label>
+                            <input type="text" id="name" name="name" placeholder="John Smith" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="phone">Phone Number</label>
+                            <input type="tel" id="phone" name="phone" placeholder="07XXX XXXXXX" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="email">Email Address</label>
+                        <input type="email" id="email" name="email" placeholder="john@example.com" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="service">Service Required</label>
+                        <select id="service" name="service" required>
+                            <option value="">Select a service...</option>
+                            <option value="landlord">Landlord Safety Certificate</option>
+                            <option value="rewiring">Rewiring / Installation</option>
+                            <option value="fire">Fire / Smoke Alarms</option>
+                            <option value="cctv">CCTV & Security</option>
+                            <option value="maintenance">Maintenance & Repairs</option>
+                            <option value="testing">Periodic Testing</option>
+                            <option value="emergency">Emergency Callout</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="message">Message (Optional)</label>
+                        <textarea id="message" name="message" placeholder="Tell us about your project..."></textarea>
+                    </div>
+                    <button type="submit" class="submit-btn" id="submitBtn">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                        Send Enquiry
+                    </button>
+                </form>
+            </div>
+            <div class="contact-info">
+                <div class="info-card">
+                    <h4>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                        Phone
+                    </h4>
+                    <a href="tel:+447510615022">07510 615022</a><br>
+                    <a href="tel:+447878192278">07878 192278</a>
+                </div>
+                <div class="info-card">
+                    <h4>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+                        Email
+                    </h4>
+                    <a href="mailto:info@gbelectricals.co.uk">info@gbelectricals.co.uk</a>
+                </div>
+                <div class="info-card">
+                    <h4>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+                        Address
+                    </h4>
+                    <p>7 Mill Lane, Chadwell Heath<br>Romford, Essex, RM6 6TT</p>
+                </div>
+                <div class="info-card">
+                    <h4>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        Business Hours
+                    </h4>
+                    <p>Mon–Fri: 8:00 AM – 6:00 PM<br>Sat: 9:00 AM – 2:00 PM<br><strong>Emergency: 24/7</strong></p>
+                </div>
+                <div class="map-container">
+                    <iframe src="https://www.google.com/maps?q=7+Mill+Lane,+Chadwell+Heath,+Romford,+Essex,+RM6+6TT&output=embed" allowfullscreen="" loading="lazy"></iframe>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <a href="#" class="logo">
+                    <div class="logo-icon">GB</div>
+                    <span>GB Electricals</span>
+                </a>
+                <p>NICEIC approved electrical contractors serving London & Essex. Professional, reliable & certified electrical services for domestic and commercial clients.</p>
+                <div class="footer-social">
+                    <a href="#" class="social-link" aria-label="Facebook">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
+                    </a>
+                    <a href="#" class="social-link" aria-label="LinkedIn">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
+                    </a>
+                    <a href="#" class="social-link" aria-label="Instagram">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
+                    </a>
+                </div>
+            </div>
+            <div class="footer-column">
+                <h5>Services</h5>
+                <a href="#services">Landlord Certificates</a>
+                <a href="#services">Rewiring</a>
+                <a href="#services">Fire Alarms</a>
+                <a href="#services">CCTV & Security</a>
+                <a href="#services">Maintenance</a>
+            </div>
+            <div class="footer-column">
+                <h5>Company</h5>
+                <a href="#about">About Us</a>
+                <a href="#accreditations">Accreditations</a>
+                <a href="#why-us">Why Choose Us</a>
+                <a href="#contact">Careers</a>
+            </div>
+            <div class="footer-column">
+                <h5>Support</h5>
+                <a href="#portal">Client Portal</a>
+                <a href="#contact">Contact</a>
+                <a href="#emergency">Emergency</a>
+                <a href="#">FAQ</a>
+            </div>
+            <div class="footer-column">
+                <h5>Legal</h5>
+                <a href="#">Privacy Policy</a>
+                <a href="#">Terms of Service</a>
+                <a href="#">Cookie Policy</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>© 2026 GB Electricals Engineering Ltd. All rights reserved.</p>
+            <a href="https://ohmdeepcerts.github.io/deepflow-apps/" target="_blank" rel="noopener">Powered by DeepFlow</a>
+        </div>
+    </footer>
+
+    <!-- Portal Login Modal -->
+    <div class="modal-overlay" id="portalModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Client Portal Access</h3>
+                <button class="modal-close" onclick="closePortalModal()">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+            <div class="modal-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            </div>
+            <p>There's no password to remember — your Client Portal is accessed via a personal link we text or email you after your first booking. Open the portal below and enter that link, or get in touch if you can't find it.</p>
+            <a href="https://ohmdeepcerts.github.io/deepflow-apps/portal/" target="_blank" rel="noopener" class="modal-portal-btn">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+                Open Client Portal
+            </a>
+            <div class="modal-help">
+                <a href="#contact" onclick="closePortalModal()">Lost your link? Contact us →</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ===== NAV SCROLL EFFECT =====
+        const nav = document.getElementById('nav');
+        window.addEventListener('scroll', () => {
+            if (window.scrollY > 50) {
+                nav.classList.add('scrolled');
+            } else {
+                nav.classList.remove('scrolled');
+            }
+        });
+
+        // ===== MOBILE MENU =====
+        function toggleMobileMenu() {
+            document.getElementById('mobileMenu').classList.toggle('active');
+            document.getElementById('mobileOverlay').classList.toggle('active');
+            document.body.style.overflow = document.getElementById('mobileMenu').classList.contains('active') ? 'hidden' : '';
+        }
+
+        // ===== COUNT UP ANIMATION =====
+        function animateCountUp() {
+            document.querySelectorAll('[data-count]').forEach(el => {
+                const target = parseInt(el.dataset.count);
+                const duration = 2000;
+                const start = performance.now();
+
+                function update(currentTime) {
+                    const elapsed = currentTime - start;
+                    const progress = Math.min(elapsed / duration, 1);
+                    const easeOut = 1 - Math.pow(1 - progress, 3);
+                    el.textContent = Math.floor(easeOut * target);
+                    if (progress < 1) requestAnimationFrame(update);
+                }
+                requestAnimationFrame(update);
+            });
+        }
+
+        const statsObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    animateCountUp();
+                    statsObserver.disconnect();
+                }
+            });
+        }, { threshold: 0.5 });
+
+        document.querySelectorAll('.stats-bar, .hero-trust').forEach(el => statsObserver.observe(el));
+
+        // ===== TIMELINE PROGRESS =====
+        const timelineObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    document.getElementById('timelineProgress').classList.add('active');
+                    document.querySelectorAll('.process-step').forEach((step, i) => {
+                        setTimeout(() => step.classList.add('visible'), i * 200);
+                    });
+                }
+            });
+        }, { threshold: 0.3 });
+
+        document.querySelector('.process-timeline') && timelineObserver.observe(document.querySelector('.process-timeline'));
+
+        // ===== PORTAL MODAL =====
+        function openPortalModal() {
+            document.getElementById('portalModal').classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closePortalModal() {
+            document.getElementById('portalModal').classList.remove('active');
+            document.body.style.overflow = '';
+        }
+
+        document.getElementById('portalModal').addEventListener('click', (e) => {
+            if (e.target === document.getElementById('portalModal')) closePortalModal();
+        });
+
+        // ===== CONTACT FORM =====
+        function handleSubmit(e) {
+            e.preventDefault();
+            const btn = document.getElementById('submitBtn');
+            btn.classList.add('loading');
+            btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation:spin 1s linear infinite"><circle cx="12" cy="12" r="10" stroke-dasharray="60" stroke-dashoffset="20"/></svg> Sending...';
+
+            setTimeout(() => {
+                btn.classList.remove('loading');
+                btn.classList.add('success');
+                btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Enquiry Sent!';
+                document.getElementById('contactForm').reset();
+
+                setTimeout(() => {
+                    btn.classList.remove('success');
+                    btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Send Enquiry';
+                }, 3000);
+            }, 1500);
+        }
+
+        // ===== SMOOTH SCROLL FOR ANCHOR LINKS =====
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function(e) {
+                const href = this.getAttribute('href');
+                if (href === '#') return;
+                e.preventDefault();
+                const target = document.querySelector(href);
+                if (target) {
+                    const offset = 80;
+                    const top = target.getBoundingClientRect().top + window.pageYOffset - offset;
+                    window.scrollTo({ top, behavior: 'smooth' });
+                }
+            });
+        });
+
+        // ===== KEYBOARD NAVIGATION =====
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closePortalModal();
+                if (document.getElementById('mobileMenu').classList.contains('active')) {
+                    toggleMobileMenu();
+                }
+            }
+        });
+
+        // ===== PERSISTENT BACKGROUND — the same network/star particle system
+        // as the DeepFlow Office App login screen, fixed behind the whole
+        // page (position:fixed in CSS) so it never "ends" between sections,
+        // recolored red/gold to match GB Electricals rather than DeepFlow's
+        // own cyan/gold. =====
+        (function(){
+            var canvas = document.getElementById('bg-canvas');
+            var ctx = canvas.getContext('2d');
+            var W, H, nodes, packets, stars, raf = null;
+
+            function resize(){
+                W = canvas.width = window.innerWidth;
+                H = canvas.height = window.innerHeight;
+            }
+
+            function build(){
+                resize();
+                nodes = Array.from({length: 70}, function(){
+                    return {
+                        x: Math.random()*W, y: Math.random()*H,
+                        vx: (Math.random()-.5)*.05, vy: (Math.random()-.5)*.05,
+                        r: Math.random()<.12 ? 3.2 : 1.5, pulse: Math.random()*Math.PI*2
+                    };
+                });
+                packets = Array.from({length: 18}, function(){
+                    return {
+                        fi: Math.floor(Math.random()*nodes.length),
+                        ti: Math.floor(Math.random()*nodes.length),
+                        t: Math.random(), speed: .0012 + Math.random()*.0025
+                    };
+                });
+                stars = Array.from({length: 60}, function(){
+                    return {
+                        x: Math.random()*W, y: Math.random()*H,
+                        sz: .8 + Math.random()*2.6,
+                        phase: Math.random()*Math.PI*2,
+                        speed: .002 + Math.random()*.005
+                    };
+                });
+            }
+
+            function drawSpark(x, y, r, a){
+                ctx.save();
+                var g = ctx.createRadialGradient(x, y, 0, x, y, r*5);
+                g.addColorStop(0, 'rgba(245,158,11,'+(a*.7)+')');
+                g.addColorStop(1, 'rgba(245,158,11,0)');
+                ctx.beginPath(); ctx.arc(x, y, r*5, 0, Math.PI*2); ctx.fillStyle = g; ctx.fill();
+                ctx.fillStyle = 'rgba(255,210,110,'+Math.min(1, a*1.3)+')';
+                ctx.beginPath();
+                for (var i=0;i<8;i++){
+                    var angle = i*Math.PI/4 - Math.PI/8;
+                    var rad = i%2===0 ? r : r*.28;
+                    var px = x+Math.cos(angle)*rad, py = y+Math.sin(angle)*rad;
+                    if (i===0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+                }
+                ctx.closePath(); ctx.fill();
+                ctx.beginPath(); ctx.arc(x, y, r*.3, 0, Math.PI*2);
+                ctx.fillStyle = 'rgba(255,235,180,'+Math.min(1, a*1.4)+')'; ctx.fill();
+                ctx.restore();
+            }
+
+            function draw(){
+                if (!document.body.contains(canvas)) { raf = null; return; }
+                ctx.clearRect(0, 0, W, H);
+                for (var i=0;i<nodes.length;i++) for (var j=i+1;j<nodes.length;j++){
+                    var n = nodes[i], m = nodes[j], d = Math.hypot(n.x-m.x, n.y-m.y);
+                    if (d < W*.14){
+                        ctx.beginPath(); ctx.moveTo(n.x, n.y); ctx.lineTo(m.x, m.y);
+                        ctx.strokeStyle = 'rgba(220,38,38,.15)'; ctx.lineWidth = .8; ctx.stroke();
+                    }
+                }
+                nodes.forEach(function(n){
+                    n.pulse += .01; n.x += n.vx; n.y += n.vy;
+                    if (n.x<0||n.x>W) n.vx *= -1;
+                    if (n.y<0||n.y>H) n.vy *= -1;
+                    var a = .5 + Math.sin(n.pulse)*.25;
+                    ctx.beginPath(); ctx.arc(n.x, n.y, n.r, 0, Math.PI*2);
+                    ctx.fillStyle = 'rgba(252,165,165,'+a+')'; ctx.fill();
+                    if (n.r > 2){
+                        ctx.beginPath(); ctx.arc(n.x, n.y, n.r*3, 0, Math.PI*2);
+                        ctx.fillStyle = 'rgba(220,38,38,'+(a*.15)+')'; ctx.fill();
+                    }
+                });
+                packets.forEach(function(p){
+                    p.t += p.speed;
+                    if (p.t >= 1){ p.t = 0; p.fi = p.ti; p.ti = Math.floor(Math.random()*nodes.length); }
+                    var n = nodes[p.fi], m = nodes[p.ti];
+                    if (!n||!m) return;
+                    var x = n.x+(m.x-n.x)*p.t, y = n.y+(m.y-n.y)*p.t;
+                    var g = ctx.createRadialGradient(x, y, 0, x, y, 8);
+                    g.addColorStop(0, 'rgba(255,200,200,.85)'); g.addColorStop(1, 'rgba(220,38,38,0)');
+                    ctx.beginPath(); ctx.arc(x, y, 8, 0, Math.PI*2); ctx.fillStyle = g; ctx.fill();
+                    ctx.beginPath(); ctx.arc(x, y, 1.8, 0, Math.PI*2); ctx.fillStyle = 'rgba(255,230,230,.9)'; ctx.fill();
+                });
+                stars.forEach(function(s){
+                    s.phase += s.speed;
+                    var a = Math.max(0, .4 + Math.sin(s.phase)*.5);
+                    if (a > .03) drawSpark(s.x, s.y, s.sz, Math.min(1, a*1.3));
+                });
+                raf = requestAnimationFrame(draw);
+            }
+
+            function start(){ if (raf) return; build(); draw(); }
+            start();
+
+            var t = null;
+            window.addEventListener('resize', function(){
+                clearTimeout(t);
+                t = setTimeout(function(){
+                    if (Math.abs(window.innerWidth - W) < 2 && Math.abs(window.innerHeight - H) < 2) return;
+                    if (raf) { cancelAnimationFrame(raf); raf = null; }
+                    start();
+                }, 150);
+            });
+        })();
+    </script>
+</body>
+</html>
