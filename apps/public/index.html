@@ -22,6 +22,7 @@
     -webkit-font-smoothing:antialiased;
   }
   a{color:inherit}
+  button{font-family:inherit}
   .wrap{max-width:1120px;margin:0 auto;padding:0 24px}
 
   /* ── PERSISTENT BACKGROUND (fixed — stays put through the whole scroll) ── */
@@ -42,18 +43,18 @@
   .brand{font-size:18px;font-weight:900;letter-spacing:1.5px;font-family:Arial Black,Impact,sans-serif;
     background:linear-gradient(135deg,var(--cyan) 0%,var(--cyan2) 35%,var(--gold) 65%,var(--amber) 100%);
     -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-  .nav-links{display:flex;gap:28px;font-size:13px;font-weight:600;color:rgba(255,255,255,.6)}
+  .nav-links{display:flex;gap:26px;font-size:13px;font-weight:600;color:rgba(255,255,255,.6)}
   .nav-links a{text-decoration:none;transition:color .15s}
   .nav-links a:hover{color:var(--cyan)}
   .nav-links{display:none}
-  @media(min-width:720px){.nav-links{display:flex}}
+  @media(min-width:820px){.nav-links{display:flex}}
   .nav-cta{padding:9px 18px;border-radius:999px;background:var(--cyan);color:#04121f;font-weight:800;font-size:12.5px;
     text-decoration:none;white-space:nowrap;transition:transform .15s,box-shadow .15s}
   .nav-cta:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(125,211,252,.35)}
 
   /* ── HERO ── */
   .hero{min-height:100vh;display:flex;align-items:center;justify-content:center;overflow:hidden}
-  .hero-inner{position:relative;z-index:2;text-align:center;padding:120px 24px 80px;max-width:760px}
+  .hero-inner{position:relative;z-index:2;text-align:center;padding:120px 24px 80px;max-width:780px}
   .eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:11px;font-weight:700;letter-spacing:2px;
     text-transform:uppercase;color:rgba(125,211,252,.7);padding:7px 16px;border:1px solid rgba(125,211,252,.25);
     border-radius:999px;background:rgba(125,211,252,.06);margin-bottom:28px;opacity:0;animation:fadeUp .7s ease forwards}
@@ -63,23 +64,29 @@
     -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
     opacity:0;animation:fadeUp .8s ease .1s forwards;
     filter:drop-shadow(0 0 40px rgba(56,189,248,.25))}
-  .tagline{font-size:clamp(15px,2.2vw,19px);color:rgba(255,255,255,.55);line-height:1.6;margin:22px auto 40px;
+  .tagline{font-size:clamp(15px,2.2vw,19px);color:rgba(255,255,255,.55);line-height:1.6;margin:22px auto 36px;
     max-width:540px;opacity:0;animation:fadeUp .8s ease .22s forwards}
   .cta-row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;opacity:0;animation:fadeUp .8s ease .34s forwards}
   .btn{padding:14px 28px;border-radius:12px;font-weight:800;font-size:14px;text-decoration:none;
-    transition:transform .15s,box-shadow .15s,background .15s;display:inline-flex;align-items:center;gap:8px}
+    transition:transform .12s,box-shadow .15s,background .15s;display:inline-flex;align-items:center;gap:8px;
+    will-change:transform}
   .btn-primary{background:linear-gradient(135deg,var(--cyan),var(--cyan2));color:#04121f;
     box-shadow:0 8px 28px rgba(56,189,248,.28)}
-  .btn-primary:hover{transform:translateY(-2px);box-shadow:0 12px 36px rgba(56,189,248,.4)}
+  .btn-primary:hover{box-shadow:0 12px 36px rgba(56,189,248,.4)}
   .btn-ghost{background:rgba(255,255,255,.06);color:#fff;border:1px solid rgba(255,255,255,.16);backdrop-filter:blur(10px)}
   .btn-ghost:hover{background:rgba(255,255,255,.1);border-color:rgba(125,211,252,.4)}
+  .hero-badges{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;margin-top:36px;
+    opacity:0;animation:fadeUp .8s ease .44s forwards}
+  .hbadge{font-size:11.5px;font-weight:700;color:rgba(255,255,255,.55);padding:8px 14px;border-radius:999px;
+    background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);backdrop-filter:blur(8px)}
   .scroll-hint{position:absolute;bottom:28px;left:50%;transform:translateX(-50%);z-index:2;
     font-size:10px;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,.3);
-    display:flex;flex-direction:column;align-items:center;gap:8px;opacity:0;animation:fadeUp .8s ease .5s forwards}
-  .scroll-hint .dot{width:5px;height:5px;border-radius:50%;background:rgba(125,211,252,.5);animation:bob 1.8s ease-in-out infinite}
+    display:flex;flex-direction:column;align-items:center;gap:8px;opacity:0;animation:fadeUp .8s ease .56s forwards}
+  .scroll-hint .chev{width:9px;height:9px;border-right:1.5px solid rgba(125,211,252,.6);border-bottom:1.5px solid rgba(125,211,252,.6);
+    transform:rotate(45deg);animation:bob 1.8s ease-in-out infinite}
 
   @keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
-  @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(6px)}}
+  @keyframes bob{0%,100%{transform:rotate(45deg) translate(0,0)}50%{transform:rotate(45deg) translate(4px,4px)}}
 
   /* ── SECTIONS ── */
   section{padding:96px 24px}
@@ -91,8 +98,9 @@
   .mockup-wrap{max-width:900px;margin:0 auto;position:relative}
   .mockup{border-radius:18px;overflow:hidden;background:rgba(255,255,255,.05);border:1px solid rgba(125,211,252,.16);
     backdrop-filter:blur(20px);box-shadow:0 30px 80px rgba(0,0,0,.45),0 0 0 1px rgba(255,255,255,.03);
-    opacity:0;transform:translateY(24px);transition:opacity .7s ease,transform .7s ease}
-  .mockup.in{opacity:1;transform:translateY(0)}
+    opacity:0;transform:translateY(24px) perspective(1200px) rotateX(6deg);
+    transition:opacity .7s ease,transform .7s ease}
+  .mockup.in{opacity:1;transform:translateY(0) perspective(1200px) rotateX(0deg)}
   .mockup-bar{display:flex;align-items:center;gap:8px;padding:12px 16px;background:rgba(0,0,0,.25);border-bottom:1px solid rgba(255,255,255,.06)}
   .mockup-bar .dot{width:10px;height:10px;border-radius:50%}
   .mockup-bar .dot.r{background:#ef4444}.mockup-bar .dot.y{background:#f59e0b}.mockup-bar .dot.g{background:#22c55e}
@@ -111,7 +119,6 @@
   .mockup-chart{display:flex;align-items:flex-end;gap:6px;height:70px;margin-bottom:20px;padding:0 2px}
   .mbar{flex:1;border-radius:4px 4px 0 0;background:linear-gradient(180deg,var(--cyan2),rgba(56,189,248,.15));
     animation:growBar 1s ease forwards;transform-origin:bottom;transform:scaleY(0)}
-  .mockup.in .mbar{animation-play-state:running}
   @keyframes growBar{to{transform:scaleY(1)}}
   .mockup-rows{display:flex;flex-direction:column;gap:8px}
   .mrow{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px;
@@ -121,68 +128,153 @@
   .pill-a{background:rgba(245,158,11,.15);color:#fbbf24}
   .pill-r{background:rgba(239,68,68,.15);color:#f87171}
 
-  /* Feature grid */
-  .feat-grid{display:grid;grid-template-columns:1fr;gap:16px;max-width:1120px;margin:0 auto}
-  @media(min-width:640px){.feat-grid{grid-template-columns:1fr 1fr}}
-  @media(min-width:960px){.feat-grid{grid-template-columns:repeat(4,1fr)}}
-  .feat-card{padding:26px 22px;background:rgba(255,255,255,.04);border:1px solid rgba(125,211,252,.12);
-    border-radius:16px;backdrop-filter:blur(16px);transition:transform .2s,border-color .2s,background .2s,box-shadow .2s}
-  .feat-card:hover{transform:translateY(-4px);border-color:rgba(125,211,252,.35);background:rgba(255,255,255,.06);
-    box-shadow:0 16px 40px rgba(56,189,248,.15)}
-  .feat-ic{width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:24px;
-    background:linear-gradient(135deg,rgba(125,211,252,.18),rgba(253,230,138,.14));border:1px solid rgba(125,211,252,.2);margin-bottom:16px}
-  .feat-t{font-size:15px;font-weight:800;margin-bottom:8px}
+  /* ── PROBLEM / SOLUTION ── */
+  .problem-grid{display:grid;grid-template-columns:1fr;gap:48px;max-width:1040px;margin:0 auto;align-items:center}
+  @media(min-width:860px){.problem-grid{grid-template-columns:1.1fr 1fr}}
+  .problem-text{text-align:left}
+  .problem-text .section-eyebrow,.problem-text .section-title{text-align:left;margin-left:0}
+  .problem-list{list-style:none;padding:0;margin:28px 0 0;display:flex;flex-direction:column;gap:22px}
+  .problem-list li{display:flex;gap:14px;opacity:0;transform:translateX(-16px);transition:opacity .6s ease,transform .6s ease}
+  .problem-list li.in{opacity:1;transform:translateX(0)}
+  .problem-list li:nth-child(2){transition-delay:.12s}
+  .problem-list li:nth-child(3){transition-delay:.24s}
+  .pl-ic{font-size:20px;flex-shrink:0;width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.05);
+    display:flex;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,.08)}
+  .pl-body b{display:block;color:#fff;font-size:14.5px;margin-bottom:3px}
+  .pl-body span{font-size:13px;color:rgba(255,255,255,.45);line-height:1.6}
+  .problem-visual{position:relative;display:flex;flex-direction:column;align-items:center;gap:14px;padding:20px}
+  .chaos-stack{position:relative;height:150px;width:100%;max-width:280px}
+  .chip{position:absolute;padding:10px 16px;border-radius:10px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);
+    font-size:12.5px;font-weight:700;backdrop-filter:blur(10px);box-shadow:0 8px 20px rgba(0,0,0,.25);white-space:nowrap}
+  .chip-1{top:0;left:6%;transform:rotate(-8deg)}
+  .chip-2{top:26px;left:48%;transform:rotate(6deg)}
+  .chip-3{top:74px;left:2%;transform:rotate(4deg)}
+  .chip-4{top:100px;left:46%;transform:rotate(-5deg)}
+  .chaos-arrow{font-size:20px;color:var(--cyan);opacity:.55}
+  .order-stack{width:100%;max-width:220px;display:flex;flex-direction:column;gap:8px}
+  .order-row{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700;background:rgba(125,211,252,.06);
+    border:1px solid rgba(125,211,252,.18);border-radius:8px;padding:9px 14px}
+  .dot-g{width:6px;height:6px;border-radius:50%;background:#4ade80;box-shadow:0 0 8px #4ade80;flex-shrink:0}
+
+  /* ── BENTO FEATURE GRID ── */
+  .bento{display:grid;grid-template-columns:repeat(4,1fr);grid-auto-rows:150px;gap:16px;max-width:1120px;margin:0 auto}
+  @media(max-width:960px){.bento{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:600px){.bento{grid-template-columns:1fr;grid-auto-rows:auto}}
+  .bento-card{padding:24px;background:rgba(255,255,255,.04);border:1px solid rgba(125,211,252,.12);border-radius:16px;
+    backdrop-filter:blur(16px);transition:transform .2s,border-color .2s,box-shadow .2s;
+    display:flex;flex-direction:column;overflow:hidden;position:relative}
+  .bento-card:hover{transform:translateY(-4px);border-color:rgba(125,211,252,.35);box-shadow:0 16px 40px rgba(56,189,248,.15)}
+  .bento-lg{grid-column:span 2;grid-row:span 2}
+  @media(max-width:600px){.bento-lg{grid-column:span 1;grid-row:auto}}
+  .bento-decochart{display:flex;align-items:flex-end;gap:5px;height:44px;margin-top:auto;opacity:.55}
+  .bento-decochart div{flex:1;border-radius:3px 3px 0 0;background:linear-gradient(180deg,var(--cyan2),transparent)}
+  .feat-ic{width:48px;height:48px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:22px;
+    background:linear-gradient(135deg,rgba(125,211,252,.18),rgba(253,230,138,.14));border:1px solid rgba(125,211,252,.2);margin-bottom:14px}
+  .feat-t{font-size:15px;font-weight:800;margin-bottom:6px}
   .feat-d{font-size:13px;color:rgba(255,255,255,.45);line-height:1.6}
 
-  /* How it works */
-  .steps{display:grid;grid-template-columns:1fr;gap:16px;max-width:960px;margin:0 auto;counter-reset:step}
-  @media(min-width:760px){.steps{grid-template-columns:repeat(3,1fr)}}
-  .step{position:relative;padding:28px 22px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);
-    border-radius:16px;backdrop-filter:blur(14px)}
-  .step-n{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:14px;
-    background:linear-gradient(135deg,var(--cyan),var(--cyan2));color:#04121f;margin-bottom:16px}
-  .step-t{font-size:15px;font-weight:800;margin-bottom:8px}
-  .step-d{font-size:13px;color:rgba(255,255,255,.45);line-height:1.6}
+  /* ── HOW IT WORKS: TIMELINE ── */
+  .timeline{position:relative;max-width:960px;margin:0 auto}
+  .timeline-svg{position:absolute;top:17px;left:0;width:100%;height:4px;overflow:visible}
+  .timeline-svg path{fill:none;stroke:var(--cyan2);stroke-width:2;stroke-dasharray:1000;stroke-dashoffset:1000;
+    transition:stroke-dashoffset 1.4s ease}
+  .timeline.in .timeline-svg path{stroke-dashoffset:0}
+  .timeline-steps{display:grid;grid-template-columns:1fr;gap:36px;position:relative;z-index:2}
+  @media(min-width:760px){.timeline-steps{grid-template-columns:repeat(3,1fr)}}
+  .tl-dot{width:36px;height:36px;border-radius:50%;background:var(--navy3);border:2px solid var(--cyan2);
+    display:flex;align-items:center;justify-content:center;font-weight:900;font-size:14px;margin:0 auto 16px;
+    opacity:0;transform:scale(.5);transition:opacity .4s ease,transform .4s ease}
+  .timeline.in .tl-step:nth-child(1) .tl-dot{opacity:1;transform:scale(1);transition-delay:.15s}
+  .timeline.in .tl-step:nth-child(2) .tl-dot{opacity:1;transform:scale(1);transition-delay:.6s}
+  .timeline.in .tl-step:nth-child(3) .tl-dot{opacity:1;transform:scale(1);transition-delay:1.05s}
+  .tl-t{font-weight:800;font-size:15px;text-align:center;margin-bottom:8px}
+  .tl-d{font-size:13px;color:rgba(255,255,255,.45);line-height:1.6;text-align:center;max-width:250px;margin:0 auto}
 
-  /* Apps section */
+  /* ── FEATURE MARQUEE ── */
+  .marquee-wrap{overflow:hidden;position:relative;max-width:1120px;margin:0 auto;
+    -webkit-mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent);
+    mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent)}
+  .marquee-track{display:flex;gap:14px;width:max-content;animation:marquee 30s linear infinite}
+  .marquee-wrap:hover .marquee-track{animation-play-state:paused}
+  @keyframes marquee{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+  .mq-chip{white-space:nowrap;padding:12px 20px;border-radius:999px;background:rgba(255,255,255,.05);
+    border:1px solid rgba(125,211,252,.15);font-size:13px;font-weight:600;color:rgba(255,255,255,.75);backdrop-filter:blur(10px)}
+
+  /* ── PORTAL CARDS (3D tilt + glow) ── */
   .apps-sec{background:linear-gradient(180deg,transparent,rgba(13,31,60,.35),transparent)}
   .app-grid{display:grid;grid-template-columns:1fr;gap:18px;max-width:1000px;margin:0 auto}
   @media(min-width:820px){.app-grid{grid-template-columns:repeat(3,1fr)}}
-  .app-card{position:relative;padding:30px 26px;border-radius:20px;text-decoration:none;color:#fff;
+  .app-card{position:relative;padding:28px 26px;border-radius:20px;text-decoration:none;color:#fff;
     background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);backdrop-filter:blur(16px);
-    display:flex;flex-direction:column;gap:14px;transition:transform .22s,border-color .22s,box-shadow .22s;overflow:hidden}
-  .app-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--accent-grad)}
-  .app-card:hover{transform:translateY(-6px);box-shadow:0 20px 50px rgba(0,0,0,.35)}
+    display:flex;flex-direction:column;gap:12px;overflow:hidden;
+    opacity:0;transform:translateY(24px);
+    transition:opacity .6s ease,transform .6s ease,border-color .2s,box-shadow .2s}
+  .apps-sec.in .app-card{opacity:1;transform:translateY(0)}
+  .apps-sec.in .app-card:nth-child(2){transition-delay:.12s}
+  .apps-sec.in .app-card:nth-child(3){transition-delay:.24s}
+  .app-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--accent-grad);z-index:2}
+  .app-card::after{content:'';position:absolute;inset:0;pointer-events:none;border-radius:20px;
+    background:radial-gradient(260px circle at var(--mx,50%) var(--my,50%),rgba(125,211,252,.16),transparent 70%);
+    opacity:0;transition:opacity .25s ease}
+  .app-card:hover::after{opacity:1}
+  .app-card:hover{box-shadow:0 20px 50px rgba(0,0,0,.35)}
   .app-card.office{--accent-grad:linear-gradient(90deg,#7dd3fc,#38bdf8)}
   .app-card.office:hover{border-color:rgba(56,189,248,.45)}
   .app-card.engineer{--accent-grad:linear-gradient(90deg,#86efac,#22c55e)}
   .app-card.engineer:hover{border-color:rgba(34,197,94,.45)}
   .app-card.portal{--accent-grad:linear-gradient(90deg,#fde68a,#f59e0b)}
   .app-card.portal:hover{border-color:rgba(245,158,11,.45)}
-  .app-ic{width:48px;height:48px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:22px;background:rgba(255,255,255,.08)}
-  .app-name{font-size:19px;font-weight:800}
+  .app-mini{border-radius:10px;background:rgba(0,0,0,.2);border:1px solid rgba(255,255,255,.08);padding:10px;margin-bottom:2px}
+  .app-mini-row{display:flex;align-items:center;gap:6px;font-size:10.5px;color:rgba(255,255,255,.4);padding:4px 0}
+  .app-mini-row .b{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+  .app-ic{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;background:rgba(255,255,255,.08)}
+  .app-name{font-size:18px;font-weight:800}
   .app-who{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:rgba(255,255,255,.4)}
   .app-desc{font-size:13px;color:rgba(255,255,255,.5);line-height:1.6;flex:1}
   .app-go{font-size:13px;font-weight:800;color:var(--cyan);display:flex;align-items:center;gap:6px}
   .app-card:hover .app-go{gap:10px}
   .app-go span{transition:transform .2s}
 
-  /* Trust strip */
-  .trust{display:flex;flex-wrap:wrap;justify-content:center;gap:40px;padding:40px 24px;
-    border-top:1px solid rgba(255,255,255,.07);border-bottom:1px solid rgba(255,255,255,.07)}
-  .trust-item{text-align:center}
-  .trust-num{font-size:26px;font-weight:900;background:linear-gradient(135deg,var(--cyan),var(--gold));
-    -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-  .trust-lbl{font-size:11px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:1px;margin-top:4px}
+  /* ── STATS ── */
+  #stats{background:linear-gradient(180deg,transparent,rgba(13,31,60,.4),transparent)}
+  .stats-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:24px;max-width:900px;margin:0 auto}
+  @media(min-width:700px){.stats-grid{grid-template-columns:repeat(4,1fr)}}
+  .stat-card{text-align:center}
+  .stat-row{display:flex;align-items:center;justify-content:center;gap:8px}
+  .stat-num,.stat-num-text{font-size:clamp(30px,5vw,44px);font-weight:900;
+    background:linear-gradient(135deg,var(--cyan),var(--gold));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+  .pulse-dot{width:9px;height:9px;border-radius:50%;background:#4ade80;animation:pulseDot 2s infinite}
+  @keyframes pulseDot{0%{box-shadow:0 0 0 0 rgba(74,222,128,.5)}70%{box-shadow:0 0 0 10px rgba(74,222,128,0)}100%{box-shadow:0 0 0 0 rgba(74,222,128,0)}}
+  .stat-lbl{font-size:11px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:1px;margin-top:8px}
+
+  /* ── FAQ ── */
+  .faq-list{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
+  .faq-item{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:14px;overflow:hidden}
+  .faq-q{width:100%;text-align:left;background:none;border:0;color:#fff;padding:18px 22px;font-size:14.5px;font-weight:700;
+    display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer}
+  .faq-x{font-size:18px;color:var(--cyan);transition:transform .25s ease;flex-shrink:0}
+  .faq-item.open .faq-x{transform:rotate(45deg)}
+  .faq-a{display:grid;grid-template-rows:0fr;transition:grid-template-rows .3s ease}
+  .faq-item.open .faq-a{grid-template-rows:1fr}
+  .faq-a-inner{overflow:hidden}
+  .faq-a-inner p{margin:0 22px 18px;font-size:13.5px;color:rgba(255,255,255,.5);line-height:1.7}
+
+  /* ── FINAL CTA ── */
+  .cta-box{max-width:760px;margin:0 auto;text-align:center;padding:56px 32px;border-radius:24px;
+    background:rgba(255,255,255,.04);border:1px solid rgba(125,211,252,.15);backdrop-filter:blur(16px);position:relative;overflow:hidden}
+  .magnetic{transition:transform .15s ease-out,box-shadow .15s ease}
 
   /* Footer */
-  footer{padding:48px 24px 32px;text-align:center;border-top:1px solid rgba(255,255,255,.07)}
+  footer{padding:56px 24px 32px;border-top:1px solid rgba(255,255,255,.07)}
+  .foot-grid{display:grid;grid-template-columns:1fr;gap:36px;max-width:1000px;margin:0 auto 32px}
+  @media(min-width:640px){.foot-grid{grid-template-columns:1.4fr 1fr 1fr}}
   .foot-brand{font-size:16px;font-weight:900;letter-spacing:1px;font-family:Arial Black,Impact,sans-serif;
     background:linear-gradient(135deg,var(--cyan),var(--gold));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:10px}
-  .foot-links{display:flex;justify-content:center;gap:22px;font-size:12px;color:rgba(255,255,255,.45);margin-bottom:18px;flex-wrap:wrap}
-  .foot-links a{text-decoration:none;transition:color .15s}
-  .foot-links a:hover{color:var(--cyan)}
-  .foot-copy{font-size:11px;color:rgba(255,255,255,.25)}
+  .foot-desc{font-size:12.5px;color:rgba(255,255,255,.4);line-height:1.7;max-width:280px}
+  .foot-col-t{font-size:11px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,.35);margin-bottom:14px}
+  .foot-col a{display:block;font-size:13px;color:rgba(255,255,255,.55);text-decoration:none;margin-bottom:10px;transition:color .15s}
+  .foot-col a:hover{color:var(--cyan)}
+  .foot-bottom{text-align:center;font-size:11px;color:rgba(255,255,255,.25);padding-top:24px;border-top:1px solid rgba(255,255,255,.06)}
 </style>
 </head>
 <body>
@@ -195,7 +287,8 @@
   <div class="nav-links">
     <a href="#preview">Product</a>
     <a href="#features">Features</a>
-    <a href="#apps">Apps</a>
+    <a href="#how">How it works</a>
+    <a href="#faq">FAQ</a>
   </div>
   <a class="nav-cta" href="#apps">Sign In →</a>
 </nav>
@@ -206,11 +299,16 @@
     <div class="wordmark">DEEPFLOW</div>
     <div class="tagline">One platform to manage jobs, compliance certificates, invoicing and your team — built for the office, your field engineers, and your clients.</div>
     <div class="cta-row">
-      <a class="btn btn-primary" href="#apps">Open an App <span>→</span></a>
-      <a class="btn btn-ghost" href="#preview">See what it does</a>
+      <a class="btn btn-primary magnetic" href="#apps">Open an App <span>→</span></a>
+      <a class="btn btn-ghost magnetic" href="#preview">See what it does</a>
+    </div>
+    <div class="hero-badges">
+      <span class="hbadge">🔒 Row-level secured on Supabase</span>
+      <span class="hbadge">⚡ Real-time sync across all 3 apps</span>
+      <span class="hbadge">📅 Automatic cert expiry alerts</span>
     </div>
   </div>
-  <div class="scroll-hint"><span class="dot"></span>Scroll</div>
+  <div class="scroll-hint"><span class="chev"></span>Scroll</div>
 </div>
 
 <section id="preview">
@@ -223,7 +321,7 @@
     <div class="mockup" id="mockup">
       <div class="mockup-bar">
         <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-        <div class="mockup-url">deepflow.co.uk</div>
+        <div class="mockup-url">deepflowsuite.co.uk</div>
       </div>
       <div class="mockup-body">
         <div class="mockup-side">
@@ -259,42 +357,75 @@
   </div>
 </section>
 
-<section id="features">
-  <div class="section-eyebrow">What DeepFlow does</div>
-  <h2 class="section-title">Everything compliance work needs,<br>in one place</h2>
-  <p class="section-sub">Replace the spreadsheets, group chats and paper certificates with a single system your whole team already knows how to use.</p>
-  <div class="feat-grid">
-    <div class="feat-card">
-      <div class="feat-ic">🔧</div>
-      <div class="feat-t">Job Management</div>
-      <div class="feat-d">Schedule, track and manage every job from one live view — no more double-booked engineers or lost paperwork.</div>
+<section id="problem">
+  <div class="problem-grid">
+    <div class="problem-text">
+      <div class="section-eyebrow">The old way is breaking</div>
+      <h2 class="section-title">Still running compliance<br>out of spreadsheets?</h2>
+      <ul class="problem-list">
+        <li><span class="pl-ic">📉</span><div class="pl-body"><b>Certificates slip through the cracks</b><span>Nothing flags an EICR expiring next month until it's already overdue.</span></div></li>
+        <li><span class="pl-ic">💬</span><div class="pl-body"><b>Updates live in chat threads</b><span>Job status, photos and notes scattered across messages no one can search later.</span></div></li>
+        <li><span class="pl-ic">📄</span><div class="pl-body"><b>Paperwork doubles the work</b><span>Certificates and invoices re-typed by hand between systems that don't talk to each other.</span></div></li>
+      </ul>
     </div>
-    <div class="feat-card">
-      <div class="feat-ic">📜</div>
-      <div class="feat-t">Compliance</div>
-      <div class="feat-d">Gas, EICR, EPC and more — every certificate tracked with automatic expiry alerts before anything lapses.</div>
-    </div>
-    <div class="feat-card">
-      <div class="feat-ic">💰</div>
-      <div class="feat-t">Invoicing</div>
-      <div class="feat-d">Create, send and track invoices in seconds, with payment status and outstanding balances always visible.</div>
-    </div>
-    <div class="feat-card">
-      <div class="feat-ic">📱</div>
-      <div class="feat-t">Multi-Portal</div>
-      <div class="feat-d">Separate, purpose-built portals for the office, field engineers and clients — everyone sees exactly what they need.</div>
+    <div class="problem-visual">
+      <div class="chaos-stack">
+        <div class="chip chip-1">📊 Spreadsheets</div>
+        <div class="chip chip-2">💬 Group chats</div>
+        <div class="chip chip-3">📄 Paper certs</div>
+        <div class="chip chip-4">📧 Email chains</div>
+      </div>
+      <div class="chaos-arrow">↓</div>
+      <div class="order-stack">
+        <div class="order-row"><span class="dot-g"></span>Jobs</div>
+        <div class="order-row"><span class="dot-g"></span>Certificates</div>
+        <div class="order-row"><span class="dot-g"></span>Invoices</div>
+        <div class="order-row"><span class="dot-g"></span>Team</div>
+      </div>
     </div>
   </div>
 </section>
 
-<section id="how" style="padding-top:0">
-  <div class="section-eyebrow">How it works</div>
-  <h2 class="section-title">From job to paid, in three steps</h2>
-  <p class="section-sub">No training manuals — if you've used a spreadsheet, you already know how to use DeepFlow.</p>
-  <div class="steps">
-    <div class="step"><div class="step-n">1</div><div class="step-t">Log the job</div><div class="step-d">Office staff create a job in seconds — property, engineer, date, and certificate type auto-suggested from history.</div></div>
-    <div class="step"><div class="step-n">2</div><div class="step-t">Track it live</div><div class="step-d">Engineers update status and upload photos from site; the office sees it change in real time, no phone calls needed.</div></div>
-    <div class="step"><div class="step-n">3</div><div class="step-t">Invoice & renew</div><div class="step-d">Job completion auto-generates the invoice and files the certificate — with renewal reminders already scheduled.</div></div>
+<section id="features">
+  <div class="section-eyebrow">What DeepFlow does</div>
+  <h2 class="section-title">Everything compliance work needs,<br>in one place</h2>
+  <p class="section-sub">Replace the spreadsheets, group chats and paper certificates with a single system your whole team already knows how to use.</p>
+  <div class="bento">
+    <div class="bento-card bento-lg">
+      <div class="feat-ic">🔧</div>
+      <div class="feat-t">Job Management</div>
+      <div class="feat-d">Schedule, track and manage every job from one live view — no more double-booked engineers or lost paperwork.</div>
+      <div class="bento-decochart">
+        <div style="height:45%"></div><div style="height:70%"></div><div style="height:55%"></div>
+        <div style="height:85%"></div><div style="height:60%"></div><div style="height:75%"></div>
+        <div style="height:50%"></div><div style="height:90%"></div>
+      </div>
+    </div>
+    <div class="bento-card">
+      <div class="feat-ic">📜</div>
+      <div class="feat-t">Compliance</div>
+      <div class="feat-d">Gas, EICR, EPC and more — tracked with automatic expiry alerts before anything lapses.</div>
+    </div>
+    <div class="bento-card">
+      <div class="feat-ic">💰</div>
+      <div class="feat-t">Invoicing</div>
+      <div class="feat-d">Create, send and track invoices in seconds, with balances always visible.</div>
+    </div>
+    <div class="bento-card">
+      <div class="feat-ic">📱</div>
+      <div class="feat-t">Multi-Portal</div>
+      <div class="feat-d">Purpose-built portals for office, engineers and clients.</div>
+    </div>
+    <div class="bento-card">
+      <div class="feat-ic">🔄</div>
+      <div class="feat-t">Real-time Sync</div>
+      <div class="feat-d">Every update lands instantly across all three apps.</div>
+    </div>
+    <div class="bento-card">
+      <div class="feat-ic">📸</div>
+      <div class="feat-t">Photo Evidence</div>
+      <div class="feat-d">Engineers attach timestamped photos straight from site.</div>
+    </div>
   </div>
 </section>
 
@@ -309,7 +440,11 @@
         <div class="app-name">Office App</div>
         <div class="app-who">For office staff</div>
       </div>
-      <div class="app-desc">The full dashboard — jobs, certificates, invoicing, directories, reports and team management, all in one place.</div>
+      <div class="app-desc">The full dashboard — jobs, certificates, invoicing, directories, reports and team management.</div>
+      <div class="app-mini">
+        <div class="app-mini-row"><span class="b" style="background:#4ade80"></span>221 Baker Street — Active</div>
+        <div class="app-mini-row"><span class="b" style="background:#fbbf24"></span>14 Elm Court — Expiring</div>
+      </div>
       <div class="app-go">Open Office App <span>→</span></div>
     </a>
     <a class="app-card engineer" href="engineer/">
@@ -318,7 +453,11 @@
         <div class="app-name">Employee App</div>
         <div class="app-who">For field engineers</div>
       </div>
-      <div class="app-desc">Today's jobs, photo uploads with auto-stamping, quick issue notes, and a live map — built for on-site, on the move.</div>
+      <div class="app-desc">Today's jobs, photo uploads with auto-stamping, quick issue notes, and a live map.</div>
+      <div class="app-mini">
+        <div class="app-mini-row"><span class="b" style="background:#38bdf8"></span>📍 On site — 9 Riverside Ave</div>
+        <div class="app-mini-row"><span class="b" style="background:#4ade80"></span>📸 3 photos uploaded</div>
+      </div>
       <div class="app-go">Open Employee App <span>→</span></div>
     </a>
     <a class="app-card portal" href="portal/">
@@ -327,30 +466,135 @@
         <div class="app-name">Client Portal</div>
         <div class="app-who">For your clients</div>
       </div>
-      <div class="app-desc">Clients see job progress, download certificates and invoices, and raise new requests — no phone call needed.</div>
+      <div class="app-desc">Clients see job progress, download certificates and invoices, and raise new requests.</div>
+      <div class="app-mini">
+        <div class="app-mini-row"><span class="b" style="background:#f59e0b"></span>📜 EICR Certificate — ready</div>
+        <div class="app-mini-row"><span class="b" style="background:#4ade80"></span>💰 Invoice #1042 — paid</div>
+      </div>
       <div class="app-go">Open Client Portal <span>→</span></div>
     </a>
   </div>
 </section>
 
-<div class="trust">
-  <div class="trust-item"><div class="trust-num" data-count="3">0</div><div class="trust-lbl">Purpose-built portals</div></div>
-  <div class="trust-item"><div class="trust-num">24/7</div><div class="trust-lbl">Client self-service</div></div>
-  <div class="trust-item"><div class="trust-num" data-count="0">0</div><div class="trust-lbl">Missed cert renewals</div></div>
-</div>
+<section id="how">
+  <div class="section-eyebrow">How it works</div>
+  <h2 class="section-title">From job to paid, in three steps</h2>
+  <p class="section-sub">No training manuals — if you've used a spreadsheet, you already know how to use DeepFlow.</p>
+  <div class="timeline" id="timeline">
+    <svg class="timeline-svg" viewBox="0 0 1000 4" preserveAspectRatio="none">
+      <path d="M0,2 L1000,2"/>
+    </svg>
+    <div class="timeline-steps">
+      <div class="tl-step">
+        <div class="tl-dot">1</div>
+        <div class="tl-t">Log the job</div>
+        <div class="tl-d">Office staff create a job in seconds — property, engineer, date, and certificate type auto-suggested.</div>
+      </div>
+      <div class="tl-step">
+        <div class="tl-dot">2</div>
+        <div class="tl-t">Track it live</div>
+        <div class="tl-d">Engineers update status and upload photos from site; the office sees it change in real time.</div>
+      </div>
+      <div class="tl-step">
+        <div class="tl-dot">3</div>
+        <div class="tl-t">Invoice & renew</div>
+        <div class="tl-d">Job completion auto-generates the invoice and files the certificate, renewal reminders included.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="why" style="padding-top:0">
+  <div class="section-eyebrow">Why teams switch</div>
+  <h2 class="section-title">Built around how compliance work actually happens</h2>
+  <div class="marquee-wrap">
+    <div class="marquee-track">
+      <span class="mq-chip">⚡ Real-time updates across office, engineers &amp; clients</span>
+      <span class="mq-chip">📅 Automatic cert expiry alerts before anything lapses</span>
+      <span class="mq-chip">📸 Timestamped photo evidence from site</span>
+      <span class="mq-chip">💰 Invoices generated straight from completed jobs</span>
+      <span class="mq-chip">🔒 Row-level secured, role-based access</span>
+      <span class="mq-chip">📍 Live engineer location &amp; job map</span>
+      <span class="mq-chip">⚡ Real-time updates across office, engineers &amp; clients</span>
+      <span class="mq-chip">📅 Automatic cert expiry alerts before anything lapses</span>
+      <span class="mq-chip">📸 Timestamped photo evidence from site</span>
+      <span class="mq-chip">💰 Invoices generated straight from completed jobs</span>
+      <span class="mq-chip">🔒 Row-level secured, role-based access</span>
+      <span class="mq-chip">📍 Live engineer location &amp; job map</span>
+    </div>
+  </div>
+</section>
+
+<section id="stats">
+  <div class="stats-grid">
+    <div class="stat-card"><div class="stat-num" data-count="3">0</div><div class="stat-lbl">Purpose-built portals</div></div>
+    <div class="stat-card"><div class="stat-num-text">24/7</div><div class="stat-lbl">Client self-service</div></div>
+    <div class="stat-card"><div class="stat-row"><div class="stat-num" data-count="0">0</div><span class="pulse-dot"></span></div><div class="stat-lbl">Missed cert renewals</div></div>
+    <div class="stat-card"><div class="stat-num" data-count="100" data-suffix="%">0%</div><div class="stat-lbl">Digital paper trail</div></div>
+  </div>
+</section>
+
+<section id="faq">
+  <div class="section-eyebrow">Questions</div>
+  <h2 class="section-title">Frequently asked questions</h2>
+  <div class="faq-list" id="faq-list">
+    <div class="faq-item">
+      <button class="faq-q" type="button">What certificate types does DeepFlow track?<span class="faq-x">+</span></button>
+      <div class="faq-a"><div class="faq-a-inner"><p>Gas Safety, EICR, EPC and more — each with its own expiry window and automatic alerts before it lapses.</p></div></div>
+    </div>
+    <div class="faq-item">
+      <button class="faq-q" type="button">Can clients see their own job progress?<span class="faq-x">+</span></button>
+      <div class="faq-a"><div class="faq-a-inner"><p>Yes — the Client Portal gives each client their own view of job status, certificates and invoices, no phone call needed.</p></div></div>
+    </div>
+    <div class="faq-item">
+      <button class="faq-q" type="button">Does the Employee App work on mobile, on-site?<span class="faq-x">+</span></button>
+      <div class="faq-a"><div class="faq-a-inner"><p>Yes — it's built for engineers in the field: today's jobs, photo uploads with auto-stamping, and a live map, all from a phone.</p></div></div>
+    </div>
+    <div class="faq-item">
+      <button class="faq-q" type="button">Is the data secure?<span class="faq-x">+</span></button>
+      <div class="faq-a"><div class="faq-a-inner"><p>Data is stored in Supabase with row-level security policies, so each portal and role only ever sees the data it's allowed to.</p></div></div>
+    </div>
+    <div class="faq-item">
+      <button class="faq-q" type="button">Do the three apps stay in sync?<span class="faq-x">+</span></button>
+      <div class="faq-a"><div class="faq-a-inner"><p>Yes — a status change, a new photo, or an invoice made in one app appears live in the others via real-time sync.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<section id="cta">
+  <div class="cta-box">
+    <h2 class="section-title" style="margin-bottom:12px">Ready to see it running?</h2>
+    <p class="section-sub" style="margin-bottom:32px">Jump straight into whichever portal you need — no setup, no waiting.</p>
+    <div class="cta-row">
+      <a class="btn btn-primary magnetic" href="#apps">Open an App <span>→</span></a>
+      <a class="btn btn-ghost magnetic" href="mailto:mandeepnain222@gmail.com">Get in touch</a>
+    </div>
+  </div>
+</section>
 
 <footer>
-  <div class="foot-brand">DEEPFLOW</div>
-  <div class="foot-links">
-    <a href="office/">Office App</a>
-    <a href="engineer/">Employee App</a>
-    <a href="portal/">Client Portal</a>
-    <a href="mailto:mandeepnain222@gmail.com">Support</a>
+  <div class="foot-grid">
+    <div>
+      <div class="foot-brand">DEEPFLOW</div>
+      <div class="foot-desc">Smart property compliance suite — jobs, certificates, invoicing and your team, in one place.</div>
+    </div>
+    <div class="foot-col">
+      <div class="foot-col-t">Product</div>
+      <a href="office/">Office App</a>
+      <a href="engineer/">Employee App</a>
+      <a href="portal/">Client Portal</a>
+    </div>
+    <div class="foot-col">
+      <div class="foot-col-t">Company</div>
+      <a href="mailto:mandeepnain222@gmail.com">Support</a>
+      <a href="#faq">FAQ</a>
+    </div>
   </div>
-  <div class="foot-copy">© 2026 DeepFlow — Smart Property Compliance Suite</div>
+  <div class="foot-bottom">© 2026 DeepFlow — Smart Property Compliance Suite</div>
 </footer>
 
 <script>
+// Persistent full-page particle background
 (function(){
   var canvas = document.getElementById('bg-canvas');
   var ctx = canvas.getContext('2d');
@@ -462,34 +706,92 @@
   });
 })();
 
-// Reveal the product mockup + count up trust stats once scrolled into view
+// Scroll-triggered reveals: mockup, problem list, portal cards, timeline, stat count-up
 (function(){
-  var mockup = document.getElementById('mockup');
-  var counters = document.querySelectorAll('.trust-num[data-count]');
-
   function countUp(el){
     var target = parseInt(el.getAttribute('data-count'), 10);
-    var start = performance.now(), dur = 900;
+    var suffix = el.getAttribute('data-suffix') || '';
+    var start = performance.now(), dur = 1000;
     function tick(now){
       var p = Math.min(1, (now-start)/dur);
       var eased = 1 - Math.pow(1-p, 3);
-      el.textContent = Math.round(target*eased);
+      el.textContent = Math.round(target*eased) + suffix;
       if (p < 1) requestAnimationFrame(tick);
     }
     requestAnimationFrame(tick);
   }
 
+  var targets = [];
+  var mockup = document.getElementById('mockup');
+  if (mockup) targets.push({ el: mockup, onIn: function(el){ el.classList.add('in'); } });
+
+  document.querySelectorAll('.problem-list li').forEach(function(li){
+    targets.push({ el: li, onIn: function(el){ el.classList.add('in'); } });
+  });
+
+  var appsSec = document.querySelector('.apps-sec');
+  if (appsSec) targets.push({ el: appsSec, onIn: function(el){ el.classList.add('in'); } });
+
+  var timeline = document.getElementById('timeline');
+  if (timeline) targets.push({ el: timeline, onIn: function(el){ el.classList.add('in'); } });
+
+  document.querySelectorAll('.stat-num[data-count]').forEach(function(el){
+    targets.push({ el: el, onIn: countUp });
+  });
+
   var io = new IntersectionObserver(function(entries){
     entries.forEach(function(entry){
       if (!entry.isIntersecting) return;
-      if (entry.target === mockup) entry.target.classList.add('in');
-      if (entry.target.hasAttribute('data-count')) countUp(entry.target);
+      var match = targets.find(function(t){ return t.el === entry.target; });
+      if (match) match.onIn(entry.target);
       io.unobserve(entry.target);
     });
-  }, { threshold: .35 });
+  }, { threshold: .3 });
 
-  if (mockup) io.observe(mockup);
-  counters.forEach(function(c){ io.observe(c); });
+  targets.forEach(function(t){ io.observe(t.el); });
+})();
+
+// 3D tilt + mouse-following glow border on portal cards
+(function(){
+  document.querySelectorAll('.app-card').forEach(function(card){
+    card.addEventListener('mousemove', function(e){
+      var r = card.getBoundingClientRect();
+      var px = (e.clientX - r.left) / r.width, py = (e.clientY - r.top) / r.height;
+      card.style.setProperty('--mx', (px*100) + '%');
+      card.style.setProperty('--my', (py*100) + '%');
+      var rx = (py - .5) * -8, ry = (px - .5) * 8;
+      card.style.transform = 'translateY(-6px) perspective(800px) rotateX(' + rx + 'deg) rotateY(' + ry + 'deg)';
+    });
+    card.addEventListener('mouseleave', function(){
+      card.style.transform = '';
+    });
+  });
+})();
+
+// Magnetic buttons
+(function(){
+  document.querySelectorAll('.magnetic').forEach(function(btn){
+    btn.addEventListener('mousemove', function(e){
+      var r = btn.getBoundingClientRect();
+      var mx = (e.clientX - r.left - r.width/2) * .3;
+      var my = (e.clientY - r.top - r.height/2) * .3;
+      btn.style.transform = 'translate(' + mx + 'px,' + my + 'px)';
+    });
+    btn.addEventListener('mouseleave', function(){
+      btn.style.transform = '';
+    });
+  });
+})();
+
+// FAQ accordion
+(function(){
+  document.querySelectorAll('.faq-item').forEach(function(item){
+    item.querySelector('.faq-q').addEventListener('click', function(){
+      var wasOpen = item.classList.contains('open');
+      document.querySelectorAll('.faq-item.open').forEach(function(o){ o.classList.remove('open'); });
+      if (!wasOpen) item.classList.add('open');
+    });
+  });
 })();
 </script>
 
