@@ -1739,7 +1739,7 @@ export function _clearDraft(id){
 Object.assign(window, {
   _deleteBAPhoto, _handleBAUpload, _setPhotoMode, _switchQNTab, _toggleQN,
   _triggerBAUpload, _waShareNotes, addWire, applyQN, calcVD, calcZs,
-  checkOfficeConnection, clearConduit, closeModal, closeQN, dismissAlert,
+  checkOfficeConnection, clearConduit, closeModal, closeQN, closeUserMenu, dismissAlert,
   doLogin, doLogout, doResetPw, handleUpload, openAddJobModal, openJob,
   openLeaveForm, openOvertimeForm, openQN, openUserMenu, quickStatusUpdate,
   refreshAll, saveHours, saveNotes, sendOmwClient, sendOmwOffice, setMapView,
