@@ -13634,6 +13634,7 @@ function escCsv(str){ return String(str||'').replace(/"/g,'""'); }
 // `window._openInvoiceFromJobSync = function(...)` and so needs no entry
 // here). Preserves exactly the global availability each already had.
 Object.assign(window, {
+  df,
   _addLiveItem, _copyJobDesc, _copyPortalLink, _editEngFromDeep, _emailPortalShare, _removeLiveItem, _renderEngDeepJobsList,
   _reqAcknowledge, _reqApproveEng, _reqCreateJob, _reqReject, _reqReopen, _reqSendReply, 
   _saveLiveItem, _sendPLReminder, _showReqDetail, _switchEngDeepTab, _switchPLTab, _updateLiveTotal, 
