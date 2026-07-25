@@ -33,7 +33,7 @@ import {
 import {
   openExpenseModal, saveExpense, deleteCurrentExpense, renderExpenses, exportExpensesCSV,
 } from './expenses.js';
-import { openCreditNoteModal, addCreditItem, fillCreditNote, saveCreditNote } from './credit-notes.js';
+import { openCreditNoteModal, addCreditItem, fillCreditNote, saveCreditNote, creditNote } from './credit-notes.js';
 import {
   getWeekDates, renderTS, selEngineer, renderTSDetail, waTimesheetSummary, getTsOff,
 } from './timesheets.js';
@@ -6548,6 +6548,7 @@ async function viewInv(id){
       ${!isPaid&&inv.type!=='proforma'?`<button class="btn btn-blue btn-sm" onclick="openPaymentModal('${id}')">💳 Record Payment</button>`:''}
       ${isPaid?`<button class="btn btn-ghost btn-sm" onclick="markInvUnpaid('${id}')">↩ Unpaid</button>`:''}
       ${isPaid&&getUserPerm('canManageUsers')?`<button class="btn btn-ghost btn-sm" onclick="unlockPaidInv('${id}')" title="Admin only — logs to audit trail">🔓 Unlock for correction</button>`:''}
+      ${inv.status!=='Draft'&&inv.status!=='Credit Note'&&inv.type!=='proforma'?`<button class="btn btn-ghost btn-sm" onclick="creditNote('${id}')" title="Issue a credit note against this invoice">↩ Credit Note</button>`:''}
       ${inv.status==='Draft'&&inv.type!=='proforma'?`<button class="btn btn-ghost btn-sm" onclick="markInvSent('${id}')">Mark Sent</button>`:''}
       <button class="btn btn-wa btn-sm" onclick="openInvSendModal('${id}')">📱 Send / Share</button>
       <button class="btn btn-ghost btn-sm" onclick="downloadInvPDFById('${id}')">⬇ PDF</button>
@@ -13650,8 +13651,8 @@ Object.assign(window, {
   certContactSugg, certFillContact, certPageNav, certSendIndivEmail, certSendIndivWA, changeUserRole, 
   checkCronSetup, checkDuplicatePhone, checkSecurityStatus, clearAllData, clearCertFilters, clearJobForm, 
   clearNotifs, clearSel, clearStore, closeCtx, closeModal, closePLDashboard, 
-  closePortalInviteModal, confirmKS, convertProformaToInvoice, copyCremMsg, copyJobToNextDay, copySql, 
-  copyText, copyWAText, copyWaTemplate, createAllTables, createDraftsForCompleted, createInvFromJob, 
+  closePortalInviteModal, confirmKS, convertProformaToInvoice, copyCremMsg, copyJobToNextDay, copySql,
+  copyText, copyWAText, copyWaTemplate, createAllTables, creditNote, createDraftsForCompleted, createInvFromJob,
   createJobFromPortalReq, createProforma, createRecurringInv, createRenewalJob, ctxCopyAddr, ctypeToggle, cvLoadClient,
   cvSearch, cvSwitchTab, debounceRenderCmd, debounceRenderJobs, deleteAttachment, deleteComment, deleteCurrentAgency,
   deleteCurrentAgent, deleteCurrentExpense, deleteCurrentJob, deleteCurrentPerson, deleteCurrentProp, deleteDuplicateInvoices,
