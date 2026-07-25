@@ -18,6 +18,23 @@
 // (JOB DETAIL → photos), unlike the Office App's Jobs/Invoices tangle.
 
 import { sb, sbStorage, toast, openJob, getCurrentJob, getCurrentUser, getUploadHD } from './main.js';
+
+// H-8: HEIC/HEIF (the default iPhone photo format) uploads fine but most
+// browsers can't decode it into an <img> tag, so a plain <img src> either
+// renders nothing or shows a broken-image icon with no way to actually see
+// the photo. Detect it upfront (rather than relying on onerror, since some
+// browsers fail silently) and show a direct "tap to view" link instead —
+// the file itself is intact, most OS-level photo viewers open HEIC fine
+// even when the browser can't render it inline.
+function _photoTag(url, name){
+  if(/\.(heic|heif)$/i.test(name||url||'')){
+    return `<div class="photo-img" onclick="window.open('${url}','_blank')" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;text-align:center;padding:6px">
+      <span style="font-size:22px">📱</span>
+      <span style="font-size:10px;line-height:1.3">HEIC photo<br>Tap to view</span>
+    </div>`;
+  }
+  return `<img src="${url}" class="photo-img" onclick="window.open('${url}','_blank')" loading="lazy">`;
+}
 import { SB_URL, SB_KEY } from '@core';
 
 let _baMode        = false;  // true = before/after mode active
@@ -56,7 +73,7 @@ export function _renderPhotoGrid(atts){
     if(!photos.length){ area.innerHTML=''; return; }
     area.innerHTML = `<div class="photo-grid">${
       photos.map(a=>`<div class="photo-wrap">
-        <img src="${a.url}" class="photo-img" onclick="window.open('${a.url}','_blank')" loading="lazy">
+        ${_photoTag(a.url,a.name)}
       </div>`).join('')
     }</div>`;
     return;
@@ -98,7 +115,7 @@ export function _renderPhotoGrid(atts){
     html += `<div style="font-size:10px;font-weight:800;color:var(--txt3);text-transform:uppercase;letter-spacing:.8px;margin:8px 0 5px">Earlier Photos</div>
     <div class="photo-grid">${
       unslotted.map(a=>`<div class="photo-wrap">
-        <img src="${a.url}" class="photo-img" onclick="window.open('${a.url}','_blank')" loading="lazy">
+        ${_photoTag(a.url,a.name)}
       </div>`).join('')
     }</div>`;
   }
@@ -112,7 +129,7 @@ function _baPairHTML(slot, before, after){
     const hasPhoto = !!att;
     const label = role === 'before' ? '⬅ Before' : 'After ➡';
     const img = hasPhoto
-      ? `<img src="${att.url}" class="photo-img" onclick="window.open('${att.url}','_blank')" loading="lazy">
+      ? `${_photoTag(att.url,att.name)}
          <button class="ba-del-btn" onclick="_deleteBAPhoto('${att.id}','${att.storage_path||''}',event)" title="Delete">✕</button>`
       : `<button class="ba-add-btn" onclick="_triggerBAUpload(${slot},'${role}')">
            <div class="ba-plus">+</div>

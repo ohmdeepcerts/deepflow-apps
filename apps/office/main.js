@@ -1861,6 +1861,25 @@ document.addEventListener('keydown', e=>{
 });
 
 // ── Bulk assign engineer ──
+// H-6: chunked concurrent execution — runs `fn` over `items` with up to
+// `concurrency` in flight at once instead of a strict one-at-a-time await
+// loop. Safe for any batch write where each item is independent (no shared
+// mutable state between iterations) — NOT safe for a loop like
+// bulkSetStatus() below, which coordinates completions through a shared
+// _pendCertJob global (see its own comment for why that one must stay
+// sequential — parallelizing it would race and attach a cert to the wrong
+// job).
+async function _concurrentEach(items, fn, concurrency=8){
+  let i=0;
+  async function worker(){
+    while(i<items.length){
+      const idx=i++;
+      await fn(items[idx], idx);
+    }
+  }
+  await Promise.all(Array.from({length:Math.min(concurrency, items.length)}, worker));
+}
+
 async function bulkAssignEngineer(){
   const ids=[...selJobs];
   if(!ids.length){toast('Select jobs first','error');return;}
@@ -1869,12 +1888,12 @@ async function bulkAssignEngineer(){
   const name=await _pickFromList('Assign to engineer:',engs);
   if(!name) return;
   let done=0,failed=0;
-  for(const id of ids){
+  await _concurrentEach(ids, async id=>{
     try{
       await _sb(`jobs?id=eq.${encodeURIComponent(id)}`,{method:'PATCH',body:{engineer:name,modified:Date.now()},prefer:'return=minimal'});
       done++;
     }catch(e){ failed++; console.warn('[DeepFlow]', e); }
-  }
+  });
   _invalidateJobCache();
   if(failed) toast(`⚠ ${done} of ${ids.length} assigned to ${name} — ${failed} failed`,'warn',5000);
   else toast(`✅ Assigned ${done} job${done!==1?'s':''} to ${name}`,'success');
@@ -1888,12 +1907,12 @@ async function bulkReschedule(){
   const newDate=prompt('Move selected jobs to date (YYYY-MM-DD):',TODAY());
   if(!newDate||!/^\d{4}-\d{2}-\d{2}$/.test(newDate)){toast('Invalid date','error');return;}
   let done=0,failed=0;
-  for(const id of ids){
+  await _concurrentEach(ids, async id=>{
     try{
       await _sb(`jobs?id=eq.${encodeURIComponent(id)}`,{method:'PATCH',body:{date:newDate,modified:Date.now()},prefer:'return=minimal'});
       done++;
     }catch(e){ failed++; console.warn('[DeepFlow]', e); }
-  }
+  });
   _invalidateJobCache();
   if(failed) toast(`⚠ ${done} of ${ids.length} moved to ${newDate} — ${failed} failed`,'warn',5000);
   else toast(`✅ Moved ${done} job${done!==1?'s':''} to ${newDate}`,'success');
@@ -1907,15 +1926,15 @@ async function bulkCopyToDate(){
   const newDate=prompt('Copy selected jobs to date (YYYY-MM-DD):',TODAY());
   if(!newDate||!/^\d{4}-\d{2}-\d{2}$/.test(newDate)){toast('Invalid date','error');return;}
   let done=0,failed=0;
-  for(const id of ids){
+  await _concurrentEach(ids, async id=>{
     try{
       const j=await dGet('jobs',id);
-      if(!j){ failed++; continue; }
+      if(!j){ failed++; return; }
       const copy={...j,id:uid(),date:newDate,status:STATUS.PENDING,created:Date.now(),modified:Date.now(),jobNum:await nextJobNum()};
       delete copy.invNumber; delete copy.linkedInvId;
       await dPut('jobs',copy); done++;
     }catch(e){ failed++; console.warn('[DeepFlow]', e); }
-  }
+  });
   _invalidateJobCache();
   if(failed) toast(`⚠ ${done} of ${ids.length} copied to ${newDate} — ${failed} failed`,'warn',5000);
   else toast(`✅ Copied ${done} job${done!==1?'s':''} to ${newDate}`,'success');
@@ -1950,7 +1969,7 @@ async function bulkDeleteJobs(){
   if(!ids.length){toast('Select jobs first','error');return;}
   if(!confirm(`Delete ${ids.length} selected job${ids.length!==1?'s':''}? This cannot be undone.`)) return;
   let done=0,failed=0;
-  for(const id of ids){
+  await _concurrentEach(ids, async id=>{
     try{
       const j=await dGet('jobs',id).catch(()=>null);
       await dDel('jobs',id);
@@ -1961,7 +1980,7 @@ async function bulkDeleteJobs(){
       });
       done++;
     }catch(e){ failed++; console.warn('[DeepFlow]', e); }
-  }
+  });
   _invalidateJobCache();
   if(failed) toast(`⚠ ${done} of ${ids.length} deleted — ${failed} failed`,'warn',5000);
   else toast(`✅ Deleted ${done} job${done!==1?'s':''}`,'success');
@@ -4099,8 +4118,23 @@ async function loadJobAttachments(jobId){
     const docs=atts.filter(a=>a.type!=='photo'&&!a.mime?.startsWith('image/'));
     let html='';
     photos.forEach(a=>{
+      // H-8: HEIC/HEIF photos (the default format on iPhones since iOS 11)
+      // upload fine, but almost no desktop browser can decode them for an
+      // <img> tag — without this, the onerror fallback below just showed a
+      // generic broken-image icon with no explanation and no way to
+      // actually see the photo. Detect it upfront and show a direct
+      // "tap to view" link instead — the file itself is intact and
+      // downloadable, most OS-level photo viewers open HEIC fine even when
+      // the browser can't render it inline.
+      const isHeic=/\.(heic|heif)$/i.test(a.name||'')||a.mime==='image/heic'||a.mime==='image/heif';
+      const imgOrFallback=isHeic
+        ?`<div onclick="window.open('${a.url}','_blank')" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--txt3);gap:4px;text-align:center;padding:6px">
+            <span style="font-size:24px">📱</span>
+            <span style="font-size:9px;line-height:1.3">HEIC photo<br>Tap to view</span>
+          </div>`
+        :`<img src="${a.url}" style="width:100%;height:100%;object-fit:cover" loading="lazy" onclick="window.open('${a.url}','_blank')" onerror="this.parentElement.innerHTML='<div onclick=&quot;window.open(\\'${a.url}\\',\\'_blank\\')&quot; style=&quot;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--txt3);gap:4px;text-align:center;padding:6px&quot;><span style=&quot;font-size:24px&quot;>🖼️</span><span style=&quot;font-size:9px;line-height:1.3&quot;>Can\\'t preview<br>Tap to open</span></div>'">`;
       html+=`<div style="position:relative;border-radius:8px;overflow:hidden;background:var(--s2);aspect-ratio:1;cursor:pointer" title="${a.name}">
-        <img src="${a.url}" style="width:100%;height:100%;object-fit:cover" loading="lazy" onclick="window.open('${a.url}','_blank')" onerror="this.parentElement.innerHTML='<div style=&quot;display:flex;align-items:center;justify-content:center;height:100%;color:var(--txt3);font-size:24px&quot;>🖼️</div>'">
+        ${imgOrFallback}
         <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.5);color:#fff;font-size:9px;padding:3px 5px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${a.uploaded_by_name||'Engineer'}</div>
         <button onclick="event.stopPropagation();deleteAttachment('${a.id}','${a.storage_path||''}')" style="position:absolute;top:4px;right:4px;background:rgba(220,38,38,.85);border:none;border-radius:50%;width:22px;height:22px;color:#fff;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;padding:0" title="Delete photo">✕</button>
       </div>`;
@@ -8641,15 +8675,15 @@ async function importBackup(inp){
   try{
     const data=JSON.parse(text);
     confirm2('Import Backup','This will overwrite all current data. Are you sure?',async()=>{
-      if(data.jobs)for(const j of data.jobs) await dPut('jobs',j);
-      if(data.persons)for(const p of data.persons) await dPut('persons',p);
-      if(data.invoices)for(const i of data.invoices) await dPut('invoices',i);
-      if(data.certs)for(const c of data.certs) await dPut('certs',c);
-      if(data.overtime)for(const o of data.overtime) await dPut('overtime',o);
-      if(data.payments)for(const p of data.payments) await dPut('payments',p);
-      if(data.expenses)for(const e of data.expenses) await dPut('expenses',e);
-      if(data.agencies)for(const a of data.agencies) await dPut('agencies',a);
-      if(data.agents)for(const a of data.agents) await dPut('agents',a);
+      if(data.jobs)await _concurrentEach(data.jobs, j=>dPut('jobs',j));
+      if(data.persons)await _concurrentEach(data.persons, p=>dPut('persons',p));
+      if(data.invoices)await _concurrentEach(data.invoices, i=>dPut('invoices',i));
+      if(data.certs)await _concurrentEach(data.certs, c=>dPut('certs',c));
+      if(data.overtime)await _concurrentEach(data.overtime, o=>dPut('overtime',o));
+      if(data.payments)await _concurrentEach(data.payments, p=>dPut('payments',p));
+      if(data.expenses)await _concurrentEach(data.expenses, e=>dPut('expenses',e));
+      if(data.agencies)await _concurrentEach(data.agencies, a=>dPut('agencies',a));
+      if(data.agents)await _concurrentEach(data.agents, a=>dPut('agents',a));
       if(data.settings){Object.assign(S,data.settings);await saveAllSettings()}
       toast('Backup imported successfully!','success');
       location.reload();
@@ -12780,9 +12814,13 @@ async function executeMerge(){
     // Get all related data
     const [allJobs,allInvs,allCerts]=await Promise.all([dAll('jobs'),dAll('invoices'),dAll('certs')]);
 
-    let jobsUpdated=0, invsUpdated=0, certsUpdated=0;
+    // H-6: the checks below are synchronous (no network calls) — only the
+    // actual writes needed batching, so each loop now just collects the
+    // rows that changed, then fires those writes concurrently instead of
+    // one dPut() at a time across (potentially) the entire table.
 
     // ═══ Update jobs — ALL name-based fields ═══
+    const jobsToUpdate=[];
     for(const j of allJobs){
       let changed=false;
       // referrer: update if it matches ANY merged person's name (incl. person[0])
@@ -12799,10 +12837,13 @@ async function executeMerge(){
       if(j.landlordWA&&people.some(p=>p.wa&&j.landlordWA===p.wa)){ j.landlordWA=chosenWA; changed=true; }
       // contact: often stores the phone number — update if it matched
       if(j.contact&&people.some(p=>p.phone&&j.contact===p.phone)){ j.contact=chosenPhone; changed=true; }
-      if(changed){ await dPut('jobs', j); jobsUpdated++; }
+      if(changed) jobsToUpdate.push(j);
     }
+    await _concurrentEach(jobsToUpdate, j=>dPut('jobs', j));
+    const jobsUpdated=jobsToUpdate.length;
 
     // ═══ Update invoices — client references ═══
+    const invsToUpdate=[];
     for(const inv of allInvs){
       let changed=false;
       // clientId: update if it was one of the deleted persons
@@ -12811,10 +12852,13 @@ async function executeMerge(){
       if(allMergedNames.includes(inv.clientName)){ inv.clientName=chosenName; changed=true; }
       // billToName: update if it matches any merged name
       if(allMergedNames.includes(inv.billToName)){ inv.billToName=chosenName; changed=true; }
-      if(changed){ await dPut('invoices', inv); invsUpdated++; }
+      if(changed) invsToUpdate.push(inv);
     }
+    await _concurrentEach(invsToUpdate, inv=>dPut('invoices', inv));
+    const invsUpdated=invsToUpdate.length;
 
     // ═══ Update certs — landlord references ═══
+    const certsToUpdate=[];
     for(const c of allCerts){
       let changed=false;
       // landlord name
@@ -12823,11 +12867,13 @@ async function executeMerge(){
       if(c.landlordPhone&&people.some(p=>p.phone&&c.landlordPhone===p.phone)){ c.landlordPhone=chosenPhone; changed=true; }
       // landlordEmail
       if(c.landlordEmail&&people.some(p=>p.email&&c.landlordEmail===p.email)){ c.landlordEmail=chosenEmail; changed=true; }
-      if(changed){ await dPut('certs', c); certsUpdated++; }
+      if(changed) certsToUpdate.push(c);
     }
+    await _concurrentEach(certsToUpdate, c=>dPut('certs', c));
+    const certsUpdated=certsToUpdate.length;
 
     // ═══ Delete merged records ═══
-    for(const id of mergeIds){ await dDel('persons', id); }
+    await _concurrentEach(mergeIds, id=>dDel('persons', id));
 
     // ═══ Clear bulk state ═══
     window._dirBulkSelected=new Set();
