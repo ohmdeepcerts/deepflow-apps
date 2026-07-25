@@ -11557,39 +11557,52 @@ async function openPaymentModal(invId){
   openModal('mo-payment');
 }
 
+// M-4: savePayment() had no submit-lock at all — a double-click, or a slow
+// connection making the office wonder if the first click registered and
+// clicking again, could record the same payment twice with no warning.
+let _savingPayment=false;
 async function savePayment(){
+  if(_savingPayment) return;
   const invId=_payInvId;
   const amount=parseFloat(document.getElementById('pay-amount').value)||0;
   if(amount<=0){toast('Enter a valid amount','error');return}
-  const payment={
-    id:uid(),invId,
-    date:document.getElementById('pay-date').value,
-    amount,
-    method:document.getElementById('pay-method').value,
-    ref:document.getElementById('pay-ref').value,
-    created:Date.now()
-  };
-  await dPut('payments',payment);
-  
-  // Check if fully paid
-  const inv=await dGet('invoices',invId);
-  const t=calcInvTotal(inv);
-  const allPmts=await dAll('payments');
-  const invPmts=allPmts.filter(p=>p.invId===invId);
-  const totalPaid=invPmts.reduce((s,p)=>s+p.amount,0);
-  
-  if(totalPaid>=t.grand-0.01){
-    inv.status='Paid';
-    await dPut('invoices',inv);
-    toast('Invoice fully paid! Status updated.','success');
-  } else {
-    toast(`Payment of £${amount.toFixed(2)} recorded. Outstanding: £${(t.grand-totalPaid).toFixed(2)}`,'success');
+  _savingPayment=true;
+  const btn=document.getElementById('btn-save-payment');
+  if(btn){ btn.disabled=true; btn.textContent='Recording…'; }
+  try{
+    const payment={
+      id:uid(),invId,
+      date:document.getElementById('pay-date').value,
+      amount,
+      method:document.getElementById('pay-method').value,
+      ref:document.getElementById('pay-ref').value,
+      created:Date.now()
+    };
+    await dPut('payments',payment);
+
+    // Check if fully paid
+    const inv=await dGet('invoices',invId);
+    const t=calcInvTotal(inv);
+    const allPmts=await dAll('payments');
+    const invPmts=allPmts.filter(p=>p.invId===invId);
+    const totalPaid=invPmts.reduce((s,p)=>s+p.amount,0);
+
+    if(totalPaid>=t.grand-0.01){
+      inv.status='Paid';
+      await dPut('invoices',inv);
+      toast('Invoice fully paid! Status updated.','success');
+    } else {
+      toast(`Payment of £${amount.toFixed(2)} recorded. Outstanding: £${(t.grand-totalPaid).toFixed(2)}`,'success');
+    }
+    await logActivity(`Payment £${amount.toFixed(2)} recorded for ${inv.number}`,'invoice');
+    closeModal('mo-payment');
+    renderInvList();
+    if(curInvId===invId) viewInv(invId);
+    updateBadges();
+  } finally {
+    _savingPayment=false;
+    if(btn){ btn.disabled=false; btn.textContent='Record Payment'; }
   }
-  await logActivity(`Payment £${amount.toFixed(2)} recorded for ${inv.number}`,'invoice');
-  closeModal('mo-payment');
-  renderInvList();
-  if(curInvId===invId) viewInv(invId);
-  updateBadges();
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -11875,6 +11888,15 @@ let _invSaving = false; // global lock — prevents double-save on repeated clic
 async function saveInvWithJobSync(){
   // ── LOCK: if already saving, ignore extra clicks completely ──
   if(_invSaving){ toast('Already saving, please wait…','info',1500); return; }
+  // M-6: canInvoice was toggleable per-user in Settings > Team but nothing
+  // ever actually checked it — an admin unchecking "Can Invoice" for a
+  // staff member had zero effect. Defaults to true everywhere it's loaded,
+  // so this only changes behavior for someone an admin has explicitly
+  // restricted.
+  if(_appUser?.role!=='Admin' && _appUser?.role!=='Manager' && !getUserPerm('canInvoice')){
+    toast('❌ You do not have permission to create or edit invoices','error');
+    return;
+  }
   _invSaving = true;
 
   const _saveBtn = document.querySelector('[onclick="saveInv()"]');
