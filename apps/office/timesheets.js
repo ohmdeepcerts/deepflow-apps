@@ -28,8 +28,8 @@ export function getWeekDates(off){
 export async function renderTS(){
   const el=document.getElementById('ts-eng-list');
   el.innerHTML=(S.engineers||[]).map(e=>`
-    <div class="ts-eng-card ${selEng===e.name?'active':''}" onclick="selEngineer('${e.name}')">
-      <div class="ts-eng-name">${e.name}</div>
+    <div class="ts-eng-card ${selEng===e.name?'active':''}" onclick="selEngineer(${escHtml(JSON.stringify(e.name))})">
+      <div class="ts-eng-name">${escHtml(e.name)}</div>
       <div class="ts-eng-stat">£${e.rate||0}/hr${e.wa?` · 📱 ${e.wa}`:''}</div>
     </div>`).join('')||'<div class="empty"><div class="ei">👷</div><p>Add engineers in Settings</p></div>';
 
@@ -70,9 +70,9 @@ export async function renderTSDetail(){
   panel.innerHTML=`<div class="ts-detail">
     <div class="ts-det-hd">
       <button class="btn btn-ghost btn-sm" onclick="tsOff--;renderTSDetail()">‹ Prev</button>
-      <div class="ts-det-title">${selEng} — ${wkLbl}</div>
+      <div class="ts-det-title">${escHtml(selEng)} — ${wkLbl}</div>
       <button class="btn btn-ghost btn-sm" onclick="tsOff++;renderTSDetail()">Next ›</button>
-      <button class="btn btn-acc btn-sm" onclick="openOvertimeModal('${selEng}')">⏱ Log OT/Absence</button>
+      <button class="btn btn-acc btn-sm" onclick="openOvertimeModal(${escHtml(JSON.stringify(selEng))})">⏱ Log OT/Absence</button>
       <button class="btn btn-wa btn-sm" onclick="waTimesheetSummary()">📱 Send Summary</button>
     </div>
     <table class="ts-table">

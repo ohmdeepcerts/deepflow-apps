@@ -22,7 +22,7 @@
 // (e.g. toggleAgentFilter, preFillRenewal) instead of a raw inline
 // assignment.
 
-import { escText as e } from '@ui';
+import { escText as e, escAttr as ea } from '@ui';
 import { _d, _S, dd, fd, jobCard, empty } from './main.js';
 import { certCard } from './certs.js';
 
@@ -114,7 +114,7 @@ export function vProperties(d){
     <div class="sec">
       <div class="sec-hd"><div class="sec-t">Properties <span class="sec-n">${list.length}</span></div></div>
       <div class="fg" style="margin-bottom:12px">
-        <input class="fi" id="prop-search" placeholder=" " value="${e(_propSearch)}" oninput="setPropSearch(this.value)">
+        <input class="fi" id="prop-search" placeholder=" " value="${ea(_propSearch)}" oninput="setPropSearch(this.value)">
         <label class="fl">Search by address</label>
       </div>
       <div class="sort-bar">

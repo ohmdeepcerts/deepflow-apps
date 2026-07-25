@@ -514,6 +514,33 @@ function _emailPortalShare(url, name, btn) {
 }
 
 export function nav(pg){
+  // SECURITY (H-5): every permission gate must run before any DOM mutation
+  // or render call below — this used to run after the target page was
+  // already marked .active and, for dash/jobs/inv/stmt/exp/ts/rep/engrep/
+  // audit specifically, already rendered with real data, so a blocked role
+  // briefly saw the forbidden page's actual content before the toast fired
+  // and the early return kicked in.
+  const rolePages={
+    Admin: null, // null = all pages allowed
+    Manager: ['dash','jobs','inv','stmt','rep','req','dir','props','certs','client','set','map'],
+    Finance: ['dash','jobs','inv','stmt','rep','dir','props','set'],
+    Staff:   ['dash','jobs','inv','stmt','req','dir','props','certs','client'],
+  };
+  const allowed=rolePages[_appUser?.role];
+  if(allowed && !allowed.includes(pg)){
+    toast('❌ You do not have access to this page','error');
+    return;
+  }
+  // SECURITY: Block non-admins from Settings entirely
+  if(pg==='set' && _appUser?.role !== 'Admin' && _appUser?.role !== 'Manager' && _appUser?.role !== 'Finance'){
+    toast('❌ Settings is restricted','error');
+    return;
+  }
+  if(pg==='audit' && _appUser?.role!=='Admin'){
+    toast('❌ Admin only','error');
+    return;
+  }
+
   hideTip(); // Always hide tooltip when navigating — prevents it sticking across pages
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.ni').forEach(n=>n.classList.remove('active'));
@@ -531,27 +558,10 @@ export function nav(pg){
   if(pg==='ts') renderTS();
   if(pg==='rep') renderReports();
   if(pg==='engrep'){initEngReport();renderEngReport();}
-  if(pg==='audit'){ if(_appUser?.role==='Admin') initAuditLog(); else { toast('❌ Admin only','error'); return; } }
-  // SECURITY: Block non-admins from Settings entirely
-  if(pg==='set' && _appUser?.role !== 'Admin' && _appUser?.role !== 'Manager' && _appUser?.role !== 'Finance'){
-    toast('❌ Settings is restricted','error');
-    return;
-  }
+  if(pg==='audit') initAuditLog();
   // Finance: read-only jobs
   if(pg==='jobs' && _appUser?.role==='Finance'){
     // Allow but will be read-only — handled in applyUserPermissions
-  }
-  // Block pages not in role's allowed list
-  const rolePages={
-    Admin: null, // null = all pages allowed
-    Manager: ['dash','jobs','inv','stmt','rep','req','dir','props','certs','client','set','map'],
-    Finance: ['dash','jobs','inv','stmt','rep','dir','props','set'],
-    Staff:   ['dash','jobs','inv','stmt','req','dir','props','certs','client'],
-  };
-  const allowed=rolePages[_appUser?.role];
-  if(allowed && !allowed.includes(pg)){
-    toast('❌ You do not have access to this page','error');
-    return;
   }
   if(pg==='req') renderRequests();
   if(pg==='dir') renderDir();
@@ -4738,7 +4748,7 @@ async function showWaPanel(){
   panel.innerHTML=`<div class="wa-panel">
     <div class="wa-panel-title">📱 Send Jobs to Engineers — ${fmtD(jDate)}</div>
     <div class="wa-eng-tabs" id="wa-eng-tabs">
-      ${engs.map((e,i)=>`<div class="wa-eng-tab ${i===0?'active':''}" onclick="waShowEng('${e}',this)">${e} (${byEng[e].length})</div>`).join('')}
+      ${engs.map((e,i)=>`<div class="wa-eng-tab ${i===0?'active':''}" onclick="waShowEng(${escHtml(JSON.stringify(e))},this)">${escHtml(e)} (${byEng[e].length})</div>`).join('')}
     </div>
     <div id="wa-preview-area"></div>
   </div>`;

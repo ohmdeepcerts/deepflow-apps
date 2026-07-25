@@ -1024,7 +1024,7 @@ function vInvoices(d){
         <div class="ic-amt" style="color:${paid?'var(--success)':can?'var(--text-tertiary)':'var(--danger)'}">${fgbp(t.grand)}</div>
         <div class="ic-lbl">${paid?'PAID':can?'VOID':'OUTSTANDING'}</div>
         <div style="display:flex;gap:6px;margin-top:6px">
-          <button class="dl sm" data-action="preview-inv" data-id="${e(inv.id||'')}">Preview</button>
+          <button class="dl sm" data-action="preview-inv" data-id="${ea(inv.id||'')}">Preview</button>
           ${!paid&&!can&&inv.url?`<a href="${ea(inv.url)}" target="_blank" class="dl sm" style="background:var(--success)">Pay</a>`:''}
         </div>
       </div>
@@ -1078,8 +1078,8 @@ function bankCard(entity){
     <div class="bank-row">${ba?`<div class="bank-f">Account: <strong>${e(ba)}</strong></div>`:''}${bs?`<div class="bank-f">Sort Code: <strong>${e(bs)}</strong></div>`:''}</div>
     <div style="display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap">
       ${br?`<div class="bank-link"><i data-lucide="link" style="width:12px;height:12px"></i>${e(br)}</div>`:''}
-      ${ba?`<button class="bank-copy" onclick="copyToClipboard('${e(ba)}')"><i data-lucide="copy" style="width:10px;height:10px;display:inline;vertical-align:-2px;margin-right:4px"></i>Copy Acc</button>`:''}
-      ${bs?`<button class="bank-copy" onclick="copyToClipboard('${e(bs)}')"><i data-lucide="copy" style="width:10px;height:10px;display:inline;vertical-align:-2px;margin-right:4px"></i>Copy Sort</button>`:''}
+      ${ba?`<button class="bank-copy" onclick="copyToClipboard(${ea(JSON.stringify(ba))})"><i data-lucide="copy" style="width:10px;height:10px;display:inline;vertical-align:-2px;margin-right:4px"></i>Copy Acc</button>`:''}
+      ${bs?`<button class="bank-copy" onclick="copyToClipboard(${ea(JSON.stringify(bs))})"><i data-lucide="copy" style="width:10px;height:10px;display:inline;vertical-align:-2px;margin-right:4px"></i>Copy Sort</button>`:''}
     </div>
   </div>`;
 }
