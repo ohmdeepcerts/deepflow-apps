@@ -111,11 +111,19 @@ export async function renderStmt() {
   let totalGrand = 0, totalPaid = 0, totalVat = 0, totalSub = 0;
   invs.forEach(inv => {
     const t = calcInvTotal(inv);
-    totalGrand += t.grand;
-    totalVat += t.vat;
-    totalSub += t.sub;
-    const paidAmt = allPayments.filter(p => p.invId === inv.id).reduce((s, p) => s + p.amount, 0);
-    totalPaid += inv.status === 'Paid' ? t.grand : paidAmt;
+    // A credit note reduces revenue/what's owed — it was being summed here
+    // exactly like a real invoice, which both overstated Total (credit
+    // notes counted as additional invoicing) and, since a credit note can
+    // never be marked Paid, permanently inflated Outstanding by the full
+    // value of every credit note ever issued.
+    const sign = inv.status === 'Credit Note' ? -1 : 1;
+    totalGrand += sign * t.grand;
+    totalVat += sign * t.vat;
+    totalSub += sign * t.sub;
+    if (inv.status !== 'Credit Note') {
+      const paidAmt = allPayments.filter(p => p.invId === inv.id).reduce((s, p) => s + p.amount, 0);
+      totalPaid += inv.status === 'Paid' ? t.grand : paidAmt;
+    }
   });
   const outstanding = totalGrand - totalPaid;
 
@@ -148,8 +156,13 @@ export async function renderStmt() {
 
   tbody.innerHTML = invs.map(inv => {
     const t = calcInvTotal(inv);
-    const paidAmt = inv.status === 'Paid' ? t.grand : allPayments.filter(p => p.invId === inv.id).reduce((s, p) => s + p.amount, 0);
-    const outs = Math.max(0, t.grand - paidAmt);
+    const isCredit = inv.status === 'Credit Note';
+    // A credit note is a reduction, not an unpaid charge — it can never be
+    // marked Paid, so showing its own value in "Outstanding" made every
+    // credit note look like a permanent debt.
+    const paidAmt = isCredit ? 0 : (inv.status === 'Paid' ? t.grand : allPayments.filter(p => p.invId === inv.id).reduce((s, p) => s + p.amount, 0));
+    const outs = isCredit ? 0 : Math.max(0, t.grand - paidAmt);
+    const sign = isCredit ? '-' : '';
     const sel = _stmtSelected.has(inv.id);
     const statusCls = {Paid:'b-paid','Awaiting Payment':'b-awaiting',Draft:'b-draft',Cancelled:'b-cancelled','Credit Note':'b-credit'}[inv.status]||'';
     return `<tr style="border-bottom:1px solid var(--border);${sel ? 'background:rgba(245,166,35,.06)' : ''}">
@@ -162,9 +175,9 @@ export async function renderStmt() {
       <td style="padding:8px 12px;font-size:12px;color:var(--txt2)">${inv.agencyName||'—'}</td>
       <td style="padding:8px 12px;font-size:12px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${inv.description||'—'}</td>
       <td style="padding:8px 12px;font-size:12px">${inv.engineer||'—'}</td>
-      <td style="padding:8px 12px;text-align:right;font-family:var(--fh)">£${t.sub.toFixed(2)}</td>
-      <td style="padding:8px 12px;text-align:right;font-family:var(--fh);color:var(--blue)">£${t.vat.toFixed(2)}</td>
-      <td style="padding:8px 12px;text-align:right;font-family:var(--fh);font-weight:700">£${t.grand.toFixed(2)}</td>
+      <td style="padding:8px 12px;text-align:right;font-family:var(--fh)">${sign}£${t.sub.toFixed(2)}</td>
+      <td style="padding:8px 12px;text-align:right;font-family:var(--fh);color:var(--blue)">${sign}£${t.vat.toFixed(2)}</td>
+      <td style="padding:8px 12px;text-align:right;font-family:var(--fh);font-weight:700">${sign}£${t.grand.toFixed(2)}</td>
       <td style="padding:8px 12px;text-align:right;font-family:var(--fh);color:var(--green)">£${paidAmt.toFixed(2)}</td>
       <td style="padding:8px 12px;text-align:right;font-family:var(--fh);font-weight:700;color:${outs>0?'var(--red)':'var(--green)'}">£${outs.toFixed(2)}</td>
       <td style="padding:8px 12px"><span class="badge ${statusCls}" style="font-size:10px;padding:3px 8px">${inv.status}</span></td>
