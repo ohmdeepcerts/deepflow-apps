@@ -3351,7 +3351,13 @@ async function createProforma(jobId){
   const vr=getVatRate();
   const price=Number(job.price)||0;
   const vat=price*vr/100;
-  const body={
+  // Built in camelCase and run through _toDb() like every other invoice
+  // write path (dPut) does — this used to hand-type snake_case keys
+  // directly, which had drifted out of sync with the real column names
+  // (dueDate, billToName, jobId, jobDate, certTypes, vat, etc. were all
+  // being sent as literal unrecognized columns), so every proforma
+  // creation failed outright with a PGRST204.
+  const body=_toDb('invoices',{
     type:'proforma',
     status:'Draft',
     number:num,
@@ -3371,10 +3377,10 @@ async function createProforma(jobId){
     clientEmail:job.llEmail||job.clientEmail||'',
     items:[{desc:job.description||job.certTypes||'Work',qty:1,unit:price,vat:true}],
     subtotal:price,
-    vat:vat,
+    vatAmount:vat,
     total:price+vat,
     created:now,modified:now
-  };
+  });
   try{
     const r=await _sb('invoices',{method:'POST',body});
     if(r?.[0]){toast('Proforma '+num+' created','success');renderInvList();return r[0];}

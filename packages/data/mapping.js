@@ -31,7 +31,7 @@ export const TO_DB = {
     invoiceType: 'invoicetype', billToName: 'billtoname', billToAddress: 'billtoaddress',
     jobAddress: 'jobaddress', agencyName: 'agencyname', agencyAddress: 'agencyaddress',
     landlordName: 'landlordname', propertyAddress: 'propertyaddress', jobNum: 'jobnum',
-    linkedInvId: 'linkedinvid', certTypes: 'certtypes',
+    linkedInvId: 'linkedinvid', certTypes: 'certtypes', jobDate: 'jobdate', vatAmount: 'vat_amount',
   },
   agents: { agencyId: 'agencyid' },
   persons: { agencyId: 'agencyid', bankName: 'bankname', bankAcc: 'bankacc', bankSort: 'banksort', bankRef: 'bankref' },
