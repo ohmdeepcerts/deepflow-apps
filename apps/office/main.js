@@ -3582,7 +3582,13 @@ async function renderNotifPreview(){
 async function saveEngDefaults(){
   const d={engSeePrice:!!document.getElementById('s-eng-see-price')?.checked,engSeeLandlord:document.getElementById('s-eng-see-landlord')?.checked!==false,engSeeTenant:document.getElementById('s-eng-see-tenant')?.checked!==false,engSeeAgent:document.getElementById('s-eng-see-agent')?.checked!==false,engSeeNotes:document.getElementById('s-eng-see-notes')?.checked!==false,engSeeInvoice:!!document.getElementById('s-eng-see-invoice')?.checked};
   Object.assign(S,d);
-  for(const[k,v] of Object.entries(d)) await saveSetting(k,v);
+  // saveSetting() only writes localStorage on THIS browser — these are
+  // real visibility permissions that must reach the actual Employee App
+  // on engineers' own phones, which only ever load settings from
+  // Supabase. saveAllSettings() does both in one call. Was previously
+  // saveSetting() per key, so this control silently never took effect
+  // for any real engineer, no matter how many times an admin toggled it.
+  await saveAllSettings();
   toast('Engineer defaults saved','success');
 }
 
@@ -3607,7 +3613,10 @@ async function updateEngPerm(engId,field,val){
   if(!S.engPerms) S.engPerms={};
   if(!S.engPerms[engId]) S.engPerms[engId]={};
   S.engPerms[engId][field]=val;
-  await saveSetting('engPerms',S.engPerms);
+  // Same reasoning as saveEngDefaults() above — this is a per-engineer
+  // permission override that must actually reach that engineer's own
+  // device via Supabase, not just this admin's local browser storage.
+  await saveAllSettings();
   toast('Permission updated','success',1500);
 }
 
