@@ -3035,7 +3035,7 @@ body.density-relaxed .jtable td{font-size:15px}
             <div class="fg"><label class="fl">VAT Rate (%)</label><input type="number" class="fi" id="s-vat-main" value="20" min="0" max="100" oninput="const o=document.getElementById('s-vat');if(o)o.value=this.value"></div>
             <div class="fg" style="grid-column:span 2;margin-top:4px">
               <label class="fcheck">
-                <input type="checkbox" id="s-vat-enabled-main" onchange="saveSettings()">
+                <input type="checkbox" id="s-vat-enabled-main" onchange="document.getElementById('s-vat-enabled').checked=this.checked;saveSettings()">
                 <strong>Charge VAT</strong> — untick if not VAT registered
               </label>
             </div>
@@ -3259,7 +3259,7 @@ body.density-relaxed .jtable td{font-size:15px}
             <div class="fg"><label class="fl">VAT Rate (%)</label><input type="number" class="fi" id="s-vat" value="20" min="0" max="100" oninput="const o=document.getElementById('s-vat-main');if(o)o.value=this.value"></div>
             <div class="fg" style="grid-column:span 2;margin-top:4px">
               <label class="fcheck">
-                <input type="checkbox" id="s-vat-enabled" onchange="saveSettings()">
+                <input type="checkbox" id="s-vat-enabled" onchange="document.getElementById('s-vat-enabled-main').checked=this.checked;saveSettings()">
                 <strong>Charge VAT on invoices</strong> — untick if your company is not VAT registered
               </label>
             </div>
@@ -3269,7 +3269,7 @@ body.density-relaxed .jtable td{font-size:15px}
           <div class="set-title">🔛 Invoice Feature Toggles</div>
           <div class="set-card">
             <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px 20px;margin-bottom:12px">
-              <label class="fcheck"><input type="checkbox" id="s-auto-inv" checked onchange="saveSettings()"> Auto-create draft on job complete</label>
+              <label class="fcheck"><input type="checkbox" id="s-auto-inv" checked onchange="document.getElementById('s-auto-inv-s').checked=this.checked;saveSettings()"> Auto-create draft on job complete</label>
               <label class="fcheck"><input type="checkbox" id="s-inv-show-vat" checked onchange="saveSettings()"> Show VAT column on PDF</label>
               <label class="fcheck"><input type="checkbox" id="s-inv-show-bank" checked onchange="saveSettings()"> Show bank details on PDF</label>
               <label class="fcheck"><input type="checkbox" id="s-inv-show-logo" checked onchange="saveSettings()"> Show logo on PDF</label>
@@ -3494,7 +3494,7 @@ body.density-relaxed .jtable td{font-size:15px}
               </div>
             </div>
             <div style="margin-top:10px">
-              <label class="fcheck"><input type="checkbox" id="s-auto-inv-s" checked onchange="saveSettings()"> Auto-create invoice on job completion</label>
+              <label class="fcheck"><input type="checkbox" id="s-auto-inv-s" checked onchange="document.getElementById('s-auto-inv').checked=this.checked;saveSettings()"> Auto-create invoice on job completion</label>
             </div>
             <div style="margin-top:10px"><button class="btn btn-acc btn-sm" onclick="saveSettings();toast('Job settings saved','success')">Save</button></div>
           </div>
