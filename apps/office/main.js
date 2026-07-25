@@ -1119,7 +1119,6 @@ export function setPendCertJob(v){ _pendCertJob=v; }
 let _dupCheckTimer=null;
 let editInvId=null,invItems=[],curInvId=null;
 let _matchTimers={},_autoSaveTimers={};
-let editAgencyId=null,editAgentId=null;
 
 let _resizing=null;
 let _descTipEl=null,_descTipTimer=null;
@@ -8546,7 +8545,7 @@ async function renderCmd(q){
     {ico:'↩',title:'Credit Note',sub:'Issue a credit note',type:'Action',fn:()=>{closeModal('cmd-overlay');df.once('navDone:inv',()=>{openCreditNoteModal()});nav('inv')}},
     {ico:'🧾',title:'Log Expense',sub:'Track material / fuel cost',type:'Action',fn:()=>{closeModal('cmd-overlay');df.once('navDone:exp',()=>{openExpenseModal()});nav('exp')}},
     {ico:'◉',title:'Add Person',sub:'Add to directories',type:'Action',fn:()=>{closeModal('cmd-overlay');df.once('navDone:dir',()=>{openPersonModal()});nav('dir')}},
-    {ico:'◈',title:'Add Certificate',sub:'Log a certificate',type:'Action',fn:()=>{closeModal('cmd-overlay');df.once('navDone:certs',()=>{openCertModal});nav('certs')}},
+    {ico:'◈',title:'Add Certificate',sub:'Log a certificate',type:'Action',fn:()=>{closeModal('cmd-overlay');df.once('navDone:certs',()=>{openCertForm()});nav('certs')}},
     {ico:'◈',title:'Dashboard',sub:'Go to dashboard',type:'Navigate',fn:()=>{closeModal('cmd-overlay');nav('dash')}},
     {ico:'⊞',title:'Jobs',sub:'Open job management',type:'Navigate',fn:()=>{closeModal('cmd-overlay');nav('jobs')}},
     {ico:'◎',title:'Invoices',sub:'Open invoices',type:'Navigate',fn:()=>{closeModal('cmd-overlay');nav('inv')}},

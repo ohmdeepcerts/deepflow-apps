@@ -17,6 +17,12 @@ import {
 } from './main.js';
 
 let editPid=null,curDirSection='landlords';
+// Left behind in main.js by the Phase 5 extraction that moved every
+// agency/agent CRUD function here — every read/write of these two vars
+// was already exclusively in this file, so main.js's copy was dead and
+// this file had none, throwing ReferenceError the moment
+// openAgencyModal/saveAgency/openAgentModal/saveAgent ran.
+let editAgencyId=null,editAgentId=null;
 
 export function getCurDirSection(){ return curDirSection; }
 
