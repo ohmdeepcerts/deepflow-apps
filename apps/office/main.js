@@ -4438,12 +4438,26 @@ async function smartAutofill(type, val, context){
 }
 
 // ── CLIENT STAR RATING — reusable across the whole app ──────────────────────
+// Matches invoices by name string alone (no id) — every call site here only
+// has a free-text name available (a job's landlordName/agencyName/agentName
+// field, typed before any record is necessarily selected), so this fallback
+// stays. Call sites that DO already have a properly id-scoped invoice list
+// (e.g. Client View, which resolves a specific person/agency id before
+// rendering) should use _clientStarsFromInvoices() directly instead — this
+// name-only match conflates any two directory records that happen to share
+// a display name (a real, live case: "Wentworth Estates" exists as both a
+// landlord and an unrelated agency), showing one entity's payment history
+// under the other's.
 async function _calcClientStars(clientName){
   if(!clientName) return null;
   const nl=clientName.toLowerCase();
   const [allInvs]=await Promise.all([dAll('invoices')]);
   const invs=allInvs.filter(i=>(i.clientName||i.billToName||'').toLowerCase()===nl||(i.landlordName||'').toLowerCase()===nl||(i.agencyName||'').toLowerCase()===nl);
-  if(!invs.length) return null;
+  return _clientStarsFromInvoices(invs);
+}
+
+function _clientStarsFromInvoices(invs){
+  if(!invs||!invs.length) return null;
   const now=new Date();
   const unpaid=invs.filter(i=>i.status!=='Paid'&&i.status!==STATUS.CANCELLED);
   const overdue=unpaid.filter(i=>i.dueDate&&new Date(i.dueDate)<now);
@@ -4468,12 +4482,16 @@ function _starsHtml(stars,color,risk,compact=false){
     :`<span style="font-size:14px;letter-spacing:1px">${h}</span><span style="font-size:10px;font-weight:700;color:${c};margin-left:5px">${stars}/5 — ${risk}</span>`;
 }
 
-export async function _renderRatingStrip(containerId,clientName){
+// `preFilteredInvs`, when passed, is used instead of a fresh name-only
+// lookup — pass this whenever the caller already has an invoice list
+// properly scoped to one specific record (see _calcClientStars' note above
+// on why the name-only fallback can conflate same-named records).
+export async function _renderRatingStrip(containerId,clientName,preFilteredInvs){
   const el=document.getElementById(containerId);
-  if(!el||!clientName)return;
+  if(!el||(!clientName&&!preFilteredInvs))return;
   el.innerHTML=`<div style="font-size:10px;color:var(--txt3);padding:6px 0">⏳ Loading…</div>`;
   try{
-    const r=await _calcClientStars(clientName);
+    const r=preFilteredInvs?_clientStarsFromInvoices(preFilteredInvs):await _calcClientStars(clientName);
     if(!r){el.innerHTML=`<div style="font-size:10px;color:var(--txt3);padding:6px 0">No invoice history</div>`;return;}
     el.innerHTML=`
       <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:8px;border:1.5px solid ${r.color}50;background:${r.color}09;${r.stars<=2?`border-left:3px solid ${r.color};`:''}">
@@ -12428,8 +12446,11 @@ async function cvLoadClient(type, id, name){
       </div>
       <button class="btn btn-ghost btn-sm" onclick="renderClientPicker()">← Back</button>
     </div>`;
-  // Load rating asynchronously so hero renders immediately
-  _renderRatingStrip('cv-rating-strip', name);
+  // Load rating asynchronously so hero renders immediately — pass the
+  // already id-scoped `invs` computed above rather than falling back to a
+  // name-only match (see _calcClientStars' note on why that can conflate
+  // two different directory records that share a display name).
+  _renderRatingStrip('cv-rating-strip', name, invs);
 
   // ── KPIs ──
   const kpi = (val, lbl, col) => `
