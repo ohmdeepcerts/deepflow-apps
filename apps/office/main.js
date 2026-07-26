@@ -7558,7 +7558,14 @@ async function renderReports(){
   const awaitInvs=invs.filter(i=>i.status==='Awaiting Payment');
 
   const totalJobs=period.length;
-  const completedJobs=period.filter(j=>j.status===STATUS.COMPLETED).length;
+  // A job that's been auto-invoiced flips from Completed to Invoiced (see
+  // onJobComplete/autoInvoice) within seconds of completion — counting only
+  // strict Completed here meant this KPI permanently undercounted real
+  // finished work for any job that had already been billed, understating
+  // Completion Rate for an actively-invoicing business. Matches the same
+  // "Completed or Invoiced both mean the work is done" treatment already
+  // used elsewhere (see the missing-invoice check a few hundred lines up).
+  const completedJobs=period.filter(j=>j.status===STATUS.COMPLETED||j.status===STATUS.INVOICED).length;
   const revenue=paidInvs.reduce((s,i)=>s+calcInvTotal(i).grand,0);
   const outstanding=awaitInvs.reduce((s,i)=>s+calcInvTotal(i).grand,0);
   const totalHrs=period.reduce((s,j)=>s+(j.hours||0),0);
