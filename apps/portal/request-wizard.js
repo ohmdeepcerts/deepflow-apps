@@ -15,13 +15,14 @@
 // setRenewalData() below.
 
 import { escText as e } from '@ui';
+import { localDateStr } from '@business';
 import { sb, _d, toast, refreshIcons, attachDelegates } from './main.js';
 
 let _renewalData=null;
 export function setRenewalData(v){ _renewalData=v; }
 
 export function vRequest(d){
-  const today=new Date().toISOString().slice(0,10);
+  const today=localDateStr();
   document.getElementById('main').innerHTML=`
     <div class="sec">
       <div class="sec-hd"><div class="sec-t">New Job</div></div>
@@ -210,7 +211,7 @@ export async function submitReq(){
   if(!addr){toast('Property address is required');document.getElementById('ra')?.focus();return;}
   if(addr.length<5){toast('Please enter a full property address');document.getElementById('ra')?.focus();return;}
   if(!svc){toast('Please select a job type');document.getElementById('rs')?.focus();return;}
-  if(date&&new Date(date)<new Date(new Date().toISOString().slice(0,10))){toast('Preferred date cannot be in the past');document.getElementById('rd')?.focus();return;}
+  if(date&&new Date(date)<new Date(localDateStr())){toast('Preferred date cannot be in the past');document.getElementById('rd')?.focus();return;}
   const btn=document.getElementById('rsb');
   if(btn){btn.disabled=true;btn.innerHTML='<div class="loading">Sending...</div>';}
   try{

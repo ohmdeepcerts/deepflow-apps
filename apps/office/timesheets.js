@@ -9,6 +9,7 @@
 
 import { fromDb as _fromDb } from '@data';
 import { escHtml } from '@ui';
+import { localDateStr } from '@business';
 import { S, dAll, openModal, _sb, fmtDshort, sBadge } from './main.js';
 
 let selEng=null,tsOff=0;
@@ -22,7 +23,7 @@ export function getTsOff(){ return tsOff; }
 export function getWeekDates(off){
   const now=new Date(),day=now.getDay(),mon=new Date(now);
   mon.setDate(now.getDate()-(day===0?6:day-1)+off*7);
-  return Array.from({length:7},(_,i)=>{const d=new Date(mon);d.setDate(mon.getDate()+i);return d.toISOString().slice(0,10)});
+  return Array.from({length:7},(_,i)=>{const d=new Date(mon);d.setDate(mon.getDate()+i);return localDateStr(d)});
 }
 
 export async function renderTS(){

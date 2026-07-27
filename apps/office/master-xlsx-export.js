@@ -8,6 +8,7 @@
 // Phase 5 modules: safe because every cross-module reference is used only
 // inside function bodies, never at module-evaluation time.
 
+import { localDateStr } from '@business';
 import { S, dAll, toast } from './main.js';
 
 // ════════════════════════════════════════════════════════════════
@@ -80,7 +81,7 @@ export async function buildXLSX(d){
   XLSX.utils.book_append_sheet(wb,wsJobs,'📋 All Jobs');
 
   // ── SHEET 2: DAILY JOBS (today + next 30 days) ─────────────
-  const today=new Date().toISOString().slice(0,10);
+  const today=localDateStr();
   const todayJobs=d.jobs.filter(j=>j.date>=today);
   todayJobs.sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0);
   const dayRows=[['Date','Address','Engineer','Trade','Description','Time Slot','Status','Priority','Price £','Paid?']];
@@ -207,7 +208,7 @@ export async function buildXLSX(d){
   XLSX.utils.book_append_sheet(wb,wsPay,'💳 Payments');
 
   // ── WRITE FILE ─────────────────────────────────────────────
-  const date=new Date().toISOString().slice(0,10);
+  const date=localDateStr();
   const fname=`${(d.settings.appWord1||'Business')}-Master-${date}.xlsx`;
   XLSX.writeFile(wb,fname);
   toast('Master workbook downloaded ✓','success');

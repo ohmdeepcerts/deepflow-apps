@@ -15,7 +15,7 @@
 // doesn't matter which of the two finishes evaluating first.
 
 import { SB_URL, SB_KEY } from '@core';
-import { STATUS, daysDiff, formatDateUK } from '@business';
+import { STATUS, daysDiff, formatDateUK, localDateStr } from '@business';
 import {
   S, dAll, dGet, dPut, dDel, toast, confirm2, uid, TODAY, logActivity,
   updateBadges, nav, closeModal, openModal, _getJWT, setJDate, _sb,
@@ -507,8 +507,11 @@ export async function renderCertStats(){
   if(period==='thisYear'){monthsToScan=12;startM=0;}
   if(period==='nextYear'){monthsToScan=12;startM=0;startY=now.getFullYear()+1;}
   const mData=Array.from({length:monthsToScan},(_,i)=>{
+    // new Date(y,m,1) is a local-midnight construction -- toISOString() is
+    // UTC, so during BST this used to shift every forecast month back by
+    // one (e.g. July's bar labeled/keyed as June), all day, every day.
     const d=new Date(startY,startM+i,1);
-    const key=d.toISOString().slice(0,7);
+    const key=localDateStr(d).slice(0,7);
     return{key,label:d.toLocaleDateString('en-GB',{month:'short',year:period.includes('Year')?undefined:'2-digit'}),
       count:all.filter(c=>c.expiryDate&&c.expiryDate.startsWith(key)).length};
   });
@@ -518,7 +521,7 @@ export async function renderCertStats(){
   if(fcEl&&fcLblEl){
     fcEl.innerHTML=mData.map(m=>{
       const h=Math.max(4,Math.round(m.count/maxM*96));
-      const isNow=m.key===now.toISOString().slice(0,7);
+      const isNow=m.key===localDateStr(now).slice(0,7);
       return`<div class="cst-bar-wrap"><div class="cst-bar-seg" style="height:${h}px;background:${isNow?'var(--acc)':'rgba(245,166,35,.35)'}" title="${m.label}: ${m.count} expiries" onclick="filterCerts('expiring')"></div></div>`;
     }).join('');
     fcLblEl.innerHTML=mData.map(m=>`<div class="cst-bar-lbl" style="flex:1;text-align:center">${m.label}</div>`).join('');
@@ -762,8 +765,13 @@ export function parseDateSmart(v){
     else if(y<100)y+=2000;
     if(m>=1&&m<=12&&d>=1&&d<=31)return`${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
   }
+  // Last-resort fallback for formats the numeric-slash parse above didn't
+  // catch (e.g. "15 March 2024"). Freeform, non-ISO strings like this parse
+  // as LOCAL midnight, so reading dt's own local fields back (localDateStr)
+  // is correct -- dt.toISOString() (UTC) would silently shift the imported
+  // date by a day for any date that falls within BST.
   const dt=new Date(s);
-  if(!isNaN(dt.getTime()))return dt.toISOString().split('T')[0];
+  if(!isNaN(dt.getTime()))return localDateStr(dt);
   return null;
 }
 
@@ -921,7 +929,7 @@ export async function renderCertDash(){
   const months=Array.from({length:12},(_,i)=>{
     const d=new Date();d.setDate(1);d.setMonth(d.getMonth()+i);
     return{
-      key:d.toISOString().slice(0,7),
+      key:localDateStr(d).slice(0,7),
       label:d.toLocaleDateString('en-GB',{month:'short'}),
       year:d.getFullYear(),
       month:d.getMonth(),
@@ -939,7 +947,7 @@ export async function renderCertDash(){
     const total=m.expired+m.expiring;
     const expH=total?Math.max(4,(m.expired/maxBar)*60):0;
     const expgH=total?Math.max(4,(m.expiring/maxBar)*60):0;
-    const isNow=m.key===new Date().toISOString().slice(0,7);
+    const isNow=m.key===localDateStr(new Date()).slice(0,7);
     return`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;cursor:pointer;position:relative" title="${m.label}: ${m.expired} expired, ${m.expiring} expiring" onclick="filterCerts('expiring')">
       ${m.expired?`<div style="width:100%;height:${expH}px;background:var(--red);border-radius:3px 3px 0 0;opacity:.85"></div>`:''}
       ${m.expiring?`<div style="width:100%;height:${expgH}px;background:var(--yellow);border-radius:${m.expired?'0':'3px 3px'} 0 0;opacity:.85"></div>`:''}
@@ -1102,7 +1110,7 @@ export async function addExpiryToExistingCert(id){
   document.getElementById('ce-type-name').textContent=c.type;
   document.getElementById('ce-address').textContent=c.address;
   document.getElementById('ce-remaining').textContent='Adding expiry date to existing certificate';
-  document.getElementById('ce-expiry').value=defExp.toISOString().slice(0,10);
+  document.getElementById('ce-expiry').value=localDateStr(defExp);
   document.getElementById('ce-certnum').value=c.certNum||'';
   document.getElementById('ce-issue').value=c.issueDate||TODAY();
   document.getElementById('ce-color-dot').style.background=ctDef.color||'var(--acc)';
@@ -1249,7 +1257,7 @@ export function openCertModal(){
   window._certLinkedJob=null;
   const d=new Date();d.setFullYear(d.getFullYear()+1);
   document.getElementById('cf-addr').value='';document.getElementById('cf-ll').value='';
-  document.getElementById('cf-issue').value=TODAY();document.getElementById('cf-expiry').value=d.toISOString().slice(0,10);
+  document.getElementById('cf-issue').value=TODAY();document.getElementById('cf-expiry').value=localDateStr(d);
   document.getElementById('cf-num').value='';document.getElementById('cf-notes').value='';
   document.getElementById('cf-job-id').value='';
   document.getElementById('cf-job-num').value='';

@@ -16,7 +16,7 @@
 // inside function bodies, never at module-evaluation time.
 
 import { escHtml } from '@ui';
-import { STATUS } from '@business';
+import { STATUS, localDateStr } from '@business';
 import { S, dAll, toast, TODAY, nav, calcInvTotal } from './main.js';
 
 
@@ -133,9 +133,12 @@ export async function renderEngReport(){
     let fromDate='', toDate=today;
     if(period==='this_month'){ fromDate=today.slice(0,7)+'-01'; }
     else if(period==='last_month'){
+      // new Date(y,m,d) is local-midnight; toISOString() is UTC -- during
+      // BST this shifted "last month" by a full month, every time, not
+      // just near midnight (same bug as _getPLPeriodDates in main.js).
       const d=new Date(new Date(today).getFullYear(),new Date(today).getMonth()-1,1);
-      fromDate=d.toISOString().slice(0,10);
-      toDate=new Date(new Date(today).getFullYear(),new Date(today).getMonth(),0).toISOString().slice(0,10);
+      fromDate=localDateStr(d);
+      toDate=localDateStr(new Date(new Date(today).getFullYear(),new Date(today).getMonth(),0));
     }else if(period==='this_year'){ fromDate=today.slice(0,4)+'-01-01'; }
     else if(period==='custom'){
       fromDate=document.getElementById('engrep-from')?.value||'';
@@ -428,7 +431,7 @@ export async function openEngDeepReport(engName){
     const months=[];
     for(let i=5;i>=0;i--){
       const d=new Date(); d.setMonth(d.getMonth()-i);
-      const ym=d.toISOString().slice(0,7);
+      const ym=localDateStr(d).slice(0,7);
       const monthJobs=stats.jobs.filter(j=>j.date&&j.date.startsWith(ym)&&(j.status===STATUS.COMPLETED||j.status===STATUS.INVOICED));
       const earned=monthJobs.reduce((s,j)=>s+Number(j.price||0),0);
       months.push({label:d.toLocaleString('en-GB',{month:'short'}),value:earned});
@@ -747,9 +750,12 @@ export async function _renderEngDeepTrendTab(engName){
     }
 
     const now=new Date();
-    const thisMonth=now.toISOString().slice(0,7);
-    const lastMonth=new Date(now.getFullYear(),now.getMonth()-1,1).toISOString().slice(0,7);
-    const sameMonthLastYear=new Date(now.getFullYear()-1,now.getMonth(),1).toISOString().slice(0,7);
+    const thisMonth=localDateStr(now).slice(0,7);
+    // Both of these are local-midnight constructions -- always off by a
+    // full month during BST if serialized via toISOString() instead of
+    // reading local fields back.
+    const lastMonth=localDateStr(new Date(now.getFullYear(),now.getMonth()-1,1)).slice(0,7);
+    const sameMonthLastYear=localDateStr(new Date(now.getFullYear()-1,now.getMonth(),1)).slice(0,7);
 
     const m1=_getMonthJobs(engName,allJobs,allInvs,sameMonthLastYear);
     const m2=_getMonthJobs(engName,allJobs,allInvs,lastMonth);
@@ -850,7 +856,7 @@ export async function downloadEngPayslip(engName){
     const periodEnd=now.toLocaleDateString('en-GB');
 
     // Completed jobs this month
-    const thisMonthStart=now.toISOString().slice(0,7)+'-01';
+    const thisMonthStart=localDateStr(now).slice(0,7)+'-01';
     const completedJobs=stats.jobs.filter(j=>j.date>=thisMonthStart&&(j.status===STATUS.COMPLETED||j.status===STATUS.INVOICED)).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
 
     // Calculate wages — use each job's actually-logged hours where the
@@ -1126,9 +1132,12 @@ export async function exportEngReport(){
     let fromDate='',toDate=today;
     if(period==='this_month'){ fromDate=today.slice(0,7)+'-01'; }
     else if(period==='last_month'){
+      // new Date(y,m,d) is local-midnight; toISOString() is UTC -- during
+      // BST this shifted "last month" by a full month, every time, not
+      // just near midnight (same bug as _getPLPeriodDates in main.js).
       const d=new Date(new Date(today).getFullYear(),new Date(today).getMonth()-1,1);
-      fromDate=d.toISOString().slice(0,10);
-      toDate=new Date(new Date(today).getFullYear(),new Date(today).getMonth(),0).toISOString().slice(0,10);
+      fromDate=localDateStr(d);
+      toDate=localDateStr(new Date(new Date(today).getFullYear(),new Date(today).getMonth(),0));
     }else if(period==='this_year'){ fromDate=today.slice(0,4)+'-01-01'; }
     else if(period==='custom'){
       fromDate=document.getElementById('engrep-from')?.value||'';
@@ -1174,9 +1183,12 @@ export async function exportEngReportPDF(){
     let fromDate='',toDate=today;
     if(period==='this_month'){ fromDate=today.slice(0,7)+'-01'; }
     else if(period==='last_month'){
+      // new Date(y,m,d) is local-midnight; toISOString() is UTC -- during
+      // BST this shifted "last month" by a full month, every time, not
+      // just near midnight (same bug as _getPLPeriodDates in main.js).
       const d=new Date(new Date(today).getFullYear(),new Date(today).getMonth()-1,1);
-      fromDate=d.toISOString().slice(0,10);
-      toDate=new Date(new Date(today).getFullYear(),new Date(today).getMonth(),0).toISOString().slice(0,10);
+      fromDate=localDateStr(d);
+      toDate=localDateStr(new Date(new Date(today).getFullYear(),new Date(today).getMonth(),0));
     }else if(period==='this_year'){ fromDate=today.slice(0,4)+'-01-01'; }
     else if(period==='custom'){
       fromDate=document.getElementById('engrep-from')?.value||'';

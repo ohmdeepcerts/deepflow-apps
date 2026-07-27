@@ -1,4 +1,4 @@
 export { STATUS } from './status.js';
 export { calcLineItemsTotal, officeVatRate, portalVatRate } from './invoice-total.js';
-export { daysDiff, formatDateUK } from './dates.js';
+export { daysDiff, formatDateUK, localDateStr } from './dates.js';
 

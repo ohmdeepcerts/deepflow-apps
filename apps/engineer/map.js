@@ -9,6 +9,7 @@
 // from geo-weather.js rather than round-tripping through main.js, since
 // that's where it actually lives.
 
+import { localDateStr } from '@business';
 import { sb, getCurrentUser } from './main.js';
 import { geocodeAddress } from './geo-weather.js';
 
@@ -22,7 +23,7 @@ export async function setMapView(view,btn){
   status.textContent='Loading jobs…';
   container.innerHTML='<div class="loading-center"><div class="spin"></div></div>';
   try{
-    const today=new Date().toISOString().split('T')[0];
+    const today=localDateStr();
     const enc=encodeURIComponent(getCurrentUser().name);
     let jobs=view==='all'
       ?await sb(`jobs?engineer=ilike.${enc}&select=*&limit=100&order=date.desc`)

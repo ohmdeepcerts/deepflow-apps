@@ -12,7 +12,7 @@
 // Phase 5 modules: safe because every cross-module reference is used only
 // inside function bodies, never at module-evaluation time.
 
-import { STATUS } from '@business';
+import { STATUS, localDateStr } from '@business';
 import { escHtml } from '@ui';
 import { _sb } from './main.js';
 
@@ -39,7 +39,7 @@ export function onMapViewChange() {
   if (dateFilter) dateFilter.style.display = (v === 'route' || v === 'today') ? 'flex' : 'none';
   if (v === 'today' || v === 'route') {
     const inp = document.getElementById('map-date-inp');
-    if (inp && !inp.value) inp.value = new Date().toISOString().split('T')[0];
+    if (inp && !inp.value) inp.value = localDateStr();
   }
   renderMapPage();
 }
@@ -120,13 +120,13 @@ export async function _mapLiveEngineers(info, status) {
 
 // ── JOBS BY DATE ─────────────────────────────────────────────────
 export async function _mapJobsByDate(info, status, mode) {
-  const today = new Date().toISOString().split('T')[0];
+  const today = localDateStr();
   const dateInp = document.getElementById('map-date-inp')?.value || today;
   let jobs;
   if (mode === 'today') {
     jobs = await _sb(`jobs?date=eq.${dateInp}&select=id,jobnum,address,engineer,status,priority,timeslot`);
   } else {
-    const next7 = new Date(Date.now() + 7*86400000).toISOString().split('T')[0];
+    const next7 = localDateStr(new Date(Date.now() + 7*86400000));
     jobs = await _sb(`jobs?date=gt.${today}&date=lte.${next7}&select=id,jobnum,address,engineer,status,priority,timeslot&order=date.asc`);
   }
   jobs = jobs || [];
@@ -190,7 +190,7 @@ export async function _mapJobsByDate(info, status, mode) {
 // ── ENGINEER ROUTE ──────────────────────────────────────────────
 export async function _mapEngineerRoute(info, status) {
   const engName = document.getElementById('map-eng-sel')?.value;
-  const dateVal = document.getElementById('map-date-inp')?.value || new Date().toISOString().split('T')[0];
+  const dateVal = document.getElementById('map-date-inp')?.value || localDateStr();
   if (!engName) {
     _showMapMessage('Select an engineer from the dropdown above', '👷');
     if (status) status.textContent = 'Please select an engineer';

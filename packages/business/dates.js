@@ -21,6 +21,17 @@ export function daysDiff(s){
   return Math.round((target-today)/(1000*60*60*24));
 }
 
+// The one safe way to turn a Date into a "YYYY-MM-DD" string. Reads local
+// calendar fields directly instead of `d.toISOString().slice(0,10)`, which
+// is always UTC -- during BST (UTC+1) that's wrong for the ~1hr after local
+// midnight for a "now" Date, or wrong ALL DAY for a Date built via the local
+// constructor (`new Date(y,m,d)`), since local midnight in July is 11pm UTC
+// the day before. Shared here so every app builds "today"/"N days from now"
+// the same correct way instead of each re-deriving toISOString().slice(...).
+export function localDateStr(d = new Date()){
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
 export function formatDateUK(iso){
   if(!iso)return'';
   const p=iso.split('-');

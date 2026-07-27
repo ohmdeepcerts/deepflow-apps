@@ -177,7 +177,7 @@ draw();
 import { SB_URL, SB_KEY, restFetch, createSupaAuthClient, makeJwtResolver } from '@core';
 import { escHtml } from '@ui';
 import { fromDb } from '@data';
-import { STATUS } from '@business';
+import { STATUS, localDateStr } from '@business';
 import { createOfflineQueue, isNetworkError as _isNetworkError } from '@offline';
 import { _hdist, _loadGeoCache, geocodeAddress, fetchWeather, fetchLandRegistry, _geoCache } from './geo-weather.js';
 import { showTool, calcVD, calcZs, updateConduit, clearConduit, addWire } from './calc-tools.js';
@@ -817,8 +817,8 @@ function _attachPullToRefresh(el){
 //  JOBS — LOAD & RENDER
 // ══════════════════════════════════════════════════════════════
 async function loadJobs(){
-  const today=new Date().toISOString().split('T')[0];
-  const future=new Date(Date.now()+30*86400000).toISOString().split('T')[0]; // 30 days ahead
+  const today=localDateStr();
+  const future=localDateStr(new Date(Date.now()+30*86400000)); // 30 days ahead
   const enc=encodeURIComponent(currentUser.name);
   try{
     // FIX 5: Use ilike (case-insensitive) for all engineer name queries so jobs saved
@@ -847,7 +847,7 @@ function toggleSort(){
   _sortByDist=!_sortByDist;
   const btn=document.getElementById('sort-btn');
   if(btn)btn.textContent=_sortByDist?'📍 Nearest':'⬇ Time';
-  const today=new Date().toISOString().split('T')[0];
+  const today=localDateStr();
   renderJobs('jobs-today',_allJobs.filter(j=>j.date===today),'today');
 }
 
@@ -1422,7 +1422,7 @@ async function submitAddJob(){
   try{
     // Create job in Supabase
     const jobId=`job-eng-${Date.now()}-${Math.random().toString(36).slice(2,6)}`;
-    const today=new Date().toISOString().split('T')[0];
+    const today=localDateStr();
     await sb('jobs',{method:'POST',body:{
       id:jobId,jobnum:`ENG-${Date.now().toString().slice(-6)}`,
       date:today,address,trade,description:desc,
@@ -1451,7 +1451,7 @@ async function loadDash(){
   if(!el)return;
   try{
     const enc=encodeURIComponent(currentUser.name);
-    const today=new Date().toISOString().split('T')[0];
+    const today=localDateStr();
     const monStart=today.slice(0,7)+'-01';
     const yrStart=today.slice(0,4)+'-01-01';
     // FIX 2: Use a LOCAL variable (dashJobs) — never overwrite the global _allJobs.
@@ -1492,7 +1492,7 @@ async function loadDash(){
     });
     const topCerts=Object.entries(certs).sort((a,b)=>b[1]-a[1]).slice(0,8);
     const mMap={};
-    for(let i=5;i>=0;i--){const d=new Date();d.setMonth(d.getMonth()-i);mMap[d.toISOString().slice(0,7)]=0;}
+    for(let i=5;i>=0;i--){const d=new Date();d.setMonth(d.getMonth()-i);mMap[localDateStr(d).slice(0,7)]=0;}
     dashJobs.filter(j=>j.status==='Completed').forEach(j=>{const m=(j.date||'').slice(0,7);if(mMap[m]!==undefined)mMap[m]++;});
     const mL=Object.keys(mMap),mV=Object.values(mMap),mMx=Math.max(...mV,1);
     const recent=[...dashJobs].filter(j=>j.status==='Completed').sort((a,b)=>(b.modified||0)-(a.modified||0)).slice(0,5);

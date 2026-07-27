@@ -8,6 +8,7 @@
 // rather than importing a live binding — same pattern as setWeather()
 // in geo-weather.js.
 
+import { localDateStr } from '@business';
 import { sb, toast, closeModal, _setBadge, _fd, _clearDraft, getCurrentUser } from './main.js';
 
 export async function loadRequests(){
@@ -28,14 +29,14 @@ export async function loadRequests(){
 }
 
 export function openOvertimeForm(){
-  document.getElementById('ot-date').value=new Date().toISOString().split('T')[0];
+  document.getElementById('ot-date').value=localDateStr();
   document.getElementById('ot-hours').value='';
   document.getElementById('ot-job').value='';
   document.getElementById('ot-notes').value='';
   document.getElementById('ot-modal').classList.add('open');
 }
 export function openLeaveForm(){
-  const t=new Date().toISOString().split('T')[0];
+  const t=localDateStr();
   document.getElementById('leave-from').value=t;
   document.getElementById('leave-to').value=t;
   document.getElementById('leave-notes').value='';

@@ -8,6 +8,7 @@
 // Phase 5 modules: safe because every cross-module reference is used only
 // inside function bodies, never at module-evaluation time.
 
+import { localDateStr } from '@business';
 import { S, dAll, dGet, toast, nav, calcInvTotal, downloadInvPDFById } from './main.js';
 
 let _stmtSelected = new Set();
@@ -31,8 +32,13 @@ export function stmtQuickRange(r) {
     from = new Date(now.getFullYear(), 0, 1);
     to = new Date(now.getFullYear(), 11, 31);
   }
-  document.getElementById('stmt-from').value = from.toISOString().slice(0, 10);
-  document.getElementById('stmt-to').value = to.toISOString().slice(0, 10);
+  // from/to are all local-midnight constructions (new Date(y,m,d)) --
+  // toISOString() is UTC, so during BST this dropped the last day of the
+  // period (or included an extra day from the previous one) on every
+  // statement pulled for a real client, every time. localDateStr() reads
+  // the Date's own local fields back instead.
+  document.getElementById('stmt-from').value = localDateStr(from);
+  document.getElementById('stmt-to').value = localDateStr(to);
   renderStmt();
 }
 

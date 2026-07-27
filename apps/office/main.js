@@ -1,7 +1,7 @@
 import { SB_URL, SB_KEY, restFetch, createSupaAuthClient, makeJwtResolver } from '@core';
 import { escHtml, initNetworkCanvas } from '@ui';
 import { toDb as _toDb, fromDb as _fromDb, createRepository, TO_DB as _TO_DB } from '@data';
-import { STATUS, calcLineItemsTotal, officeVatRate, daysDiff, formatDateUK } from '@business';
+import { STATUS, calcLineItemsTotal, officeVatRate, daysDiff, formatDateUK, localDateStr } from '@business';
 import { createOfflineQueue } from '@offline';
 import {
   getCertTab, switchCertTab, filterCerts, clearCertFilters, renderCertTable, certPageNav,
@@ -186,12 +186,9 @@ export const uid = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,
 // toISOString() always converts to UTC -- during BST (UTC+1), for the hour
 // after local midnight this returned YESTERDAY's date, silently misdating
 // new jobs/invoices and undercounting "today's jobs" on the dashboard.
-// Read local calendar fields instead so this always matches the browser's
-// own clock, which is what everyone actually means by "today" here.
-export const TODAY = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-};
+// localDateStr() reads local calendar fields instead, matching the
+// browser's own clock -- which is what everyone actually means by "today".
+export const TODAY = () => localDateStr();
 
 // dGet/dAll/dPut/dDel now come from @data's generic repository (Phase 2) —
 // this was already byte-for-byte what that factory implements (it was
@@ -1765,9 +1762,12 @@ const _jobRowData = {};
 
 // ── Day navigation: shift jDate by N days ──
 function shiftDay(n){
+  // 'T00:00:00' (no Z) parses as LOCAL midnight -- during BST that's 11pm
+  // UTC the day before, so serializing via toISOString() was wrong by a
+  // full day, every time this ran (not just a near-midnight edge case).
   const d = new Date((jDate||TODAY())+'T00:00:00');
   d.setDate(d.getDate()+n);
-  jDate = d.toISOString().slice(0,10);
+  jDate = localDateStr(d);
   // Update range to show just that day if we're navigating
   _jRange = '7';
   ['all','7','30','past'].forEach(k=>{
@@ -1992,9 +1992,11 @@ function quickEditPrice(id,current,spanEl){
 async function copyJobToNextDay(id){
   const j = await dGet('jobs',id);
   if(!j) return;
+  // Same local-midnight-constructor issue as shiftDay() above -- wrong by a
+  // full day, every time, during BST if serialized via toISOString().
   const d = new Date((j.date||TODAY())+'T00:00:00');
   d.setDate(d.getDate()+1);
-  const nextDate = d.toISOString().slice(0,10);
+  const nextDate = localDateStr(d);
   const copy = {...j, id:uid(), date:nextDate, status:STATUS.PENDING, created:Date.now(), modified:Date.now()};
   delete copy.invNumber; delete copy.linkedInvId;
   try{
@@ -2940,7 +2942,7 @@ function onJobComplete(j){
       let defaultExpiry=null;
       if(ct.validity){
         const d=new Date();d.setMonth(d.getMonth()+(ct.validity||12));
-        defaultExpiry=d.toISOString().slice(0,10);
+        defaultExpiry=localDateStr(d);
       }
       createCertEntry(ct,defaultExpiry,null,TODAY());
     });
@@ -2987,7 +2989,7 @@ function promptNextCertExpiry(){
   // Default expiry = today + validity months
   if(ct.validity){
     const d=new Date();d.setMonth(d.getMonth()+(ct.validity||12));
-    document.getElementById('ce-expiry').value=d.toISOString().slice(0,10);
+    document.getElementById('ce-expiry').value=localDateStr(d);
   }
   document.getElementById('ce-color-dot').style.background=ct.color||'var(--acc)';
   // Store current for save
@@ -5141,7 +5143,7 @@ async function createInvFromJob(jobId){
     document.getElementById('if-terms').value=S.payTerms||'';
     document.getElementById('if-status').value='Draft';
     const dd=new Date();dd.setDate(dd.getDate()+(S.dueDays||14));
-    document.getElementById('if-due').value=dd.toISOString().slice(0,10);
+    document.getElementById('if-due').value=localDateStr(dd);
     const jobRefEl=document.getElementById('if-jobref');if(jobRefEl)jobRefEl.value=jobNumber;
     const agentEl=document.getElementById('if-agent');if(agentEl)agentEl.value=hasAgency?agentName:'';
     const agentCCEl=document.getElementById('if-agent-cc');if(agentCCEl)agentCCEl.value=hasAgency?agentEmail:'';
@@ -5646,7 +5648,7 @@ async function duplicateInv(id){
   };
   // Set due date from settings
   const dd = new Date(); dd.setDate(dd.getDate()+(S.dueDays||14));
-  newInv.dueDate = dd.toISOString().slice(0,10);
+  newInv.dueDate = localDateStr(dd);
   await dPut('invoices', newInv);
   toast(`✅ Invoice copied as ${newNum}`, 'success');
   renderInvList();
@@ -7139,7 +7141,7 @@ function openNewInvModal(){
   document.getElementById('if-agent').value='';
   document.getElementById('if-agent-cc').value='';
   const dd=new Date();dd.setDate(dd.getDate()+14);
-  document.getElementById('if-due').value=dd.toISOString().slice(0,10);
+  document.getElementById('if-due').value=localDateStr(dd);
   invItems=[{desc:'Labour',qty:1,unit:0,vat:true}];
   fillInvClientDrop();renderInvItems();
   document.getElementById('if-vat-pct').textContent=getVatRate();
@@ -7512,7 +7514,7 @@ async function createJobFromPortalReq(id, parsedJson){
 async function renderReports(){
   const days=parseInt(document.getElementById('rep-period')?.value||30);
   const cutoff=new Date();cutoff.setDate(cutoff.getDate()-days);
-  const cutoffStr=cutoff.toISOString().slice(0,10);
+  const cutoffStr=localDateStr(cutoff);
   // ISSUE 3 FIX: fetch only jobs within the report period — not all jobs ever
   const all=await _sb(`jobs?date=gte.${cutoffStr}&select=*`).then(r=>(r||[]).map(j=>_fromDb('jobs',j))).catch(()=>[]);
   const invs=await dAll('invoices');
@@ -7656,7 +7658,7 @@ async function renderDash(){
 
   // Revenue bars — last 7 days
   const bars=document.getElementById('rev-bars');
-  const days7=Array.from({length:7},(_,i)=>{const d=new Date();d.setDate(d.getDate()-6+i);return d.toISOString().slice(0,10)});
+  const days7=Array.from({length:7},(_,i)=>{const d=new Date();d.setDate(d.getDate()-6+i);return localDateStr(d)});
   const maxRev=Math.max(...days7.map(d=>allJobs.filter(j=>j.date===d&&j.price>0).reduce((s,j)=>s+j.price,0)),1);
   bars.innerHTML=days7.map(d=>{
     const dayRevenue=allJobs.filter(j=>j.date===d&&j.price>0).reduce((s,j)=>s+j.price,0);
@@ -9206,7 +9208,7 @@ async function seedDemo(){
 
   // Gas cert expiring
   const d30=new Date();d30.setDate(d30.getDate()+25);
-  await dPut('certs',{id:uid(),address:'12 Main St, London E1 1AA',type:'Gas Safety',landlord:'John Doe',issueDate:'2024-02-21',expiryDate:d30.toISOString().slice(0,10),certNum:'GS-2024-001',notes:''});
+  await dPut('certs',{id:uid(),address:'12 Main St, London E1 1AA',type:'Gas Safety',landlord:'John Doe',issueDate:'2024-02-21',expiryDate:localDateStr(d30),certNum:'GS-2024-001',notes:''});
   await dPut('certs',{id:uid(),address:'47 Oak Road, Manchester M1 1BB',type:'Electrical',landlord:'John Doe',issueDate:'2024-08-01',expiryDate:'2029-08-01',certNum:'EL-2024-047',notes:''});
 
   await logActivity('DeepFlow v3 initialized — demo data loaded','info');
@@ -12833,7 +12835,6 @@ async function cvLoadClient(type, id, name){
     </table>` : '<div style="color:var(--txt3);font-size:13px;padding:20px 0">No invoices found for this client</div>';
 
   // ── Certs panel ──
-  const today = new Date().toISOString().split('T')[0];
   document.getElementById('cv-panel-certs').innerHTML = certs.length ? `
     <table style="width:100%;border-collapse:collapse;font-size:12px">
       <thead><tr style="border-bottom:2px solid var(--border)">
@@ -13499,14 +13500,19 @@ async function downloadPortalInviteCard(name, url){
    ════════════════════════════════════════ */
 
 function _getPLPeriodDates(period){
+  // The boundary math below (new Date(y,m,d)) was always correct in local
+  // terms -- the bug was only ever in the final step, serializing that
+  // already-correct local Date via toISOString() (UTC) instead of reading
+  // its own local fields back via localDateStr(). During BST this silently
+  // shifted every period by up to a full month (see 'last_month'/quarters).
   const now = new Date();
-  const today = now.toISOString().slice(0,10);
+  const today = localDateStr(now);
   let start, end;
   switch(period){
     case 'this_month': start=today.slice(0,7)+'-01'; end=today; break;
-    case 'last_month': {const d=new Date(now.getFullYear(),now.getMonth()-1,1); start=d.toISOString().slice(0,7)+'-01'; const e=new Date(now.getFullYear(),now.getMonth(),0); end=e.toISOString().slice(0,10);} break;
-    case 'this_quarter': {const q=Math.floor(now.getMonth()/3); start=new Date(now.getFullYear(),q*3,1).toISOString().slice(0,10); end=today;} break;
-    case 'last_quarter': {const q=Math.floor(now.getMonth()/3)-1; const y=q<0?now.getFullYear()-1:now.getFullYear(); const aq=q<0?q+4:q; start=new Date(y,aq*3,1).toISOString().slice(0,10); end=new Date(y,aq*3+3,0).toISOString().slice(0,10);} break;
+    case 'last_month': {const d=new Date(now.getFullYear(),now.getMonth()-1,1); start=localDateStr(d).slice(0,7)+'-01'; const e=new Date(now.getFullYear(),now.getMonth(),0); end=localDateStr(e);} break;
+    case 'this_quarter': {const q=Math.floor(now.getMonth()/3); start=localDateStr(new Date(now.getFullYear(),q*3,1)); end=today;} break;
+    case 'last_quarter': {const q=Math.floor(now.getMonth()/3)-1; const y=q<0?now.getFullYear()-1:now.getFullYear(); const aq=q<0?q+4:q; start=localDateStr(new Date(y,aq*3,1)); end=localDateStr(new Date(y,aq*3+3,0));} break;
     case 'this_year': start=now.getFullYear()+'-01-01'; end=today; break;
     case 'last_year': {const ly=now.getFullYear()-1; start=ly+'-01-01'; end=ly+'-12-31';} break;
     default: start='2020-01-01'; end=today;
@@ -13679,12 +13685,12 @@ function _renderPLCashFlow(jobs, invs, exps, payments, start, end){
 
   // Outgoing: known recurring costs (last 30 days avg, projected forward 30)
   const last30 = new Date(); last30.setDate(last30.getDate()-30);
-  const recentExps = exps.filter(e => e.date >= last30.toISOString().slice(0,10));
+  const recentExps = exps.filter(e => e.date >= localDateStr(last30));
   const monthlyExpAvg = recentExps.reduce((s,e) => s+(+(e.cost||0)), 0);
 
   // Wages for jobs in the next 30 days
   const next30 = new Date(); next30.setDate(next30.getDate()+30);
-  const next30str = next30.toISOString().slice(0,10);
+  const next30str = localDateStr(next30);
   const upcomingJobs = jobs.filter(j => j.date >= today && j.date <= next30str);
   let upcomingWages = 0;
   upcomingJobs.forEach(j => {
