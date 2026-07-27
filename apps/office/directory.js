@@ -512,8 +512,14 @@ export function buildPersonCard(p, invs, topColor, jobs){
 export function openPersonModalFor(role){
   openPersonModal();
   setTimeout(()=>{
-    const cb=document.getElementById('pf-'+role.slice(0,2));
-    if(cb){cb.checked=true;if(role==='engineer'||role==='subcontractor')document.getElementById('pf-eng-extra').style.display='';}
+    // 'pf-'+role.slice(0,2) never actually matched a real checkbox id
+    // (landlord -> "pf-la" vs the real "pf-ll", subcontractor -> "pf-su"
+    // vs the real "pf-sc") -- cb was always null, so "+ Add Landlord" and
+    // "+ Add Subcontractor" never pre-checked their role. Explicit map
+    // instead of guessing from the string.
+    const cbId={landlord:'pf-ll',client:'pf-cl',subcontractor:'pf-sc'}[role];
+    const cb=cbId&&document.getElementById(cbId);
+    if(cb){cb.checked=true;if(role==='subcontractor')document.getElementById('pf-eng-extra').style.display='';}
   },50);
 }
 
@@ -637,7 +643,6 @@ export async function fillFromMatch(store, id){
     const roles = r.roles||[];
     document.getElementById('pf-ll').checked = roles.includes('landlord');
     document.getElementById('pf-cl').checked = roles.includes('client');
-    document.getElementById('pf-en').checked = roles.includes('engineer');
     document.getElementById('pf-sc').checked = roles.includes('subcontractor');
     document.getElementById('mo-person-title').textContent = '✎ Edit Person';
     document.getElementById('btn-del-person').style.display = '';
@@ -877,8 +882,7 @@ export async function deleteCurrentAgent(){
 
 export async function openPersonModal(id){
   editPid=id||null;
-  document.getElementById('pf-en').onchange=function(){document.getElementById('pf-eng-extra').style.display=this.checked?'':''};
-  document.getElementById('pf-sc').onchange=function(){document.getElementById('pf-eng-extra').style.display=(this.checked||document.getElementById('pf-en').checked)?'':'none'};
+  document.getElementById('pf-sc').onchange=function(){document.getElementById('pf-eng-extra').style.display=this.checked?'':'none'};
   // Fill trade dropdown for person
   const td=document.getElementById('pf-trade');
   td.innerHTML='<option value="">—</option>'+(S.trades||[]).map(t=>`<option>${t.name}</option>`).join('');
@@ -904,9 +908,8 @@ export async function openPersonModal(id){
     document.getElementById('pf-trade').value=p.trade||'';
     document.getElementById('pf-ll').checked=(p.roles||[]).includes('landlord');
     document.getElementById('pf-cl').checked=(p.roles||[]).includes('client');
-    document.getElementById('pf-en').checked=(p.roles||[]).includes('engineer');
     document.getElementById('pf-sc').checked=(p.roles||[]).includes('subcontractor');
-    const showExtra=(p.roles||[]).some(r=>r==='engineer'||r==='subcontractor');
+    const showExtra=(p.roles||[]).includes('subcontractor');
     document.getElementById('pf-eng-extra').style.display=showExtra?'':'none';
     if(agSel) agSel.value = p.agencyId||'';
     // Show agency field if they have a linked agency
@@ -917,7 +920,7 @@ export async function openPersonModal(id){
   } else {
     document.getElementById('mo-person-title').textContent='👤 Add Person';
     ['pf-name','pf-phone','pf-email','pf-wa','pf-addr','pf-notes','pf-rate'].forEach(x=>document.getElementById(x).value='');
-    ['pf-ll','pf-cl','pf-en','pf-sc'].forEach(x=>document.getElementById(x).checked=false);
+    ['pf-ll','pf-cl','pf-sc'].forEach(x=>document.getElementById(x).checked=false);
     document.getElementById('pf-eng-extra').style.display='none';
     if(agSel) agSel.value='';
     const agGrp = document.getElementById('pf-agency-grp');
@@ -938,7 +941,6 @@ export async function savePerson(silent=false){
   const roles=[];
   if(document.getElementById('pf-ll').checked)roles.push('landlord');
   if(document.getElementById('pf-cl').checked)roles.push('client');
-  if(document.getElementById('pf-en').checked)roles.push('engineer');
   if(document.getElementById('pf-sc').checked)roles.push('subcontractor');
   const p={
     id:editPid||uid(),name,
@@ -958,8 +960,12 @@ export async function savePerson(silent=false){
   };
   if(!editPid){ editPid=p.id; }
   await dPut('persons',p);
-  // Sync engineers to settings
-  if(roles.includes('engineer')||roles.includes('subcontractor')){
+  // Sync subcontractors into the job-assignment dropdown data (S.engineers)
+  // -- "engineer" used to be pushable here too via a Person-form checkbox,
+  // duplicating the real Team/phone+PIN system with a phantom, unlinked
+  // name entry that vanished on the next Team sync. Checkbox removed;
+  // subcontractor behaviour here is unchanged.
+  if(roles.includes('subcontractor')){
     const engs=S.engineers||[];
     const idx=engs.findIndex(e=>e.name===name);
     const engObj={name,phone:p.phone,rate:p.rate,wa:p.wa,trade:p.trade};
