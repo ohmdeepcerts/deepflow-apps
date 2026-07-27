@@ -183,7 +183,15 @@ export const uid = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,
   const r = Math.random()*16|0;
   return (c==='x' ? r : (r&0x3|0x8)).toString(16);
 });
-export const TODAY = () => new Date().toISOString().slice(0,10);
+// toISOString() always converts to UTC -- during BST (UTC+1), for the hour
+// after local midnight this returned YESTERDAY's date, silently misdating
+// new jobs/invoices and undercounting "today's jobs" on the dashboard.
+// Read local calendar fields instead so this always matches the browser's
+// own clock, which is what everyone actually means by "today" here.
+export const TODAY = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+};
 
 // dGet/dAll/dPut/dDel now come from @data's generic repository (Phase 2) —
 // this was already byte-for-byte what that factory implements (it was
@@ -3238,7 +3246,8 @@ async function _autoInvoiceInner(j){
   // PostgREST rejected the entire PATCH (unknown column), silently swallowed
   // by the .catch() below, so auto-created invoices never actually flipped
   // the job's status to Invoiced or recorded the link back to the invoice.
-  await _sb(`jobs?id=eq.${encodeURIComponent(j.id)}`,{method:'PATCH',body:{status:STATUS.INVOICED,linkedinvid:inv.id,modified:Date.now()},prefer:'return=minimal'}).catch(()=>{});
+  await _sb(`jobs?id=eq.${encodeURIComponent(j.id)}`,{method:'PATCH',body:{status:STATUS.INVOICED,linkedinvid:inv.id,modified:Date.now()},prefer:'return=minimal'})
+    .catch(e=>console.warn('[DeepFlow] Failed to flip job to Invoiced after auto-creating',inv.number,'— invoice exists but job status/link may be stale:',e));
   await logActivity(`Draft invoice ${inv.number} auto-created for ${client.name} (${hours?hours+'h':('£'+jobPrice)})`, 'invoice');
   toast(`📄 Draft invoice ${inv.number} created — review in Invoices`,'info',5000);
   updateBadges();
@@ -3873,7 +3882,16 @@ function extractPostcode(address){
   return m ? m[1].toUpperCase().replace(/\s+/g,' ').trim() : '';
 }
 
+// Module-level lock, not the button-disable at line ~3963 -- that only
+// fires after two awaits (dGet for the existing job, nextJobNum for a new
+// one), so a fast double-click could re-enter and race past both before
+// either disabled the button, building two independent job objects (and,
+// for a new job, two independently-generated job numbers) from one click.
+let _jobSaving=false;
 async function saveJob(){
+  if(_jobSaving){ toast('Already saving, please wait…','info',1500); return; }
+  _jobSaving=true;
+  try{
   const addr=document.getElementById('jf-addr').value.trim();
   if(!addr){toast('Address is required','error');return;}
   const desc=document.getElementById('jf-desc').value.trim();
@@ -4031,6 +4049,9 @@ async function saveJob(){
   }finally{
     if(btn){btn.disabled=false;btn.textContent='Save Job';}
   }
+  } finally {
+    _jobSaving=false;
+  }
 }
 
 async function loadJobAttachments(jobId){
@@ -4096,7 +4117,7 @@ async function deleteAttachment(attId, storagePath){
       await fetch(`${SB_URL}/storage/v1/object/deepflow/${storagePath}`,{
         method:'DELETE',
         headers:{'apikey':SB_KEY,'Authorization':'Bearer '+(await _getJWT())}
-      }).catch(()=>{});
+      }).catch(e=>console.warn('[DeepFlow] Storage blob delete failed for',storagePath,'— the DB row is still being removed, leaving an orphaned file:',e));
     }
     // Delete from attachments table
     await _sb(`attachments?id=eq.${attId}`,{method:'DELETE'});
@@ -5239,7 +5260,7 @@ async function _syncInvoiceFieldToJob(invId, dbField, dbVal){
 
   // billToAddress syncs to the landlord/agency record — not the job
   if(fieldLower === 'billtoaddress'){
-    _syncBillToAddress(invId, dbVal).catch(()=>{});
+    _syncBillToAddress(invId, dbVal).catch(e=>console.warn('[DeepFlow] Failed to sync billing address back to the directory record for invoice',invId,'— invoice shows the new address but the person/agency record still has the old one:',e));
     return;
   }
 
@@ -8027,6 +8048,13 @@ CREATE OR REPLACE FUNCTION get_auth_users() RETURNS TABLE(id uuid, email text, c
     };
 
     const roleOpts = Object.entries(roleInfo).map(([v,r])=>`<option value="${v}">${r.icon} ${r.label}</option>`).join('');
+    // Engineer role deliberately excluded from both dropdowns below: an
+    // auth_id-linked account can never actually work as an engineer anymore
+    // (Office App blocks the Engineer role outright in applyUserPermissions,
+    // and the Engineer App dropped email+password login entirely) -- the
+    // ONLY working path is phone+PIN via "👷 Add Engineer", which is also
+    // the only path that runs the name-collision check jobs rely on.
+    const roleOptsNoEng = Object.entries(roleInfo).filter(([v])=>v!=='engineer').map(([v,r])=>`<option value="${v}">${r.icon} ${r.label}</option>`).join('');
     const me = _appUser?.email;
 
     let rows = '';
@@ -8045,18 +8073,18 @@ CREATE OR REPLACE FUNCTION get_auth_users() RETURNS TABLE(id uuid, email text, c
           <div style="width:36px;height:36px;border-radius:50%;background:${ri.bg};display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">${ri.icon}</div>
           <div style="flex:1;min-width:0">
             <div style="font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-              ${profile.name||'—'}
+              ${escHtml(profile.name||'—')}
               ${isMe?'<span style="font-size:10px;background:rgba(79,143,255,.15);color:#4f8fff;padding:1px 7px;border-radius:10px">YOU</span>':''}
               <span style="font-size:10px;background:${ri.bg};color:${ri.col};padding:1px 7px;border-radius:10px;font-weight:700">✓ Active</span>
             </div>
-            <div style="font-size:11px;color:var(--txt3);margin-top:2px">${au.email} · Last seen: ${lastSeen}${profile.role==='engineer'?(profile.phone?` · 📱 ${escHtml(profile.phone)} · `+_pinStatusBadge(profile):' · <span style="color:#e05252">No phone number</span>'):''}</div>
+            <div style="font-size:11px;color:var(--txt3);margin-top:2px">${escHtml(au.email)} · Last seen: ${lastSeen}${profile.role==='engineer'?(profile.phone?` · 📱 ${escHtml(profile.phone)} · `+_pinStatusBadge(profile):' · <span style="color:#e05252">No phone number</span>'):''}</div>
           </div>
           <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;flex-wrap:wrap">
-            <select style="padding:6px 10px;border-radius:7px;border:1px solid var(--border);background:var(--s2);color:var(--txt);font-size:12px" ${isMe?'disabled':''} onchange="teamChangeRole('${profile.id}','${au.email}',this.value,this)">
+            <select style="padding:6px 10px;border-radius:7px;border:1px solid var(--border);background:var(--s2);color:var(--txt);font-size:12px" ${isMe?'disabled':''} onchange="teamChangeRole('${profile.id}',${escHtml(JSON.stringify(au.email))},this.value,this)">
               ${Object.entries(roleInfo).map(([v,r])=>`<option value="${v}" ${profile.role===v?'selected':''}>${r.icon} ${r.label}</option>`).join('')}
             </select>
             ${profile.role==='engineer'?(profile.phone?_pinActionButtons(profile):`<button class="btn btn-ghost btn-xs" onclick="enablePhoneLogin('${profile.id}',${escHtml(JSON.stringify(profile.name||au.email))},'')">📱 Enable Phone Login</button>`):''}
-            ${!isMe?`<button class="btn btn-red btn-xs" onclick="teamRevoke('${profile.id}','${profile.name||au.email}')">🗑 Remove</button>`:'<span style="font-size:11px;color:var(--txt3)">(you)</span>'}
+            ${!isMe?`<button class="btn btn-red btn-xs" onclick="teamRevoke('${profile.id}',${escHtml(JSON.stringify(profile.name||au.email))})">🗑 Remove</button>`:'<span style="font-size:11px;color:var(--txt3)">(you)</span>'}
           </div>
         </div>`;
       } else {
@@ -8067,13 +8095,13 @@ CREATE OR REPLACE FUNCTION get_auth_users() RETURNS TABLE(id uuid, email text, c
           <div style="flex:1;min-width:0">
             <input type="text" id="tname-${au.id}" placeholder="Enter full name *"
               style="padding:6px 10px;border-radius:7px;border:1px solid var(--border);background:var(--s2);color:var(--txt);font-size:12px;width:100%;max-width:200px;margin-bottom:3px">
-            <div style="font-size:11px;color:var(--txt3)">${au.email}</div>
+            <div style="font-size:11px;color:var(--txt3)">${escHtml(au.email)}</div>
           </div>
           <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;flex-wrap:wrap">
             <select id="trole-${au.id}" style="padding:6px 10px;border-radius:7px;border:1px solid var(--border);background:var(--s2);color:var(--txt);font-size:12px">
-              ${roleOpts}
+              ${roleOptsNoEng}
             </select>
-            <button class="btn btn-acc btn-sm" onclick="teamAdd('${au.id}','${au.email}')">✅ Add</button>
+            <button class="btn btn-acc btn-sm" onclick="teamAdd('${au.id}',${escHtml(JSON.stringify(au.email))})">✅ Add</button>
           </div>
         </div>`;
       }
@@ -8148,6 +8176,11 @@ async function teamAdd(authId, email){
   const role    = roleEl?.value || 'staff';
 
   if(!name){ toast('Enter a name first','error'); nameEl?.focus(); return; }
+  // Defense in depth: the dropdown feeding this no longer offers "engineer"
+  // at all (see roleOptsNoEng) since this path never ran the name-collision
+  // check jobs rely on -- reject outright rather than trust the DOM wasn't
+  // tampered with or a future edit re-adds the option.
+  if(role==='engineer'){ toast('❌ Use "👷 Add Engineer" for engineers — this link is for office roles only','error',6000); return; }
 
   const isEng = role === 'engineer';
   const payload = {
@@ -8204,11 +8237,13 @@ async function teamRevoke(userId, name, isPinEngineer){
   // Phone+PIN engineers have no Supabase Auth account to separately clean
   // up — is_engineer()/is_valid_engineer_token() both require active=true,
   // so deactivating alone fully and immediately blocks all access. The
-  // Team list only ever shows active=true rows and there's no reactivate
-  // UI, so a deactivated row is permanently invisible either way -- which
-  // means leaving its phone number in place doesn't preserve anything
-  // recoverable, it just permanently blocks that number (users_phone_unique)
-  // from ever being used by a new or re-added engineer. Clearing it here.
+  // Team list only ever shows active=true rows, so a deactivated row won't
+  // reappear there -- but Add Engineer's name-collision picker (see
+  // _showEngineerNameCollisionModal) still finds and can reactivate it by
+  // name. Clearing phone here still matters: it frees the number
+  // immediately for a *different* new engineer, rather than leaving it
+  // reserved by a dormant row until someone specifically re-types this
+  // exact name to rediscover it.
   if(isPinEngineer){
     if(!confirm(`Remove "${name}" from DeepFlow?\n\nThis immediately blocks their Engineer App login — no Supabase cleanup needed.\nTheir phone number will be free to use again for a new or re-added engineer.`)) return;
     try{
@@ -8304,7 +8339,7 @@ function _showEngineerNameCollisionModal(name, phone, matches, err){
         <div style="font-weight:700;font-size:13px">${escHtml(m.name)}</div>
         <div style="font-size:11px;color:var(--txt3);margin-top:2px">📱 ${escHtml(m.phone||'none on file')} · left, last seen ${lastSeen}</div>
       </div>
-      <button class="btn btn-acc btn-xs" onclick="_reactivateInCollision('${m.id}',${escHtml(JSON.stringify(m.name))},${escHtml(JSON.stringify(phone))},${hasActive})">🔄 This is them</button>
+      <button class="btn btn-acc btn-xs" onclick="_reactivateInCollision(${escHtml(JSON.stringify(m.id))},${escHtml(JSON.stringify(m.name))},${escHtml(JSON.stringify(phone))},${hasActive})">🔄 This is them</button>
     </div>`;
   }).join('');
 

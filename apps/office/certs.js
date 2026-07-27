@@ -250,11 +250,19 @@ export function toggleAllCerts(cb){
 export async function bulkNRToggle(){
   const checked=document.querySelectorAll('.ct-row-cb:checked');
   if(!checked.length)return toast('Select rows first','warn');
+  // Per-row try/catch so one bad row (RLS, network) can't abort the loop
+  // mid-way and leave everything after it untouched with zero feedback --
+  // same pattern as the job-side bulk actions (bulkSetStatus/bulkDeleteJobs).
+  let done=0,failed=0;
   for(const cb of checked){
-    const c=await dGet('certs',cb.value);
-    if(c){c.notResponding=!c.notResponding;await dPut('certs',c);}
+    try{
+      const c=await dGet('certs',cb.value);
+      if(c){c.notResponding=!c.notResponding;await dPut('certs',c);}
+      done++;
+    }catch(e){ failed++; console.warn('[DeepFlow] bulkNRToggle failed for',cb.value,e); }
   }
-  toast(`NR toggled on ${checked.length} cert(s)`,'success');
+  if(failed) toast(`⚠ NR toggled on ${done} of ${checked.length} — ${failed} failed`,'warn',5000);
+  else toast(`NR toggled on ${done} cert(s)`,'success');
   renderCertTable();
 }
 
@@ -262,8 +270,13 @@ export async function bulkDeleteCerts(){
   const checked=document.querySelectorAll('.ct-row-cb:checked');
   if(!checked.length)return toast('Select rows first','warn');
   confirm2('Delete Certs',`Delete ${checked.length} selected certificate(s)?`,async()=>{
-    for(const cb of checked) await dDel('certs',cb.value);
-    toast(`${checked.length} cert(s) deleted`,'warn');
+    let done=0,failed=0;
+    for(const cb of checked){
+      try{ await dDel('certs',cb.value); done++; }
+      catch(e){ failed++; console.warn('[DeepFlow] bulkDeleteCerts failed for',cb.value,e); }
+    }
+    if(failed) toast(`⚠ ${done} of ${checked.length} deleted — ${failed} failed`,'warn',5000);
+    else toast(`${done} cert(s) deleted`,'warn');
     renderCertTable(); updateBadges();
   });
 }
@@ -1267,7 +1280,11 @@ export async function openCertModalFromJob(jobId, jobNum, prefill={}){
     if(ts){const opt=[...ts.options].find(o=>o.value===prefill.type);if(opt)ts.value=opt.value;}
   }
 }
+let _certSaving=false;
 export async function saveCert(){
+  if(_certSaving){ toast('Already saving, please wait…','info',1500); return; }
+  _certSaving=true;
+  try{
   const certId=window._editCertModalId||uid();
 
   // FIX 10: Capture optional job link. When the cert modal is opened from a job context
@@ -1299,6 +1316,7 @@ export async function saveCert(){
   if(_certTab==='list')renderCertTable();else if(_certTab==='dash')renderCertDash();
   updateBadges();
   toast('Certificate saved'+(c.jobNum?' — linked to job '+c.jobNum:''),'success');
+  } finally { _certSaving=false; }
 }
 export async function delCert(id){
   confirm2('Delete Certificate','Remove this certificate permanently?',async()=>{

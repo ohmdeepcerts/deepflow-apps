@@ -745,7 +745,11 @@ export async function openAgencyModal(id){
   openModal('mo-agency'); setTimeout(()=>wireAutoSave('agencies'),100);
 }
 
+let _agencySaving=false;
 export async function saveAgency(silent=false){
+  if(_agencySaving){ if(!silent)toast('Already saving, please wait…','info',1500); return; }
+  _agencySaving=true;
+  try{
   const name = document.getElementById('agf-name').value.trim();
   if(!name){if(!silent)toast('Agency name required','error');return}
   const a = {
@@ -768,6 +772,7 @@ export async function saveAgency(silent=false){
   await logActivity(`${a.created?'Added':'Updated'} agency: ${name}`,'agency');
   if(!silent){ closeModal('mo-agency'); renderDirSection('agencies'); toast('Agency saved','success'); }
   else { renderDirSection('agencies'); }
+  } finally { _agencySaving=false; }
 }
 
 export async function deleteCurrentAgency(){
@@ -822,7 +827,11 @@ export async function openAgentModal(id){
   openModal('mo-agent'); setTimeout(()=>wireAutoSave('agents'),100);
 }
 
+let _agentSaving=false;
 export async function saveAgent(silent=false){
+  if(_agentSaving){ if(!silent)toast('Already saving, please wait…','info',1500); return; }
+  _agentSaving=true;
+  try{
   const name = document.getElementById('agt-name').value.trim();
   if(!name){if(!silent)toast('Agent name required','error');return}
   const ag = {
@@ -841,6 +850,7 @@ export async function saveAgent(silent=false){
   await logActivity(`${ag.created?'Added':'Updated'} agent: ${name}`,'agent');
   if(!silent){ closeModal('mo-agent'); renderDirSection('agents'); toast('Agent saved','success'); }
   else { renderDirSection('agents'); }
+  } finally { _agentSaving=false; }
 }
 
 export async function deleteCurrentAgent(){
@@ -918,7 +928,11 @@ export async function openPersonModal(id){
   openModal('mo-person'); setTimeout(()=>wireAutoSave('persons'),100);
 }
 
+let _personSaving=false;
 export async function savePerson(silent=false){
+  if(_personSaving){ if(!silent)toast('Already saving, please wait…','info',1500); return; }
+  _personSaving=true;
+  try{
   const name=document.getElementById('pf-name').value.trim();
   if(!name){if(!silent)toast('Name required','error');return}
   const roles=[];
@@ -955,6 +969,7 @@ export async function savePerson(silent=false){
   await logActivity(`${p.id===editPid&&!silent?'Updated':'Added'} person: ${name}`,'person');
   if(!silent){ closeModal('mo-person');renderDir();renderDirSection(curDirSection);toast('Saved','success'); }
   else { renderDir();renderDirSection(curDirSection); }
+  } finally { _personSaving=false; }
 }
 
 export async function deleteCurrentPerson(){
