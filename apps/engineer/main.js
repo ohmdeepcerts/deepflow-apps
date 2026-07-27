@@ -621,6 +621,26 @@ async function checkOfficeConnection(){
   }
 }
 
+// ══ SESSION VALIDITY (force-logout / PIN reset detection) ══
+// Office "Force Logout" / "Reset PIN" clears session_token server-side
+// immediately, and RLS (users_engineer_token_own_read) correctly blocks
+// this session from then on -- but RLS just returns zero rows rather than
+// an error, so checkOfficeConnection()'s plain reachability ping never
+// notices (an empty result still counts as "connected"). This polls the
+// engineer's own row; an empty result means the token no longer matches
+// server-side, so the tab is signed out right away instead of sitting in
+// a stale logged-in-looking state until the user happens to reload.
+async function _checkSessionAlive(){
+  if(!_isTokenAuth()) return;
+  try{
+    const rows = await sb(`users?id=eq.${currentUser.id}&select=id`);
+    if(!rows || !rows.length){
+      _doSignOut();
+      toast('Your access was changed by the office — please sign in again','error',6000);
+    }
+  }catch(e){ /* transient network/API issue -- don't sign out on that */ }
+}
+
 function doLogout(){
   if(!confirm('Sign out of DeepFlow?'))return;
   _doSignOut();
@@ -696,9 +716,12 @@ function showApp(){
   // Guard prevents duplicate intervals if showApp() is somehow called twice.
   if(!_intervalsStarted){
     _intervalsStarted=true;
-    setInterval(()=>{if(currentUser&&document.visibilityState!=='hidden'){loadJobs();checkBroadcastAlerts();}},30000);
+    setInterval(()=>{if(currentUser&&document.visibilityState!=='hidden'){loadJobs();checkBroadcastAlerts();_checkSessionAlive();}},30000);
     setInterval(()=>{if(currentUser)checkBroadcastAlerts();},15000);
     setInterval(()=>{if(currentUser)checkOfficeConnection();},120000);
+    // Catches the common case fastest: engineer backgrounds the app (office
+    // force-logs-them-out while it's closed), then reopens it later.
+    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&currentUser)_checkSessionAlive();});
   }
 }
 

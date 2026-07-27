@@ -513,13 +513,11 @@ function _emailPortalShare(url, name, btn) {
   window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
 
-export function nav(pg){
-  // SECURITY (H-5): every permission gate must run before any DOM mutation
-  // or render call below — this used to run after the target page was
-  // already marked .active and, for dash/jobs/inv/stmt/exp/ts/rep/engrep/
-  // audit specifically, already rendered with real data, so a blocked role
-  // briefly saw the forbidden page's actual content before the toast fired
-  // and the early return kicked in.
+// Shared by nav()'s own gate and by the last-page restore in
+// applyUserPermissions() -- not every page has a sidebar .ni entry to check
+// visibility against (Settings is only reachable via the user menu), so
+// restoring on reload needs the same real rule nav() enforces, not a DOM check.
+function _canAccessPage(pg){
   const rolePages={
     Admin: null, // null = all pages allowed
     Manager: ['dash','jobs','inv','stmt','rep','req','dir','props','certs','client','set','map'],
@@ -527,17 +525,21 @@ export function nav(pg){
     Staff:   ['dash','jobs','inv','stmt','req','dir','props','certs','client'],
   };
   const allowed=rolePages[_appUser?.role];
-  if(allowed && !allowed.includes(pg)){
-    toast('❌ You do not have access to this page','error');
-    return;
-  }
-  // SECURITY: Block non-admins from Settings entirely
-  if(pg==='set' && _appUser?.role !== 'Admin' && _appUser?.role !== 'Manager' && _appUser?.role !== 'Finance'){
-    toast('❌ Settings is restricted','error');
-    return;
-  }
-  if(pg==='audit' && _appUser?.role!=='Admin'){
-    toast('❌ Admin only','error');
+  if(allowed && !allowed.includes(pg)) return false;
+  if(pg==='set' && _appUser?.role !== 'Admin' && _appUser?.role !== 'Manager' && _appUser?.role !== 'Finance') return false;
+  if(pg==='audit' && _appUser?.role!=='Admin') return false;
+  return true;
+}
+
+export function nav(pg){
+  // SECURITY (H-5): every permission gate must run before any DOM mutation
+  // or render call below — this used to run after the target page was
+  // already marked .active and, for dash/jobs/inv/stmt/exp/ts/rep/engrep/
+  // audit specifically, already rendered with real data, so a blocked role
+  // briefly saw the forbidden page's actual content before the toast fired
+  // and the early return kicked in.
+  if(!_canAccessPage(pg)){
+    toast(pg==='audit'?'❌ Admin only':pg==='set'?'❌ Settings is restricted':'❌ You do not have access to this page','error');
     return;
   }
 
@@ -549,6 +551,7 @@ export function nav(pg){
   if(navEl) navEl.classList.add('active');
   document.getElementById('tb-title').textContent=PTITLES[pg]||pg;
   curPg=pg;
+  localStorage.setItem('df_last_page',pg);
   setTopbarActions(pg);
   if(pg==='dash') renderDash();
   if(pg==='jobs') {_invalidateJobCache();renderJobs();renderSavedViews();}
@@ -1566,6 +1569,18 @@ function applyUserPermissions(){
     _sb('users?id=eq.'+u._sbId,{method:'PATCH',body:{last_seen:Math.floor(Date.now()/1000)},prefer:'return=minimal'}).catch(()=>{});
   }
   setTimeout(updateOnlinePanel,800);
+
+  // ── Restore last-visited page ─────────────────────────────────────────────
+  // curPg only lives in memory, so any reload always dumped everyone back on
+  // Dashboard regardless of where they'd been -- most annoying on Settings,
+  // which now writes to Supabase a lot (Team add/remove/reset/etc.) and now
+  // isn't even in the sidebar (it's a user-menu item), so a reload to
+  // double-check a change also meant re-navigating back here every time.
+  // Uses the same rule nav() enforces (not a sidebar-visibility check --
+  // Settings has no .ni entry to check), so a role change since the last
+  // visit is still respected.
+  const lastPg=localStorage.getItem('df_last_page');
+  if(lastPg && lastPg!=='dash' && _canAccessPage(lastPg)) nav(lastPg);
 }
 
 
@@ -7808,7 +7823,6 @@ function renderSettings(){
     <td><input class="fi" value="${e.wa||''}" style="padding:5px;width:90px" placeholder="447..." onchange="S.engineers[${i}].wa=this.value"></td>
     <td><select class="fs" style="padding:5px;min-width:90px" onchange="S.engineers[${i}].trade=this.value">${(S.trades||[]).map(t=>`<option ${t.name===e.trade?'selected':''}>${t.name}</option>`).join('')}</select></td>
     <td><input class="fi" type="number" value="${e.capacity||8}" style="padding:5px;width:55px" onchange="S.engineers[${i}].capacity=+this.value"></td>
-    <td><input class="fi" value="${e.pin||''}" style="padding:5px;width:65px" maxlength="6" placeholder="PIN" onchange="S.engineers[${i}].pin=this.value" title="Engineers use this PIN to log into mobile portal"></td>
     <td><button class="btn btn-red btn-xs" onclick="S.engineers.splice(${i},1);renderSettings()">✕</button></td>
   </tr>`).join('');
 
@@ -7903,7 +7917,7 @@ function addEngRow(){
   // FIX 7: Engineers live in Supabase — adding a row is NOT saved until the user clicks
   // "Save Settings". Previously there was zero indication of this, so rows vanished silently
   // on navigation. Now we show a persistent banner and scroll to the save button.
-  S.engineers.push({name:'',phone:'',rate:0,dayRate:0,hourlyRate:0,costRate:0,otRate:0,wa:'',trade:'',capacity:8,pin:''});
+  S.engineers.push({name:'',phone:'',rate:0,dayRate:0,hourlyRate:0,costRate:0,otRate:0,wa:'',trade:'',capacity:8});
   renderSettings();
   _markSettingsUnsaved();
   // Scroll the new row into view
@@ -8097,7 +8111,7 @@ CREATE OR REPLACE FUNCTION get_auth_users() RETURNS TABLE(id uuid, email text, c
       return{
         _sbId:u.id, name:u.name, phone:u.phone||'', rate:u.rate||existing.rate||0,
         dayRate:existing.dayRate||0, hourlyRate:existing.hourlyRate||0, costRate:existing.costRate||0,
-        otRate:existing.otRate||0, wa:existing.wa||'', trade:existing.trade||'', capacity:existing.capacity||8, pin:u.pin||'', email:u.email||''
+        otRate:existing.otRate||0, wa:existing.wa||'', trade:existing.trade||'', capacity:existing.capacity||8, email:u.email||''
       };
     });
     localStorage.setItem('df_setting_engineers', JSON.stringify(S.engineers));
@@ -8135,7 +8149,7 @@ async function teamAdd(authId, email){
   const payload = {
     id: crypto.randomUUID(),
     name, email: email.toLowerCase(), role, active: true,
-    auth_id: authId, pin: '',
+    auth_id: authId,
     can_edit:    !isEng && role!=='viewer',
     can_delete:  role==='admin'||role==='manager',
     can_invoice: !isEng && role!=='viewer',
@@ -8185,14 +8199,20 @@ async function teamChangeRole(userId, email, newRole, sel){
 async function teamRevoke(userId, name, isPinEngineer){
   // Phone+PIN engineers have no Supabase Auth account to separately clean
   // up — is_engineer()/is_valid_engineer_token() both require active=true,
-  // so deactivating alone fully and immediately blocks all access. Kept
-  // reversible (not deleted) so re-adding someone doesn't lose their name/
-  // phone/PIN history if it turns out to be temporary.
+  // so deactivating alone fully and immediately blocks all access. The
+  // Team list only ever shows active=true rows and there's no reactivate
+  // UI, so a deactivated row is permanently invisible either way -- which
+  // means leaving its phone number in place doesn't preserve anything
+  // recoverable, it just permanently blocks that number (users_phone_unique)
+  // from ever being used by a new or re-added engineer. Clearing it here.
   if(isPinEngineer){
-    if(!confirm(`Remove "${name}" from DeepFlow?\n\nThis immediately blocks their Engineer App login — no Supabase cleanup needed.`)) return;
+    if(!confirm(`Remove "${name}" from DeepFlow?\n\nThis immediately blocks their Engineer App login — no Supabase cleanup needed.\nTheir phone number will be free to use again for a new or re-added engineer.`)) return;
     try{
-      await _sb(`users?id=eq.${userId}`,{method:'PATCH',prefer:'return=minimal',body:{active:false,session_token:null,session_expires:null}});
-      toast(`✅ ${name} removed — their login is blocked immediately`,'success');
+      await _sb(`users?id=eq.${userId}`,{method:'PATCH',prefer:'return=minimal',body:{
+        active:false, session_token:null, session_expires:null, phone:null,
+        pin_hash:null, pin_reset_allowed:false, pin_fail_count:0, pin_locked_until:null,
+      }});
+      toast(`✅ ${name} removed — their login is blocked immediately and their number is free to reuse`,'success');
       loadTeam();
     }catch(e){ toast('❌ '+e.message,'error'); }
     return;
@@ -8451,7 +8471,7 @@ async function syncOfficeUsers(){
     if(!u.name) continue;
     // Map app role → Supabase role string
     const sbRole=u.role==='Admin'?'admin':u.role==='Manager'?'manager':u.role==='Viewer'?'viewer':'staff';
-    const payload={name:u.name, pin:u.pin||'', role:sbRole, active:true};
+    const payload={name:u.name, role:sbRole, active:true};
     try{
       if(u._sbId){
         // Update existing row
