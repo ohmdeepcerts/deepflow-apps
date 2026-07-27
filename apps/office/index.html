@@ -4097,7 +4097,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS last_accuracy integer;</div>
         <div style="font-size:10px;color:var(--txt3);margin-top:3px">Click to select · Auto-detected from description</div>
       </div>
       <div class="fg" style="display:none"><label class="fl">Trade (internal)</label><select id="jf-trade" class="fs"></select></div>
-      <div class="fg"><label class="fl" style="display:flex;justify-content:space-between;align-items:center">Engineer <button type="button" class="btn btn-ghost btn-xs" onclick="openQuickEngModal()" style="font-size:9px;padding:2px 7px">+ New</button></label><select id="jf-eng" class="fs"></select></div>
+      <div class="fg"><label class="fl">Engineer</label><select id="jf-eng" class="fs"></select></div>
       <div class="fg"><label class="fl">Job Date</label><input type="date" id="jf-date" class="fi"></div>
       <div class="fg"><label class="fl">Description</label><textarea id="jf-desc" class="fi fta-grow" placeholder="e.g. Annual Gas Safety Check…" rows="2" style="min-height:42px;line-height:1.5" oninput="autoGrow(this);autoDetectCertTypes(this.value)"></textarea></div>
       <div class="fg"><label class="fl">Time Slot</label><input type="text" id="jf-time" class="fi" placeholder="e.g. 9:00–11:00 AM"></div>
@@ -4806,26 +4806,6 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS last_accuracy integer;</div>
     <button class="btn btn-red btn-sm" id="btn-del-expense" style="display:none;margin-right:auto" onclick="deleteCurrentExpense()">Delete</button>
     <button class="btn btn-ghost" onclick="closeModal('mo-expense')">Cancel</button>
     <button class="btn btn-acc" onclick="saveExpense()">Save Expense</button>
-  </div>
-</div>
-</div>
-
-<!-- Quick Add Engineer Modal -->
-<div class="overlay" id="mo-quick-eng">
-<div class="modal" style="max-width:420px">
-  <div class="modal-title">👷 Add New Engineer</div>
-  <div class="fg"><label class="fl">Full Name</label><input type="text" id="qef-name" class="fi" placeholder="Engineer's full name"></div>
-  <div class="frow">
-    <div class="fg"><label class="fl">Phone</label><input type="text" id="qef-phone" class="fi"></div>
-    <div class="fg"><label class="fl">WhatsApp Number</label><input type="text" id="qef-wa" class="fi" placeholder="447700900000"></div>
-  </div>
-  <div class="frow">
-    <div class="fg"><label class="fl">Hourly Rate (£)</label><input type="number" id="qef-rate" class="fi" placeholder="0.00" step="0.01"></div>
-    <div class="fg"><label class="fl">Default Trade</label><select id="qef-trade" class="fs"></select></div>
-  </div>
-  <div class="modal-actions">
-    <button class="btn btn-ghost" onclick="closeModal('mo-quick-eng')">Cancel</button>
-    <button class="btn btn-acc" onclick="saveQuickEngineer()">Add Engineer</button>
   </div>
 </div>
 </div>

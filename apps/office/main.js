@@ -7967,14 +7967,18 @@ function _pinStatusBadge(u){
 }
 function _pinActionButtons(u){
   const nameJson=escHtml(JSON.stringify(u.name||''));
+  // Changing number is orthogonal to PIN state -- it just updates phone on
+  // the SAME row (same id, same name, same pin_hash), so it's offered no
+  // matter which of the three PIN states below applies.
+  const changeNumBtn=`<button class="btn btn-ghost btn-xs" onclick="engineerChangePhone('${u.id}',${nameJson},${escHtml(JSON.stringify(u.phone||''))})">📱 Change Number</button>`;
   if(u.pin_hash){
     return `<button class="btn btn-ghost btn-xs" onclick="engineerResetPin('${u.id}',${nameJson})">🔄 Reset PIN</button>
-      <button class="btn btn-ghost btn-xs" onclick="engineerForceLogout('${u.id}',${nameJson})">🚫 Force Logout</button>`;
+      <button class="btn btn-ghost btn-xs" onclick="engineerForceLogout('${u.id}',${nameJson})">🚫 Force Logout</button>${changeNumBtn}`;
   }
   if(u.pin_reset_allowed){
-    return `<button class="btn btn-ghost btn-xs" onclick="engineerRevokeAccess('${u.id}',${nameJson})">🔒 Revoke</button>`;
+    return `<button class="btn btn-ghost btn-xs" onclick="engineerRevokeAccess('${u.id}',${nameJson})">🔒 Revoke</button>${changeNumBtn}`;
   }
-  return `<button class="btn btn-ghost btn-xs" onclick="engineerGrantAccess('${u.id}',${nameJson})">✅ Grant Access</button>`;
+  return `<button class="btn btn-ghost btn-xs" onclick="engineerGrantAccess('${u.id}',${nameJson})">✅ Grant Access</button>${changeNumBtn}`;
 }
 
 async function loadTeam(){
@@ -8361,6 +8365,50 @@ async function engineerRevokeAccess(id, name){
     toast(`🔒 Access revoked for ${name}`,'warn',4000);
     loadTeam();
   }catch(e){ toast('Failed: '+(e.message||'').slice(0,100),'error',6000); }
+}
+
+// ── CHANGE NUMBER — same person, new phone. Unlike enablePhoneLogin() (which
+// is for granting a first-time/no-PIN engineer initial access and always
+// sets pin_reset_allowed:true), this only PATCHes phone on the SAME row --
+// id, name, and pin_hash are all untouched. engineer_pin_login() looks up by
+// phone alone (WHERE phone = p_phone), so their existing PIN keeps working
+// immediately on the new number with zero re-setup and zero identity churn
+// (no new row, so no risk of a second same-name row down the line).
+function engineerChangePhone(id, name, currentPhone){
+  const overlay=document.getElementById('eng-pin-overlay');
+  if(overlay) overlay.remove();
+  const div=document.createElement('div');
+  div.id='eng-pin-overlay';
+  div.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px';
+  div.innerHTML=`
+    <div style="background:var(--s1);border:1px solid var(--border);border-radius:16px;padding:24px;max-width:340px;width:100%">
+      <div style="font-size:15px;font-weight:800;margin-bottom:4px">📱 Change Number for ${escHtml(name)}</div>
+      <div style="font-size:12px;color:var(--txt3);margin-bottom:14px">Their PIN stays the same — they just log in with the new number next time.</div>
+      <input id="ecp-phone" value="${escHtml(currentPhone||'')}" placeholder="New phone number" style="width:100%;padding:11px;border-radius:8px;border:1px solid var(--border);background:var(--s2);color:var(--txt);font-size:13px;margin-bottom:12px;box-sizing:border-box">
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost btn-sm" style="flex:1" onclick="document.getElementById('eng-pin-overlay').remove()">Cancel</button>
+        <button class="btn btn-acc btn-sm" style="flex:1" onclick="submitEngineerChangePhone('${id}',${escHtml(JSON.stringify(name))})">Save</button>
+      </div>
+      <div id="ecp-err" style="color:var(--red);font-size:12px;margin-top:8px"></div>
+    </div>`;
+  document.body.appendChild(div);
+  setTimeout(()=>{const el=document.getElementById('ecp-phone');el?.focus();el?.select();},50);
+}
+
+async function submitEngineerChangePhone(id, name){
+  const phone=(document.getElementById('ecp-phone')?.value||'').trim();
+  const err=document.getElementById('ecp-err');
+  if(!phone){ if(err)err.textContent='Phone number is required'; return; }
+  try{
+    await _sb(`users?id=eq.${id}`,{method:'PATCH',prefer:'return=minimal',body:{phone}});
+    document.getElementById('eng-pin-overlay')?.remove();
+    toast(`✅ ${name}'s number updated — same PIN still works on ${phone}`,'success',5000);
+    loadTeam();
+  }catch(e){
+    let msg=e.message||'Unknown error';
+    if(msg.includes('users_phone_unique')||msg.includes('duplicate')) msg='That phone number is already in use by another account.';
+    if(err)err.textContent=msg;
+  }
 }
 
 // Legacy stubs — keep so old code calling these doesn't break
@@ -11994,39 +12042,6 @@ async function kanbanDrop(e, newStatus){
 // ════════════════════════════════════════════════════════════════
 //  QUICK ADD ENGINEER (from job modal)
 // ════════════════════════════════════════════════════════════════
-function openQuickEngModal(){
-  document.getElementById('qef-name').value='';
-  document.getElementById('qef-phone').value='';
-  document.getElementById('qef-wa').value='';
-  document.getElementById('qef-rate').value='';
-  const td = document.getElementById('qef-trade');
-  td.innerHTML='<option value="">—</option>'+(S.trades||[]).map(t=>`<option>${t.name}</option>`).join('');
-  openModal('mo-quick-eng');
-}
-
-async function saveQuickEngineer(){
-  const name = document.getElementById('qef-name').value.trim();
-  if(!name){toast('Name required','error');return}
-  const engObj = {
-    name, phone: document.getElementById('qef-phone').value.trim(),
-    rate: parseFloat(document.getElementById('qef-rate').value)||0,
-    wa: document.getElementById('qef-wa').value.replace(/[^0-9]/g,''),
-    trade: document.getElementById('qef-trade').value
-  };
-  // Add to settings engineers
-  const engs = S.engineers||[];
-  if(!engs.find(e=>e.name===name)){engs.push(engObj);await saveSetting('engineers',engs)}
-  // Also save as person in directory
-  const p = {id:uid(), name, phone:engObj.phone, email:'', wa:engObj.wa, address:'', notes:'', rate:engObj.rate, trade:engObj.trade, roles:['engineer']};
-  await dPut('persons', p);
-  await logActivity(`Engineer added: ${name}`, 'person');
-  toast(`Engineer ${name} added!`, 'success');
-  closeModal('mo-quick-eng');
-  // Refresh dropdown in job modal
-  fillJobDropdowns();
-  document.getElementById('jf-eng').value = name;
-}
-
 // ════════════════════════════════════════════════════════════════
 //  INVOICE ↔ JOB UNIFIED NUMBERING
 //  Invoice number IS the job number. Creating an invoice also
@@ -13885,6 +13900,7 @@ function escCsv(str){ return String(str||'').replace(/"/g,'""'); }
 Object.assign(window, {
   df, showAddEngineerModal, closeAddEngineerModal, submitAddEngineer,
   enablePhoneLogin, submitEnablePhoneLogin, engineerResetPin, engineerForceLogout, engineerGrantAccess, engineerRevokeAccess,
+  engineerChangePhone, submitEngineerChangePhone,
   _addLiveItem, _copyJobDesc, _copyPortalLink, _editEngFromDeep, _emailPortalShare, _removeLiveItem, _renderEngDeepJobsList,
   _reqAcknowledge, _reqApproveEng, _reqCreateJob, _reqReject, _reqReopen, _reqSendReply, 
   _saveLiveItem, _sendPLReminder, _showReqDetail, _switchEngDeepTab, _switchPLTab, _updateLiveTotal, 
@@ -13914,7 +13930,7 @@ Object.assign(window, {
   openBroadcast, openCertForm, openCmd, openCreditNoteModal, openDisposableModal, openEngDeepReport, 
   openEngDir, openExpenseModal, openImportModal, openInvSendModal, openJobForInvoice, openJobModal, openJobModalByNum, openMergeModal,
   openOvertimeModal, openPLDashboard, openPaymentModal, openPersonModal, openPersonModalFor, openPersonWA,
-  openPropModal, openQuickEngModal, openStandaloneProformaModal, openWhatsApp, postComment, previewCertPdf,
+  openPropModal, openStandaloneProformaModal, openWhatsApp, postComment, previewCertPdf,
   previewWaTemplate, printFilteredInvoices, printProforma, quickConfirm, quickEditPrice, quickEditTime, quickStatus,
   removeCertPdf, removeInvCustomText, renderAuditLog, renderCertStats, renderCertTable, renderClientPicker,
   renderDirSection, renderEngReport, renderExpenses, renderInvItems, renderInvList, renderJobs, renderMapPage,
@@ -13923,7 +13939,7 @@ Object.assign(window, {
   saveAgent, saveAgentFromJob, saveAndSendInv, saveCert, saveCertExpiry, saveCertForm, 
   saveCreditNote, saveDashNotes, saveDisposableInvoice, saveEngDefaults, saveExpense, saveInv, 
   saveJob, saveLandlordFromJob, saveNotifSettings, saveOvertimeLog, savePayment, savePerson, 
-  saveProp, saveQuickEngineer, saveSettings, saveStandaloneProforma, searchJobForInvoice, selEngineer,
+  saveProp, saveSettings, saveStandaloneProforma, searchJobForInvoice, selEngineer,
   selectAddr, selectAllVisibleJobs, sendAllOverdueWA, sendBroadcast, sendInvEmail, sendInvWA,
   showPortalInviteModal,
   sendLandlordComplete, sendLandlordWA, sendOverdueWA, sendTenantWA, sendToWA, setAccent, setCremMode, setFontSize,
