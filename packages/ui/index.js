@@ -1,4 +1,5 @@
 export { escHtml, escAttr, escText } from './escaping.js';
+export { initNetworkCanvas } from './network-canvas.js';
 
 // toast()/modal() are deliberately NOT extracted yet: each app's version is
 // coupled to that app's own DOM structure and CSS (a shared toast container
