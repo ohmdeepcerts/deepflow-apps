@@ -8252,12 +8252,57 @@ function showAddEngineerModal(){
 }
 function closeAddEngineerModal(){ document.getElementById('add-eng-overlay')?.remove(); }
 
+// Jobs link to an engineer by matching this exact name text (no stable id
+// involved -- see PHASE7 investigation), so two engineer rows sharing a name
+// aren't just a display mixup: they'd see and could edit each other's jobs,
+// and an inactive row with the same name as someone leaving-and-returning is
+// exactly how the same duplicate-Izhar-row situation piled up before. Check
+// for a name collision before ever creating a fresh row, and let the office
+// make an informed choice instead of finding out later.
 async function submitAddEngineer(){
   const name  = (document.getElementById('ae-name')?.value||'').trim();
   const phone = (document.getElementById('ae-phone')?.value||'').trim();
   const err   = document.getElementById('ae-err');
   if(!name||!phone){ if(err)err.textContent='Name and phone number are required'; return; }
 
+  let existing=[];
+  try{ existing = await _sb(`users?role=eq.engineer&name=ilike.${encodeURIComponent(name)}&select=id,name,phone,active`)||[]; }
+  catch(e){ /* lookup failing shouldn't block adding -- fall through to normal create */ }
+  const match = existing[0];
+
+  if(!match){ await _createEngineerRow(name, phone, err); return; }
+
+  if(!match.active){
+    confirm2(
+      '👤 This name already exists',
+      `A former engineer named "${match.name}" is already on record (phone: ${match.phone||'none on file'}), currently removed.\n\nIs this the SAME person coming back, or a DIFFERENT person who happens to share the name?`,
+      ()=>_reactivateEngineer(match.id, name, phone, err), // OK = same person
+      null,
+      {okText:'🔄 Same person — reactivate', okClass:'btn btn-acc',
+       altText:'➕ Different person — add new', altFaded:true,
+       altAction:()=>{
+         _createEngineerRow(name, phone, err);
+         setTimeout(()=>toast(`💡 Tip: consider a distinguishing name (e.g. a surname, or "${name} 2") so their jobs never get mixed up with the other ${name}`,'info',8000),600);
+       }}
+    );
+    return;
+  }
+
+  // Currently active — the dangerous case: both would see and could edit
+  // each other's jobs immediately, with no way to tell them apart in the
+  // job form's engineer dropdown. Default action is to back out and rename.
+  confirm2(
+    '⚠️ Name already in use',
+    `An ACTIVE engineer named "${match.name}" already exists (phone: ${match.phone||'none on file'}).\n\nAdding another engineer with the exact same name means they'll see — and can edit — each other's jobs, with no way to tell them apart.\n\nStrongly recommend using a distinguishing name instead, e.g. a surname or "${name} 2".`,
+    null, // OK = just close, safe default
+    null,
+    {okText:'Go back and rename', okClass:'btn btn-acc',
+     altText:'I understand — add anyway', altFaded:true,
+     altAction:()=>_createEngineerRow(name, phone, err)}
+  );
+}
+
+async function _createEngineerRow(name, phone, err){
   const payload = {
     id: crypto.randomUUID(),
     name, phone, role:'engineer', active:true, auth_id:null, email:'',
@@ -8270,6 +8315,27 @@ async function submitAddEngineer(){
     await _sb('users',{method:'POST',body:payload,prefer:'return=minimal'});
     closeAddEngineerModal();
     toast(`✅ ${name} added — tell them to open the Engineer App and enter ${phone} to set up their PIN`,'success',6000);
+    loadTeam();
+  }catch(e){
+    let msg=e.message||'Unknown error';
+    if(msg.includes('users_phone_unique')||msg.includes('duplicate')) msg='That phone number is already in use by another account.';
+    if(err)err.textContent=msg;
+  }
+}
+
+// Reuses the SAME row (same id) instead of minting a new one -- this is what
+// actually keeps a returning engineer linked to their history with zero
+// extra work, and avoids piling up another dead same-named row the next
+// time they leave and come back. PIN is cleared so they always land on a
+// fresh self-setup screen rather than trusting a possibly-stale old PIN.
+async function _reactivateEngineer(id, name, phone, err){
+  try{
+    await _sb(`users?id=eq.${id}`,{method:'PATCH',prefer:'return=minimal',body:{
+      active:true, phone, pin_reset_allowed:true,
+      pin_hash:null, session_token:null, session_expires:null, pin_fail_count:0, pin_locked_until:null,
+    }});
+    closeAddEngineerModal();
+    toast(`✅ ${name} reactivated — tell them to open the Engineer App and enter ${phone} to set up a new PIN`,'success',6000);
     loadTeam();
   }catch(e){
     let msg=e.message||'Unknown error';
