@@ -207,9 +207,19 @@ if(!_supaAuth){
 // correctly scoped by table (parsed from the request path) instead of
 // relying on that coincidence.
 const _getJWT = makeJwtResolver(_supaAuth);
+
+// Phone+PIN sessions carry no Supabase Auth JWT — identity is proven by this
+// token instead, read by the DB's is_valid_engineer_token()/
+// my_token_engineer_name() RLS helpers via the x-engineer-token header.
+// Password-mode sessions leave this null and behave exactly as before.
+let _engToken = null;
+export function _isTokenAuth(){ return currentUser?.authMode==='token' && !!_engToken; }
+
 export async function sb(path,opts={}){
-  const jwt=await _getJWT();
-  const res=await restFetch(path,opts,jwt);
+  const tokenAuth = _isTokenAuth();
+  const authToken = tokenAuth ? SB_KEY : await _getJWT();
+  const finalOpts = tokenAuth ? {...opts, headers:{...(opts.headers||{}), 'x-engineer-token':_engToken}} : opts;
+  const res=await restFetch(path,finalOpts,authToken);
   const txt=await res.text();
   if(!res.ok)throw new Error(`[DeepFlow] ${path} → ${res.status}: ${txt}`);
   const d=txt?JSON.parse(txt):null;
@@ -427,13 +437,24 @@ let _lastJobIds  = new Set();
 let _lastLat     = null;  // engineer GPS position for nearest-job sort
 let _lastLng     = null;
 
+// ── Storage auth headers — shared by sbStorage() here and photos.js's
+// delete call, so both stay in sync for token-mode vs password-mode.
+export async function _storageAuthHeaders(extra){
+  const tokenAuth = _isTokenAuth();
+  const jwt = tokenAuth ? SB_KEY : await _getJWT();
+  return {
+    apikey: SB_KEY,
+    Authorization: 'Bearer '+jwt,
+    ...(tokenAuth ? {'x-engineer-token':_engToken} : {}),
+    ...extra,
+  };
+}
+
 // ── sbStorage — Supabase file upload ─────────────────────────
 export async function sbStorage(path,file){
-  const jwt = await _getJWT();
+  const headers = await _storageAuthHeaders({'Content-Type':file.type||'application/octet-stream','x-upsert':'true'});
   const res=await fetch(`${SB_URL}/storage/v1/object/deepflow/${path}`,{
-    method:'POST',
-    headers:{'apikey':SB_KEY,'Authorization':'Bearer '+jwt,'Content-Type':file.type||'application/octet-stream','x-upsert':'true'},
-    body:file
+    method:'POST', headers, body:file
   });
   if(!res.ok)throw new Error('Upload failed: '+(await res.text()).slice(0,100));
   return `${SB_URL}/storage/v1/object/public/deepflow/${path}`;
@@ -459,113 +480,100 @@ function _applyTheme(t){
 // ══════════════════════════════════════════════════════════════
 //  AUTH
 // ══════════════════════════════════════════════════════════════
-async function doLogin(){
-  const email    = (document.getElementById('login-email')?.value||'').trim().toLowerCase();
-  const password = document.getElementById('login-password')?.value||'';
-  if(!email||!password){ _loginErr('Enter your email and password'); return; }
+// Phone+PIN login is the only way in — no Supabase Auth account involved,
+// no email/password to reset or forget. engineer_pin_login
+// verifies the PIN server-side (bcrypt, same lockout shape as the Client
+// Portal's PIN gate) and returns a random session_token that the existing,
+// previously-unused is_valid_engineer_token()/my_token_engineer_name() RLS
+// layer already knows how to authorize.
+// Applies a successful login/setup RPC result (both return the same shape)
+// and drops the engineer straight into the app.
+function _applyPinSession(r, phone){
+  _engToken = r.session_token;
+  currentUser = {
+    id: r.eng_id,
+    name: r.eng_name,
+    email: '',
+    role: 'engineer',
+    phone,
+    active: true,
+    authMode: 'token',
+  };
+  localStorage.setItem('df_eng_user', JSON.stringify(currentUser));
+  localStorage.setItem('df_eng_sess_expires', String(r.session_expires*1000));
+  localStorage.setItem('df_eng_token', _engToken);
+  showApp();
+}
 
-  const btn = document.querySelector('.btn-login');
+// Phone submitted with no working PIN yet is not an error — it means either
+// a brand-new engineer or an intentional office-triggered reset. Both land
+// here rather than at a dead end.
+let _setupPhone = null;
+function _showPinSetup(name, phone){
+  _setupPhone = phone;
+  document.getElementById('login-normal-box').style.display = 'none';
+  document.getElementById('login-setup-box').style.display = 'block';
+  document.getElementById('login-setup-title').textContent = name ? `Set up your PIN, ${name}` : 'Set up your PIN';
+  setTimeout(()=>document.getElementById('setup-pin')?.focus(),50);
+}
+
+async function doPinLogin(){
+  const phone = (document.getElementById('login-phone')?.value||'').trim();
+  const pin   = document.getElementById('login-pin')?.value||'';
+  if(!phone){ _loginErr('Enter your phone number'); return; }
+
+  const btn = document.getElementById('btn-login-submit');
   btn.textContent='Signing in…'; btn.disabled=true;
 
   try{
-    // Step 1: Supabase Auth — same system as the office app
-    const {data:authData, error:authErr} = await _supaAuth.auth.signInWithPassword({email, password});
-    if(authErr){
-      if(authErr.message?.includes('Invalid login')||authErr.message?.includes('invalid_credentials')){
-        _loginErr('❌ Wrong email or password');
-      } else if(authErr.message?.includes('Email not confirmed')){
-        _loginErr('⚠️ Your account needs to be confirmed. Ask the office admin to go to Supabase → Auth → Users → find you → confirm your email.');
-      } else {
-        _loginErr('❌ '+authErr.message);
-      }
+    // Deliberately no client-side PIN format check here — a blank or
+    // malformed PIN must still reach the server so needs_setup can fire for
+    // an account that has no PIN yet (see engineer_pin_login's own ordering).
+    const rows = await sb('rpc/engineer_pin_login',{method:'POST',body:{p_phone:phone,p_pin:pin}});
+    const r = rows?.[0];
+    if(!r?.ok){
+      if(r?.needs_setup){ _showPinSetup(r.eng_name, phone); return; }
+      _loginErr('❌ '+(r?.error_msg||'Invalid phone or PIN'));
       return;
     }
-
-    const authUser = authData.user;
-    if(!authUser){ _loginErr('❌ Login failed'); return; }
-
-    // Step 2: Load engineer profile — now sb() uses the real JWT from the session above
-    let profile = null;
-    try{
-      const rows = await sb(`users?auth_id=eq.${authUser.id}&active=eq.true&select=*`);
-      profile = rows?.[0]||null;
-    }catch(e){}
-
-    // Fallback: match by email (catches cases where auth_id wasn't backfilled yet)
-    // FIX CR2: Serialize with await + lock to prevent race conditions
-    if(!profile){
-      try{
-        const rows = await sb(`users?email=eq.${encodeURIComponent(email)}&active=eq.true&select=*`);
-        profile = rows?.[0]||null;
-        if(profile && !profile.auth_id){
-          // PATCH auth_id atomically — await so we know it succeeded before continuing
-          await sb(`users?id=eq.${profile.id}`,{method:'PATCH',body:{auth_id:authUser.id},prefer:'return=minimal'});
-          profile.auth_id = authUser.id; // keep local copy in sync
-        }
-      }catch(e){ console.warn('Profile email fallback failed:', e?.message); }
-    }
-
-    if(!profile){
-      await _supaAuth.auth.signOut();
-      _loginErr('⚠️ Your account exists in Supabase but has not been added to DeepFlow yet. Ask the office admin to go to Settings → Team → Sync from Supabase and add you.');
-      return;
-    }
-
-    if(!profile.active){
-      _loginErr('⚠️ Your account has been deactivated. Contact the office.');
-      return;
-    }
-
-    if(profile.role !== 'engineer'){
-      _loginErr('⚠️ Your account is set up as "'+profile.role+'" not "engineer". Ask the office admin to change your role to Engineer in Settings → Team.');
-      return;
-    }
-
-    // Step 3: Store session
-    currentUser = {
-      id: profile.id,
-      name: profile.name || authUser.email,
-      email: authUser.email,
-      role: 'engineer',
-      phone: profile.phone||'',
-      active: true,
-      _authId: authUser.id,
-    };
-    localStorage.setItem('df_eng_user', JSON.stringify(currentUser));
-    localStorage.setItem('df_eng_sess_expires', String(Date.now() + 30*24*60*60*1000));
-
-    showApp();
-
+    _applyPinSession(r, phone);
   }catch(e){
-    console.error('Login error:',e);
+    console.error('PIN login error:',e);
     if(e?.message?.includes('Failed to fetch')||e?.message?.includes('NetworkError')){
       _loginErr('⚠️ No internet connection — check your network');
     } else {
-      _loginErr('⚠️ ' + (e?.message||'Connection error'));
+      _loginErr('⚠️ Connection error');
     }
   }finally{
     btn.textContent='Sign In →'; btn.disabled=false;
   }
 }
 
-async function doResetPw(){
-  const email=(document.getElementById('login-email')?.value||'').trim().toLowerCase();
-  if(!email){_loginErr('Enter your email address first');return;}
-  if(!_supaAuth){_loginErr('Not connected');return;}
-  const btn=document.querySelector('.btn-login');
-  btn.disabled=true;btn.textContent='Sending…';
+async function doPinSetup(){
+  const pin = document.getElementById('setup-pin')?.value||'';
+  const confirm = document.getElementById('setup-pin-confirm')?.value||'';
+  const err = document.getElementById('setup-err');
+  if(!/^[0-9]{6}$/.test(pin)){ if(err){err.textContent='PIN must be exactly 6 digits';err.style.display='block';} return; }
+  if(pin!==confirm){ if(err){err.textContent='PINs don’t match';err.style.display='block';} return; }
+
+  const btn = document.querySelector('#login-setup-box .btn-login');
+  btn.textContent='Setting up…'; btn.disabled=true;
+
   try{
-    const {error}=await _supaAuth.auth.resetPasswordForEmail(email);
-    if(error){_loginErr('❌ '+error.message);return;}
-    const el=document.getElementById('login-err');
-    if(el){
-      el.style.display='block';el.style.background='rgba(34,197,94,.1)';
-      el.style.borderColor='rgba(34,197,94,.3)';el.style.color='#22c55e';
-      el.textContent='✅ Reset email sent — check your inbox';
+    const rows = await sb('rpc/engineer_pin_self_setup',{method:'POST',body:{p_phone:_setupPhone,p_new_pin:pin}});
+    const r = rows?.[0];
+    if(!r?.ok){
+      if(err){err.textContent=r?.error_msg||'Could not set PIN — ask your office to try again';err.style.display='block';}
+      return;
     }
-  }catch(e){_loginErr('❌ Failed to send reset email');}
-  finally{btn.disabled=false;btn.textContent='Sign In →';}
+    _applyPinSession(r, _setupPhone);
+  }catch(e){
+    if(err){err.textContent='Connection error';err.style.display='block';}
+  }finally{
+    btn.textContent='Set PIN & Continue →'; btn.disabled=false;
+  }
 }
+
 function _loginErr(m){const e=document.getElementById('login-err');e.textContent=m;e.style.display='block';}
 // ══ USER MENU SHEET ══
 // Haptic feedback on save buttons
@@ -620,9 +628,16 @@ function doLogout(){
 
 function _doSignOut(){
   _stopLocation();
+  if(currentUser?.authMode==='token' && _engToken){
+    // Best-effort — invalidate server-side immediately rather than waiting
+    // for natural expiry. Not awaited: sign-out should feel instant even
+    // if this particular call is slow or offline.
+    sb('rpc/engineer_session_logout',{method:'POST',body:{p_id:currentUser.id,p_token:_engToken}}).catch(()=>{});
+  }
   localStorage.removeItem('df_eng_user');
   localStorage.removeItem('df_eng_sess_expires');
-  // No Supabase Auth session to sign out from (hash-based auth)
+  localStorage.removeItem('df_eng_token');
+  _engToken=null;
   currentUser=null;_allJobs=[];_weather=null;
   if(typeof _lastJobIds!=='undefined')_lastJobIds=new Set();
   // Show login, hide app
@@ -630,15 +645,20 @@ function _doSignOut(){
   const login=document.getElementById('login-screen');
   if(app)app.style.display='none';
   if(login)login.style.display='flex';
-  // Clear login fields
-  const em=document.getElementById('login-email');
-  const pw=document.getElementById('login-password');
+  // Clear login fields and reset back to the normal phone+PIN box, in case
+  // sign-out happens mid PIN-setup
+  const ph=document.getElementById('login-phone');
+  const pn=document.getElementById('login-pin');
   const err=document.getElementById('login-err');
-  if(em)em.value='';
-  if(pw)pw.value='';
+  if(ph)ph.value='';
+  if(pn)pn.value='';
   if(err)err.style.display='none';
-  // Focus email field
-  setTimeout(()=>{if(em)em.focus();},200);
+  const setupBox=document.getElementById('login-setup-box');
+  const normalBox=document.getElementById('login-normal-box');
+  if(setupBox)setupBox.style.display='none';
+  if(normalBox)normalBox.style.display='block';
+  _setupPhone=null;
+  setTimeout(()=>{ph?.focus();},200);
 }
 let _intervalsStarted=false;
 function showApp(){
@@ -1703,14 +1723,23 @@ export function _clearDraft(id){
     }catch(e){localStorage.removeItem('df_eng_user');}
     const exp = parseInt(localStorage.getItem('df_eng_sess_expires')||'0');
     if(saved?.name && saved?.role==='engineer' && (exp===0||Date.now()<exp)){
+      if(saved.authMode==='token'){
+        _engToken = localStorage.getItem('df_eng_token');
+        if(!_engToken) throw new Error('missing token');
+      }
       currentUser=saved;
-      // Re-validate: confirm the account is still active in Supabase (non-blocking fast check)
+      // Re-validate: confirm the account is still active (non-blocking fast check).
+      // Token mode: RLS's users_engineer_token_own_read already scopes this to
+      // exactly the caller's own row and requires active=true + a live token,
+      // so an empty result here covers "deactivated" and "expired/invalid
+      // token" in one check.
       (async()=>{
         try{
-          const rows = await sb(`users?auth_id=eq.${encodeURIComponent(saved._authId)}&active=eq.true&select=id,active`);
+          const rows = saved.authMode==='token'
+            ? await sb('users?select=id,active')
+            : await sb(`users?auth_id=eq.${encodeURIComponent(saved._authId)}&active=eq.true&select=id,active`);
           if(!rows||!rows.length){
-            // Account deactivated since last login — force sign out
-            toast('⚠️ Your account has been deactivated. Contact the office.','error',6000);
+            toast('⚠️ Your session has ended. Please sign in again.','error',6000);
             setTimeout(_doSignOut, 2000);
           }
         }catch(e){ /* Network error — allow offline use, re-check next refresh */ }
@@ -1722,6 +1751,8 @@ export function _clearDraft(id){
   // No valid session — show login
   localStorage.removeItem('df_eng_user');
   localStorage.removeItem('df_eng_sess_expires');
+  localStorage.removeItem('df_eng_token');
+  _engToken=null;
 
   // Auto-save drafts for users who land on the login screen
   initAutoSave();
@@ -1740,7 +1771,7 @@ Object.assign(window, {
   _deleteBAPhoto, _handleBAUpload, _setPhotoMode, _switchQNTab, _toggleQN,
   _triggerBAUpload, _waShareNotes, addWire, applyQN, calcVD, calcZs,
   checkOfficeConnection, clearConduit, closeModal, closeQN, closeUserMenu, dismissAlert,
-  doLogin, doLogout, doResetPw, handleUpload, openAddJobModal, openJob,
+  doLogout, doPinLogin, doPinSetup, handleUpload, openAddJobModal, openJob,
   openLeaveForm, openOvertimeForm, openQN, openUserMenu, quickStatusUpdate,
   refreshAll, saveHours, saveNotes, sendOmwClient, sendOmwOffice, setMapView,
   setQuality, showTool, submitAddJob, submitLeaveRequest,

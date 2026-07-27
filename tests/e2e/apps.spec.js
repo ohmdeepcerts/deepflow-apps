@@ -38,8 +38,9 @@ test.describe('Employee App', () => {
   test('the login screen renders with no console errors', async ({ page }) => {
     const errors = collectPageErrors(page);
     await page.goto('/engineer/');
-    await expect(page.locator('#login-email')).toBeVisible();
-    await expect(page.locator('#login-password')).toBeVisible();
+    // Phone+PIN is the only login method — no email/password path exists.
+    await expect(page.locator('#login-phone')).toBeVisible();
+    await expect(page.locator('#login-pin')).toBeVisible();
     expect(errors, `console errors: ${errors.join('\n')}`).toHaveLength(0);
   });
 });

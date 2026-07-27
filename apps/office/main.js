@@ -8034,6 +8034,26 @@ function _markSettingsUnsaved(){
 //  unified list with role pickers for each person.
 // ════════════════════════════════════════════════════════════════
 
+// Shared by both engineer row templates below (auth-linked + phone-only) —
+// same three states either way: has a working PIN, cleared and awaiting
+// self-setup, or cleared and blocked until the office grants access back.
+function _pinStatusBadge(u){
+  if(u.pin_hash) return '<span style="font-size:10px;background:rgba(34,197,94,.1);color:#22c55e;padding:1px 7px;border-radius:10px;font-weight:700">✓ PIN set</span>';
+  if(u.pin_reset_allowed) return '<span style="font-size:10px;background:rgba(245,166,35,.1);color:#f5a623;padding:1px 7px;border-radius:10px;font-weight:700">⏳ Awaiting setup</span>';
+  return '<span style="font-size:10px;background:rgba(240,68,68,.1);color:#e05252;padding:1px 7px;border-radius:10px;font-weight:700">🔒 Blocked</span>';
+}
+function _pinActionButtons(u){
+  const nameJson=escHtml(JSON.stringify(u.name||''));
+  if(u.pin_hash){
+    return `<button class="btn btn-ghost btn-xs" onclick="engineerResetPin('${u.id}',${nameJson})">🔄 Reset PIN</button>
+      <button class="btn btn-ghost btn-xs" onclick="engineerForceLogout('${u.id}',${nameJson})">🚫 Force Logout</button>`;
+  }
+  if(u.pin_reset_allowed){
+    return `<button class="btn btn-ghost btn-xs" onclick="engineerRevokeAccess('${u.id}',${nameJson})">🔒 Revoke</button>`;
+  }
+  return `<button class="btn btn-ghost btn-xs" onclick="engineerGrantAccess('${u.id}',${nameJson})">✅ Grant Access</button>`;
+}
+
 async function loadTeam(){
   // SECURITY: Only Admins can manage the team
   if(_appUser?.role !== 'Admin'){
@@ -8102,12 +8122,13 @@ CREATE OR REPLACE FUNCTION get_auth_users() RETURNS TABLE(id uuid, email text, c
               ${isMe?'<span style="font-size:10px;background:rgba(79,143,255,.15);color:#4f8fff;padding:1px 7px;border-radius:10px">YOU</span>':''}
               <span style="font-size:10px;background:${ri.bg};color:${ri.col};padding:1px 7px;border-radius:10px;font-weight:700">✓ Active</span>
             </div>
-            <div style="font-size:11px;color:var(--txt3);margin-top:2px">${au.email} · Last seen: ${lastSeen}</div>
+            <div style="font-size:11px;color:var(--txt3);margin-top:2px">${au.email} · Last seen: ${lastSeen}${profile.role==='engineer'?(profile.phone?` · 📱 ${escHtml(profile.phone)} · `+_pinStatusBadge(profile):' · <span style="color:#e05252">No phone number</span>'):''}</div>
           </div>
           <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;flex-wrap:wrap">
             <select style="padding:6px 10px;border-radius:7px;border:1px solid var(--border);background:var(--s2);color:var(--txt);font-size:12px" ${isMe?'disabled':''} onchange="teamChangeRole('${profile.id}','${au.email}',this.value,this)">
               ${Object.entries(roleInfo).map(([v,r])=>`<option value="${v}" ${profile.role===v?'selected':''}>${r.icon} ${r.label}</option>`).join('')}
             </select>
+            ${profile.role==='engineer'?(profile.phone?_pinActionButtons(profile):`<button class="btn btn-ghost btn-xs" onclick="enablePhoneLogin('${profile.id}',${escHtml(JSON.stringify(profile.name||au.email))},'')">📱 Enable Phone Login</button>`):''}
             ${!isMe?`<button class="btn btn-red btn-xs" onclick="teamRevoke('${profile.id}','${profile.name||au.email}')">🗑 Remove</button>`:'<span style="font-size:11px;color:var(--txt3)">(you)</span>'}
           </div>
         </div>`;
@@ -8130,6 +8151,32 @@ CREATE OR REPLACE FUNCTION get_auth_users() RETURNS TABLE(id uuid, email text, c
         </div>`;
       }
     });
+
+    // Phone+PIN engineers have no Supabase Auth account at all — they'll
+    // never appear in authUsers, so they need their own section straight
+    // from ourUsers. is_engineer()/is_valid_engineer_token() both require
+    // active=true, so "Remove" below just deactivates rather than deleting.
+    const pinEngineers = ourUsers.filter(u=>u.role==='engineer' && !u.auth_id);
+    if(pinEngineers.length){
+      rows += `<div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 6px">📱 Phone + PIN Engineers</div>`;
+      pinEngineers.forEach(u=>{
+        rows += `
+        <div style="display:flex;align-items:center;gap:10px;padding:11px 14px;border-radius:8px;border:1px solid var(--border);background:var(--s1);flex-wrap:wrap">
+          <div style="width:36px;height:36px;border-radius:50%;background:${roleInfo.engineer.bg};display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">${roleInfo.engineer.icon}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+              ${escHtml(u.name||'—')}
+              ${_pinStatusBadge(u)}
+            </div>
+            <div style="font-size:11px;color:var(--txt3);margin-top:2px">${escHtml(u.phone||'No phone number set')}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;flex-wrap:wrap">
+            ${_pinActionButtons(u)}
+            <button class="btn btn-red btn-xs" onclick="teamRevoke('${u.id}',${escHtml(JSON.stringify(u.name||''))},true)">🗑 Remove</button>
+          </div>
+        </div>`;
+      });
+    }
 
     el.innerHTML = rows || '<div style="text-align:center;padding:20px;color:var(--txt3);font-size:12px">No Supabase Auth users found. Add users in Supabase first.</div>';
     if(stat) stat.textContent = `${authUsers.length} Supabase user${authUsers.length!==1?'s':''} · ${ourUsers.length} in DeepFlow — last synced ${new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}`;
@@ -8226,7 +8273,21 @@ async function teamChangeRole(userId, email, newRole, sel){
 }
 
 // Remove a user from DeepFlow (they stay in Supabase Auth — delete there to block login)
-async function teamRevoke(userId, name){
+async function teamRevoke(userId, name, isPinEngineer){
+  // Phone+PIN engineers have no Supabase Auth account to separately clean
+  // up — is_engineer()/is_valid_engineer_token() both require active=true,
+  // so deactivating alone fully and immediately blocks all access. Kept
+  // reversible (not deleted) so re-adding someone doesn't lose their name/
+  // phone/PIN history if it turns out to be temporary.
+  if(isPinEngineer){
+    if(!confirm(`Remove "${name}" from DeepFlow?\n\nThis immediately blocks their Engineer App login — no Supabase cleanup needed.`)) return;
+    try{
+      await _sb(`users?id=eq.${userId}`,{method:'PATCH',prefer:'return=minimal',body:{active:false,session_token:null,session_expires:null}});
+      toast(`✅ ${name} removed — their login is blocked immediately`,'success');
+      loadTeam();
+    }catch(e){ toast('❌ '+e.message,'error'); }
+    return;
+  }
   if(!confirm(`Remove "${name}" from DeepFlow?\n\nThis removes their profile and permissions.\nTo block login completely, also delete them in Supabase Auth → Users.`)) return;
   try{
     await _sb(`users?id=eq.${userId}`,{method:'DELETE',prefer:'return=minimal'});
@@ -8235,13 +8296,151 @@ async function teamRevoke(userId, name){
   }catch(e){ toast('❌ '+e.message,'error'); }
 }
 
+// ── ADD ENGINEER (phone + PIN) — no Supabase Dashboard step, ever ────────
+function showAddEngineerModal(){
+  closeAddEngineerModal();
+  const div=document.createElement('div');
+  div.id='add-eng-overlay';
+  div.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px';
+  div.innerHTML=`
+    <div style="background:var(--s1);border:1px solid var(--border);border-radius:16px;padding:24px;max-width:360px;width:100%">
+      <div style="font-size:16px;font-weight:800;margin-bottom:14px">👷 Add Engineer</div>
+      <input id="ae-name" placeholder="Full name *" style="width:100%;padding:11px;border-radius:8px;border:1px solid var(--border);background:var(--s2);color:var(--txt);font-size:13px;margin-bottom:8px;box-sizing:border-box">
+      <input id="ae-phone" placeholder="Phone number * (used to log in)" style="width:100%;padding:11px;border-radius:8px;border:1px solid var(--border);background:var(--s2);color:var(--txt);font-size:13px;margin-bottom:14px;box-sizing:border-box">
+      <div style="font-size:11px;color:var(--txt3);margin-bottom:14px">No PIN to set — they'll create their own the first time they open the Engineer App and enter this number. Trade, rate, and other settings can be added afterward in Settings → Engineers.</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost btn-sm" style="flex:1" onclick="closeAddEngineerModal()">Cancel</button>
+        <button class="btn btn-acc btn-sm" style="flex:1" onclick="submitAddEngineer()">Create</button>
+      </div>
+      <div id="ae-err" style="color:var(--red);font-size:12px;margin-top:8px"></div>
+    </div>`;
+  document.body.appendChild(div);
+  setTimeout(()=>document.getElementById('ae-name')?.focus(),50);
+}
+function closeAddEngineerModal(){ document.getElementById('add-eng-overlay')?.remove(); }
+
+async function submitAddEngineer(){
+  const name  = (document.getElementById('ae-name')?.value||'').trim();
+  const phone = (document.getElementById('ae-phone')?.value||'').trim();
+  const err   = document.getElementById('ae-err');
+  if(!name||!phone){ if(err)err.textContent='Name and phone number are required'; return; }
+
+  const payload = {
+    id: crypto.randomUUID(),
+    name, phone, role:'engineer', active:true, auth_id:null, email:'',
+    pin_reset_allowed:true,
+    can_edit:false, can_delete:false, can_invoice:false, can_finance:false,
+    see_landlord:true, see_landlord_phone:false, see_agent:false, see_contact:true, see_price:false,
+    created: Math.floor(Date.now()/1000),
+  };
+  try{
+    await _sb('users',{method:'POST',body:payload,prefer:'return=minimal'});
+    closeAddEngineerModal();
+    toast(`✅ ${name} added — tell them to open the Engineer App and enter ${phone} to set up their PIN`,'success',6000);
+    loadTeam();
+  }catch(e){
+    let msg=e.message||'Unknown error';
+    if(msg.includes('users_phone_unique')||msg.includes('duplicate')) msg='That phone number is already in use by another account.';
+    if(err)err.textContent=msg;
+  }
+}
+
+// ── PHONE LOGIN SETUP for an existing (auth-linked) engineer who doesn't
+// have a phone number yet — no PIN involved, they set their own on first
+// visit, same as a brand-new engineer.
+function enablePhoneLogin(id, name, phone){
+  const overlay=document.getElementById('eng-pin-overlay');
+  if(overlay) overlay.remove();
+  const div=document.createElement('div');
+  div.id='eng-pin-overlay';
+  div.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px';
+  div.innerHTML=`
+    <div style="background:var(--s1);border:1px solid var(--border);border-radius:16px;padding:24px;max-width:340px;width:100%">
+      <div style="font-size:15px;font-weight:800;margin-bottom:4px">📱 Phone Login for ${escHtml(name)}</div>
+      <div style="font-size:12px;color:var(--txt3);margin-bottom:14px">No PIN to set — they'll create their own the first time they open the Engineer App and enter this number.</div>
+      <input id="epl-phone" value="${escHtml(phone||'')}" placeholder="Phone number" style="width:100%;padding:11px;border-radius:8px;border:1px solid var(--border);background:var(--s2);color:var(--txt);font-size:13px;margin-bottom:12px;box-sizing:border-box">
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost btn-sm" style="flex:1" onclick="document.getElementById('eng-pin-overlay').remove()">Cancel</button>
+        <button class="btn btn-acc btn-sm" style="flex:1" onclick="submitEnablePhoneLogin('${id}',${escHtml(JSON.stringify(name))})">Save</button>
+      </div>
+      <div id="epl-err" style="color:var(--red);font-size:12px;margin-top:8px"></div>
+    </div>`;
+  document.body.appendChild(div);
+  setTimeout(()=>document.getElementById('epl-phone')?.focus(),50);
+}
+
+async function submitEnablePhoneLogin(id, name){
+  const phone=(document.getElementById('epl-phone')?.value||'').trim();
+  const err=document.getElementById('epl-err');
+  if(!phone){ if(err)err.textContent='Phone number is required'; return; }
+  try{
+    await _sb(`users?id=eq.${id}`,{method:'PATCH',prefer:'return=minimal',body:{phone,pin_reset_allowed:true}});
+    document.getElementById('eng-pin-overlay')?.remove();
+    toast(`✅ ${name} can now set up their PIN using ${phone}`,'success',5000);
+    loadTeam();
+  }catch(e){
+    let msg=e.message||'Unknown error';
+    if(msg.includes('users_phone_unique')||msg.includes('duplicate')) msg='That phone number is already in use by another account.';
+    if(err)err.textContent=msg;
+  }
+}
+
+// ── RESET / FORCE LOGOUT / GRANT / REVOKE — engineer_pin_clear and
+// engineer_allow_pin_reset are both is_office()-gated server-side. Neither
+// the office nor this app ever sees or transmits an actual PIN value again;
+// the engineer always creates their own via the Engineer App's self-setup
+// screen once access is granted.
+function engineerResetPin(id, name){
+  confirm2(
+    'Reset PIN',
+    `This immediately logs ${name} out. Next time they open the Engineer App, they'll be asked to create a brand new PIN themselves.`,
+    async()=>{
+      try{
+        await _sb('rpc/engineer_pin_clear',{method:'POST',body:{p_id:id,p_allow_reset:true}});
+        toast(`🔑 ${name}'s PIN was cleared — they'll set a new one on next visit`,'success',5000);
+        loadTeam();
+      }catch(e){ toast('Failed: '+(e.message||'').slice(0,100),'error',6000); }
+    }
+  );
+}
+
+function engineerForceLogout(id, name){
+  confirm2(
+    'Force Logout',
+    `This immediately logs ${name} out and blocks them from logging back in — they'll see "not authorised" until you grant access again.`,
+    async()=>{
+      try{
+        await _sb('rpc/engineer_pin_clear',{method:'POST',body:{p_id:id,p_allow_reset:false}});
+        toast(`🚫 ${name} logged out and blocked`,'warn',5000);
+        loadTeam();
+      }catch(e){ toast('Failed: '+(e.message||'').slice(0,100),'error',6000); }
+    }
+  );
+}
+
+async function engineerGrantAccess(id, name){
+  try{
+    await _sb('rpc/engineer_allow_pin_reset',{method:'POST',body:{p_id:id,p_allow:true}});
+    toast(`✅ ${name} can now set a PIN and log back in`,'success',5000);
+    loadTeam();
+  }catch(e){ toast('Failed: '+(e.message||'').slice(0,100),'error',6000); }
+}
+
+async function engineerRevokeAccess(id, name){
+  try{
+    await _sb('rpc/engineer_allow_pin_reset',{method:'POST',body:{p_id:id,p_allow:false}});
+    toast(`🔒 Access revoked for ${name}`,'warn',4000);
+    loadTeam();
+  }catch(e){ toast('Failed: '+(e.message||'').slice(0,100),'error',6000); }
+}
+
 // Legacy stubs — keep so old code calling these doesn't break
 async function loadAuthUsers(){ await loadTeam(); }
 async function loadEngineers(){ await loadTeam(); }
 async function syncFromSupabaseAuth(){ await loadTeam(); }
 async function syncEngineersFromSupabase(){ await loadTeam(); }
 async function addOfficeStaff(){ toast('Use Sync from Supabase to add users','info'); }
-async function addEngineer(){ toast('Use Sync from Supabase to add engineers','info'); }
+async function addEngineer(){ showAddEngineerModal(); }
 async function inviteEngineer(){ return addEngineer(); }
 async function importAuthUser(id,email){ await teamAdd(id,email); }
 async function addEngFromAuth(id,email){ await teamAdd(id,email); }
@@ -13755,7 +13954,8 @@ function escCsv(str){ return String(str||'').replace(/"/g,'""'); }
 // `window._openInvoiceFromJobSync = function(...)` and so needs no entry
 // here). Preserves exactly the global availability each already had.
 Object.assign(window, {
-  df,
+  df, showAddEngineerModal, closeAddEngineerModal, submitAddEngineer,
+  enablePhoneLogin, submitEnablePhoneLogin, engineerResetPin, engineerForceLogout, engineerGrantAccess, engineerRevokeAccess,
   _addLiveItem, _copyJobDesc, _copyPortalLink, _editEngFromDeep, _emailPortalShare, _removeLiveItem, _renderEngDeepJobsList,
   _reqAcknowledge, _reqApproveEng, _reqCreateJob, _reqReject, _reqReopen, _reqSendReply, 
   _saveLiveItem, _sendPLReminder, _showReqDetail, _switchEngDeepTab, _switchPLTab, _updateLiveTotal, 

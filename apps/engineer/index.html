@@ -472,18 +472,22 @@ input:checked + .mcb-slider:before{transform:translateX(23px);background:#f5a623
   <div class="login-bolt">⚡</div>
   <div class="login-brand">DeepFlow</div>
   <div class="login-role">Engineer Portal</div>
-  <div class="login-box">
-    <input class="fi" type="email" id="login-email" placeholder="your@email.com" autocomplete="email" autocorrect="off" autocapitalize="off" spellcheck="false" onkeydown="if(event.key==='Enter')document.getElementById('login-password').focus()">
-    <div style="position:relative;margin-bottom:0">
-      <input class="fi" type="password" id="login-password" placeholder="Password" autocomplete="current-password" style="padding-right:44px;margin-bottom:0" onkeydown="if(event.key==='Enter')doLogin()">
-      <button onclick="const e=document.getElementById('login-password');e.type=e.type==='password'?'text':'password';this.textContent=e.type==='password'?'👁':'🙈'" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;color:var(--txt3);padding:0">👁</button>
-    </div>
-    <div style="text-align:right;margin:4px 0 8px">
-      <a href="#" onclick="doResetPw();return false" style="font-size:11px;color:var(--acc);text-decoration:none">Forgot password?</a>
-    </div>
-    <button class="btn-login" onclick="doLogin()">Sign In →</button>
+  <div class="login-box" id="login-normal-box">
+    <input class="fi" type="tel" id="login-phone" placeholder="Phone number" autocomplete="tel" inputmode="tel" onkeydown="if(event.key==='Enter')document.getElementById('login-pin').focus()">
+    <input class="fi" type="password" id="login-pin" placeholder="6-digit PIN" autocomplete="one-time-code" inputmode="numeric" maxlength="6" pattern="[0-9]*" onkeydown="if(event.key==='Enter')doPinLogin()">
+
+    <button class="btn-login" id="btn-login-submit" onclick="doPinLogin()" style="margin-top:4px">Sign In →</button>
     <div class="login-err" id="login-err"></div>
     <div class="login-hint">Contact your manager if you need access help</div>
+  </div>
+
+  <div class="login-box" id="login-setup-box" style="display:none">
+    <div style="font-size:15px;font-weight:800;margin-bottom:4px;color:var(--txt)" id="login-setup-title">Set up your PIN</div>
+    <div style="font-size:12px;color:var(--txt3);margin-bottom:14px">Choose a 6-digit PIN. You'll use your phone number + this PIN to sign in from now on.</div>
+    <input class="fi" type="password" id="setup-pin" placeholder="New 6-digit PIN" autocomplete="new-password" inputmode="numeric" maxlength="6" pattern="[0-9]*" onkeydown="if(event.key==='Enter')document.getElementById('setup-pin-confirm').focus()">
+    <input class="fi" type="password" id="setup-pin-confirm" placeholder="Confirm PIN" autocomplete="new-password" inputmode="numeric" maxlength="6" pattern="[0-9]*" onkeydown="if(event.key==='Enter')doPinSetup()">
+    <button class="btn-login" onclick="doPinSetup()" style="margin-top:4px">Set PIN & Continue →</button>
+    <div class="login-err" id="setup-err"></div>
   </div>
 </div>
 

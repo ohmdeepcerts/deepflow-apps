@@ -17,7 +17,7 @@
 // module needs no callback into JOB DETAIL: the coupling is one-directional
 // (JOB DETAIL → photos), unlike the Office App's Jobs/Invoices tangle.
 
-import { sb, sbStorage, toast, openJob, getCurrentJob, getCurrentUser, getUploadHD } from './main.js';
+import { sb, sbStorage, toast, openJob, getCurrentJob, getCurrentUser, getUploadHD, _storageAuthHeaders } from './main.js';
 
 // H-8: HEIC/HEIF (the default iPhone photo format) uploads fine but most
 // browsers can't decode it into an <img> tag, so a plain <img src> either
@@ -35,7 +35,7 @@ function _photoTag(url, name){
   }
   return `<img src="${url}" class="photo-img" onclick="window.open('${url}','_blank')" loading="lazy">`;
 }
-import { SB_URL, SB_KEY } from '@core';
+import { SB_URL } from '@core';
 
 let _baMode        = false;  // true = before/after mode active
 let _baPendingSlot = null;   // which slot number triggered the file picker
@@ -235,9 +235,13 @@ export async function _deleteBAPhoto(attId, storagePath, e){
   try{
     await sb(`attachments?id=eq.${attId}`,{method:'DELETE'});
     if(storagePath){
-      fetch(`${SB_URL}/storage/v1/object/deepflow/${storagePath}`,{
-        method:'DELETE', headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
-      }).catch(()=>{});
+      // Was hardcoded to the anon key (never a real session token), which
+      // RLS's deepflow_staff_delete policy (is_office() OR is_engineer())
+      // has no way to authorize — fixed to use the same auth resolution as
+      // every other authenticated call, token-mode included.
+      _storageAuthHeaders().then(headers=>
+        fetch(`${SB_URL}/storage/v1/object/deepflow/${storagePath}`,{method:'DELETE', headers}).catch(()=>{})
+      );
     }
     toast('Photo deleted','warn');
     openJob(getCurrentJob().id);

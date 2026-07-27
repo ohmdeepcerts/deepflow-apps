@@ -46,6 +46,12 @@ export function makeJwtResolver(supaAuthClient) {
 // reads the body and throws on failure in its own existing style (the three
 // apps format error messages differently today; preserving that exactly,
 // not collapsing it here).
+//
+// opts.headers is an optional extra-headers object, merged in last so a
+// caller can override anything above it — used by the Engineer App's
+// phone+PIN session to send `x-engineer-token` instead of relying on a
+// Supabase Auth JWT. Additive only: callers that never pass opts.headers
+// see byte-identical behavior to before.
 export async function restFetch(path, opts = {}, authToken = SB_KEY) {
   return fetch(`${SB_URL}/rest/v1/${path}`, {
     method: opts.method || 'GET',
@@ -60,6 +66,7 @@ export async function restFetch(path, opts = {}, authToken = SB_KEY) {
           : opts.method === 'POST'
             ? 'return=representation'
             : ''),
+      ...opts.headers,
     },
     body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
   });
