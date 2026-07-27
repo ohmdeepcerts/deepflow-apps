@@ -8265,41 +8265,87 @@ async function submitAddEngineer(){
   const err   = document.getElementById('ae-err');
   if(!name||!phone){ if(err)err.textContent='Name and phone number are required'; return; }
 
-  let existing=[];
-  try{ existing = await _sb(`users?role=eq.engineer&name=ilike.${encodeURIComponent(name)}&select=id,name,phone,active`)||[]; }
+  // Fetch EVERY matching record, not just one -- a name can collide with
+  // more than one row at once (e.g. an old inactive "Izhar" plus a
+  // different, currently-active "Izhar" someone already added), and only
+  // checking the first result back (in an unspecified row order) meant this
+  // could silently pick the wrong one: either offering no way to reactivate
+  // a dormant match that was sitting right there, or reactivating one
+  // without ever checking it would collide with an already-active other.
+  let matches=[];
+  try{ matches = await _sb(`users?role=eq.engineer&name=ilike.${encodeURIComponent(name)}&select=id,name,phone,active,last_seen&order=active.desc,created.desc`)||[]; }
   catch(e){ /* lookup failing shouldn't block adding -- fall through to normal create */ }
-  const match = existing[0];
 
-  if(!match){ await _createEngineerRow(name, phone, err); return; }
+  if(!matches.length){ await _createEngineerRow(name, phone, err); return; }
+  _showEngineerNameCollisionModal(name, phone, matches, err);
+}
 
-  if(!match.active){
-    confirm2(
-      '👤 This name already exists',
-      `A former engineer named "${match.name}" is already on record (phone: ${match.phone||'none on file'}), currently removed.\n\nIs this the SAME person coming back, or a DIFFERENT person who happens to share the name?`,
-      ()=>_reactivateEngineer(match.id, name, phone, err), // OK = same person
-      null,
-      {okText:'🔄 Same person — reactivate', okClass:'btn btn-acc',
-       altText:'➕ Different person — add new', altFaded:true,
-       altAction:()=>{
-         _createEngineerRow(name, phone, err);
-         setTimeout(()=>toast(`💡 Tip: consider a distinguishing name (e.g. a surname, or "${name} 2") so their jobs never get mixed up with the other ${name}`,'info',8000),600);
-       }}
-    );
-    return;
-  }
+// Lists every existing engineer with this name (active or not) so the
+// office can pick "this specific one is coming back" instead of the app
+// guessing, and can't accidentally reactivate someone into a collision with
+// a different, already-active same-named engineer without seeing that
+// engineer listed right there in the same dialog.
+function _showEngineerNameCollisionModal(name, phone, matches, err){
+  const overlay=document.getElementById('eng-collision-overlay');
+  if(overlay) overlay.remove();
+  const hasActive = matches.some(m=>m.active);
+  const rows = matches.map(m=>{
+    if(m.active){
+      return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-radius:8px;border:1px solid rgba(240,68,68,.3);background:rgba(240,68,68,.06);margin-bottom:8px">
+        <div>
+          <div style="font-weight:700;font-size:13px">${escHtml(m.name)} <span style="font-size:10px;background:rgba(34,197,94,.15);color:#22c55e;padding:1px 7px;border-radius:10px;margin-left:4px">● Active now</span></div>
+          <div style="font-size:11px;color:var(--txt3);margin-top:2px">📱 ${escHtml(m.phone||'—')}</div>
+        </div>
+      </div>`;
+    }
+    const lastSeen = m.last_seen ? new Date(m.last_seen*1000).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}) : 'never logged in';
+    return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--s2);margin-bottom:8px">
+      <div>
+        <div style="font-weight:700;font-size:13px">${escHtml(m.name)}</div>
+        <div style="font-size:11px;color:var(--txt3);margin-top:2px">📱 ${escHtml(m.phone||'none on file')} · left, last seen ${lastSeen}</div>
+      </div>
+      <button class="btn btn-acc btn-xs" onclick="_reactivateInCollision('${m.id}',${escHtml(JSON.stringify(m.name))},${escHtml(JSON.stringify(phone))},${hasActive})">🔄 This is them</button>
+    </div>`;
+  }).join('');
 
-  // Currently active — the dangerous case: both would see and could edit
-  // each other's jobs immediately, with no way to tell them apart in the
-  // job form's engineer dropdown. Default action is to back out and rename.
-  confirm2(
-    '⚠️ Name already in use',
-    `An ACTIVE engineer named "${match.name}" already exists (phone: ${match.phone||'none on file'}).\n\nAdding another engineer with the exact same name means they'll see — and can edit — each other's jobs, with no way to tell them apart.\n\nStrongly recommend using a distinguishing name instead, e.g. a surname or "${name} 2".`,
-    null, // OK = just close, safe default
-    null,
-    {okText:'Go back and rename', okClass:'btn btn-acc',
-     altText:'I understand — add anyway', altFaded:true,
-     altAction:()=>_createEngineerRow(name, phone, err)}
-  );
+  const div=document.createElement('div');
+  div.id='eng-collision-overlay';
+  div.style.cssText='position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;padding:20px';
+  div.innerHTML=`
+    <div style="background:var(--s1);border:1px solid var(--border);border-radius:16px;padding:24px;max-width:420px;width:100%;max-height:85vh;overflow:auto">
+      <div style="font-size:16px;font-weight:800;margin-bottom:4px">👤 "${escHtml(name)}" already exists</div>
+      <div style="font-size:12px;color:var(--txt3);margin-bottom:14px">${matches.length} record${matches.length>1?'s':''} found with this name. Is the new engineer one of these, or someone different?</div>
+      ${rows}
+      ${hasActive?`<div style="font-size:11px;color:#e05252;background:rgba(240,68,68,.08);border-radius:8px;padding:10px;margin:10px 0 4px">⚠️ An active engineer already has this exact name. If this is someone else, keep them separate below — otherwise they'll see and can edit each other's jobs, with no way to tell them apart.</div>`:''}
+      <div style="margin-top:10px">
+        <label class="fl" style="font-size:11px">None of these — add as a new person, named:</label>
+        <input id="ecm-new-name" value="${escHtml(hasActive?name+' 2':name)}" style="width:100%;padding:9px;border-radius:8px;border:1px solid var(--border);background:var(--s2);color:var(--txt);font-size:13px;margin:6px 0;box-sizing:border-box">
+        <button class="btn ${hasActive?'btn-ghost':'btn-acc'} btn-sm" style="width:100%" onclick="_confirmNewDespiteCollision(${escHtml(JSON.stringify(phone))})">➕ Add as new person</button>
+      </div>
+      <button class="btn btn-ghost btn-sm" style="width:100%;margin-top:8px" onclick="document.getElementById('eng-collision-overlay')?.remove()">Cancel</button>
+      <div id="ecm-err" style="color:var(--red);font-size:12px;margin-top:8px"></div>
+    </div>`;
+  document.body.appendChild(div);
+}
+
+// One more guard specifically for the multi-match case: reactivating a
+// dormant record is normally safe, but if a DIFFERENT engineer with the
+// same name is already active, doing so creates the exact two-active-
+// same-name collision this whole flow exists to prevent -- silently,
+// unless something stops to ask first.
+function _reactivateInCollision(id, name, phone, hasActive){
+  if(hasActive && !confirm(`"${name}" is currently active under a different account. Reactivating this one too means both will be active with the identical name — they'll see and can edit each other's jobs.\n\nContinue anyway?`)) return;
+  document.getElementById('eng-collision-overlay')?.remove();
+  _reactivateEngineer(id, name, phone, null);
+}
+
+function _confirmNewDespiteCollision(phone){
+  const nameEl=document.getElementById('ecm-new-name');
+  const name=(nameEl?.value||'').trim();
+  const err=document.getElementById('ecm-err');
+  if(!name){ if(err)err.textContent='Name is required'; return; }
+  document.getElementById('eng-collision-overlay')?.remove();
+  _createEngineerRow(name, phone, document.getElementById('ae-err'));
 }
 
 async function _createEngineerRow(name, phone, err){
@@ -13966,7 +14012,7 @@ function escCsv(str){ return String(str||'').replace(/"/g,'""'); }
 Object.assign(window, {
   df, showAddEngineerModal, closeAddEngineerModal, submitAddEngineer,
   enablePhoneLogin, submitEnablePhoneLogin, engineerResetPin, engineerForceLogout, engineerGrantAccess, engineerRevokeAccess,
-  engineerChangePhone, submitEngineerChangePhone,
+  engineerChangePhone, submitEngineerChangePhone, _reactivateEngineer, _confirmNewDespiteCollision, _reactivateInCollision,
   _addLiveItem, _copyJobDesc, _copyPortalLink, _editEngFromDeep, _emailPortalShare, _removeLiveItem, _renderEngDeepJobsList,
   _reqAcknowledge, _reqApproveEng, _reqCreateJob, _reqReject, _reqReopen, _reqSendReply, 
   _saveLiveItem, _sendPLReminder, _showReqDetail, _switchEngDeepTab, _switchPLTab, _updateLiveTotal, 
