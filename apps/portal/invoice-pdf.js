@@ -11,7 +11,7 @@
 // it. _d/_S are likewise live bindings: each is assigned exactly once,
 // during INIT, and never reassigned again.
 
-import { escText as e } from '@ui';
+import { escText as e, buildInvoiceHTML } from '@ui';
 import { _INV_STORE, _d, _S, toast, calcTotal, _portalVatRate, fd, refreshIcons } from './main.js';
 
 let _CURRENT_INV_ID=null;
@@ -85,7 +85,7 @@ export function closeModal(ev){
   _CURRENT_INV_ID=null;
 }
 
-export function downloadInvPDF(id){
+export async function downloadInvPDF(id){
   const inv=_INV_STORE.get(id);
   if(!inv){toast('Invoice not found');return;}
   // Prefer the stored, office-generated PDF — same reasoning as previewInv.
@@ -95,136 +95,32 @@ export function downloadInvPDF(id){
     document.body.appendChild(a); a.click(); a.remove();
     return;
   }
-  if(!window.jspdf){toast('PDF library loading — please wait and try again');return;}
-  const{jsPDF}=window.jspdf;
-  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
-  const W=210,H=297,M=18,RW=W-M*2;
-  const dark=[15,23,42],mid=[100,116,139],light=[241,245,249];
-  const t=calcTotal(inv);
-  const vr=_portalVatRate();
+  if(!window.jspdf||!window.html2canvas){toast('PDF library loading — please wait and try again');return;}
 
-  // Same theme + layout as the Office App's generator (apps/office/main.js
-  // _buildInvoicePDFDoc) — this file used to be a completely separate,
-  // never-updated design (indigo accent, fixed-height header) that only
+  // Same shared HTML template as the Office App (packages/ui/invoice-
+  // template.js), rasterised the same way — this file used to be a
+  // completely separate, independently hand-drawn jsPDF design that only
   // an invoice without a stored pdfUrl yet would ever hit, which is
   // exactly why a redesign could land in Office and this would still show
-  // the old look here.
-  const isAgency=inv.invoiceType==='agency';
-  const accent=isAgency?[14,165,233]:[124,58,237];
-  const headerBg=isAgency?[13,31,60]:[76,33,182];
-
-  const safeText=(txt,x,y,maxW)=>{if(!txt)return;const lines=doc.splitTextToSize(String(txt),maxW||80);doc.text(lines,x,y);return lines.length;};
-
-  const hasLogo=!!_S.logoData;
-  const coLines=[];
-  if(!hasLogo) coLines.push({txt:_S.coName||'Your Company',size:12,bold:true,gap:5.5});
-  if(_S.coAddr) doc.splitTextToSize(_S.coAddr,80).forEach(line=>coLines.push({txt:line,size:7.5,gap:3.6}));
-  const contactBits=[_S.coPhone,_S.coEmail,_S.coWeb].filter(Boolean).join('  ·  ');
-  if(contactBits) coLines.push({txt:contactBits,size:7.5,gap:3.6});
-  const regBits=[_S.coVatNum?'VAT No: '+_S.coVatNum:null,_S.coReg?'Company No: '+_S.coReg:null].filter(Boolean).join('  ·  ');
-  if(regBits) coLines.push({txt:regBits,size:7.5,gap:3.6});
-  const logoTop=M-8, logoH=hasLogo?18:0;
-  const textTop=hasLogo?(logoTop+logoH+6):(M-4);
-  const textBottom=coLines.reduce((yy,l)=>yy+l.gap,textTop);
-  const headerH=Math.max(40,textBottom+6);
-
-  doc.setFillColor(...headerBg);doc.rect(0,0,W,headerH,'F');
-  if(hasLogo){ try{ doc.addImage(_S.logoData,'PNG',M,logoTop,36,18,'','FAST'); }catch(err){ console.warn('[DeepFlow]',err); } }
-
-  let cy=textTop;
-  coLines.forEach(l=>{
-    doc.setFont('helvetica',l.bold?'bold':'normal');doc.setFontSize(l.size);
-    doc.setTextColor(...(l.bold?[255,255,255]:[210,215,235]));
-    doc.text(l.txt,M,cy);cy+=l.gap;
-  });
-
-  doc.setFont('helvetica','bold');doc.setFontSize(22);doc.setTextColor(255,255,255);
-  doc.text('INVOICE',W-M,M-6,{align:'right'});
-  doc.setFontSize(10);
-  doc.text(inv.number||'—',W-M,M+1,{align:'right'});
-  doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(200,205,225);
-  doc.text('Issue: '+(inv.date||'—')+(inv.dueDate?'   Due: '+inv.dueDate:''),W-M,M+7,{align:'right'});
-  doc.setFont('helvetica','bold');doc.setFontSize(9);
-  const sc={'Paid':[74,222,128],'Awaiting Payment':[253,224,71],'Cancelled':[252,165,165],'Draft':[190,195,215]}[inv.status]||[210,215,235];
-  doc.setTextColor(...sc);doc.text((inv.status||'Draft').toUpperCase(),W-M,M+14,{align:'right'});
-
-  let y=headerH+8;
-  doc.setDrawColor(226,232,240);doc.setLineWidth(0.3);doc.line(M,y,W-M,y);y+=8;
-  const colW=(RW-10)/2;
-  doc.setFillColor(...light);doc.rect(M,y,colW,6,'F');
-  doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(...mid);
-  doc.text('BILL TO',M+3,y+4.5);y+=10;
-  doc.setFont('helvetica','normal');doc.setFontSize(11);doc.setTextColor(...dark);
-  doc.text(inv.billToName||inv.clientName||_d.name||'—',M,y);
-  let cY=y+6;
-  const bAddr=inv.billToAddress||inv.clientAddr||'';
-  if(bAddr){doc.setFontSize(9);doc.setTextColor(...mid);const al=doc.splitTextToSize(bAddr,colW);doc.text(al,M,cY);cY+=al.length*4.5;}
-  y=cY+6;
-  doc.setDrawColor(226,232,240);doc.line(M,y,W-M,y);y+=3;
-  doc.setFillColor(...dark);doc.rect(M,y,RW,7,'F');
-  doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(200,200,220);
-  const cols=[M+2,M+90,M+114,M+134,W-M-2];
-  ['DESCRIPTION','QTY','UNIT PRICE','VAT','TOTAL'].forEach((h,i)=>doc.text(h,cols[i],y+4.8,i===4?{align:'right'}:null));
-  y+=9;
-  (inv.items||[]).forEach((item,ii)=>{
-    const l=(item.qty||1)*(item.unit||0);const v=item.vat?l*vr/100:0;
-    if(y>H-50){doc.addPage();doc.setFillColor(...accent);doc.rect(0,0,W,4,'F');y=14;}
-    if(ii%2===0){doc.setFillColor(248,250,252);doc.rect(M,y-3.5,RW,7.5,'F');}
-    doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(...dark);
-    const dl=doc.splitTextToSize(String(item.desc||''),82);
-    doc.text(dl[0]+(dl.length>1?'…':''),M+2,y+1);
-    doc.text(String(item.qty||1),cols[1],y+1);
-    doc.text('£'+Number(item.unit||0).toFixed(2),cols[2],y+1);
-    doc.setTextColor(item.vat?100:160,item.vat?120:160,160);
-    doc.text(item.vat?vr+'%':'—',cols[3],y+1);
-    doc.setTextColor(...dark);doc.text('£'+(l+v).toFixed(2),cols[4],y+1,{align:'right'});y+=7.5;
-  });
-  y+=3;doc.setDrawColor(226,232,240);doc.line(M,y,W-M,y);y+=7;
-  const tC=W-M-52;
-  doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(...mid);
-  doc.text('Subtotal:',tC,y);doc.text('£'+t.sub.toFixed(2),W-M,y,{align:'right'});y+=6;
-  doc.text(`VAT (${vr}%):`,tC,y);doc.text('£'+t.vat.toFixed(2),W-M,y,{align:'right'});y+=3;
-  doc.setDrawColor(226,232,240);doc.line(tC,y,W-M,y);y+=6;
-  doc.setFont('helvetica','bold');doc.setFontSize(13);doc.setTextColor(...accent);
-  doc.text('TOTAL:',tC,y);doc.text('£'+t.grand.toFixed(2),W-M,y,{align:'right'});y+=10;
-  const wmText={'Paid':'PAID','Awaiting Payment':'UNPAID'}[inv.status];
-  const wmColour={'Paid':[34,197,94],'Awaiting Payment':[220,38,38]}[inv.status];
-  if(wmText){
-    doc.saveGraphicsState();doc.setGState(doc.GState({opacity:0.07}));
-    doc.setFont('helvetica','bold');doc.setFontSize(80);doc.setTextColor(...wmColour);
-    doc.text(wmText,W/2,H/2,{align:'center',angle:35});doc.restoreGraphicsState();
+  // the old look here. One template now, not two that can drift again.
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  const t=calcTotal(inv);
+  const vr=_portalVatRate();
+  const html=buildInvoiceHTML({inv,S:_S,totals:t,vatRate:vr});
+  const holder=document.createElement('div');
+  holder.style.cssText='position:fixed;left:-99999px;top:0;';
+  holder.innerHTML=html;
+  document.body.appendChild(holder);
+  try{
+    const canvas=await window.html2canvas(holder.firstElementChild,{scale:2.5,useCORS:true,backgroundColor:'#ffffff'});
+    const imgData=canvas.toDataURL('image/jpeg',0.93);
+    let w=210, h=210*canvas.height/canvas.width;
+    if(h>297){ h=297; w=297*canvas.width/canvas.height; }
+    doc.addImage(imgData,'JPEG',(210-w)/2,0,w,h);
+  } finally {
+    holder.remove();
   }
-  if(_S.bankName||_S.bankAcc){
-    y+=2;doc.setFillColor(...light);doc.rect(M,y,RW,6,'F');
-    doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(...mid);
-    doc.text('PAYMENT DETAILS',M+3,y+4);y+=8;
-    doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(...dark);
-    if(_S.bankName)doc.text('Bank: '+_S.bankName,M,y);
-    if(_S.bankAcc)doc.text('Acc: '+_S.bankAcc+(_S.bankSort?' · Sort: '+_S.bankSort:''),M+60,y);y+=5.5;
-    if(_S.bankIBAN)doc.text('IBAN: '+_S.bankIBAN,M,y);
-  }
-  y+=10;
-  doc.setFillColor(255,251,235);doc.setDrawColor(...accent);doc.setLineWidth(0.5);
-  doc.roundedRect(M,y-3.5,RW,10,2,2,'FD');
-  doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(100,70,10);
-  doc.text('Please quote reference: '+(inv.number||'—')+' with your payment',M+3,y+3);y+=14;
-  if(_S.payTerms||_S.invNotes){
-    doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(...mid);
-    if(_S.payTerms){safeText(_S.payTerms,M,y,RW);y+=5;}
-    if(_S.invNotes){safeText(_S.invNotes,M,y,RW);}
-  }
-  const showAgent=_S.invShowAgent!==false && isAgency && inv.agentName && inv.agentName.trim();
-  doc.setDrawColor(226,232,240);doc.line(M,H-17,W-M,H-17);
-  doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(170,175,195);
-  const footLine1=[_S.coName,_S.invFooter].filter(Boolean).join('  ·  ');
-  doc.text(footLine1,M,H-12);
-  doc.text('Powered by DeepFlow',W-M,H-12,{align:'right'});
-  if(showAgent){
-    doc.setFontSize(6.5);doc.setTextColor(...mid);
-    const agentBits=['Instructed via agent: '+inv.agentName.trim(), inv.agentEmail&&inv.agentEmail.trim()].filter(Boolean).join('  ·  ');
-    doc.text(agentBits,M,H-7.5);
-  }
-  doc.setFillColor(...accent);doc.rect(0,H-4,W,4,'F');
   doc.save((inv.number||'invoice')+'.pdf');
   toast('Invoice downloaded');
 }

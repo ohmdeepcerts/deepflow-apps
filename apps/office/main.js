@@ -1,5 +1,5 @@
 import { SB_URL, SB_KEY, restFetch, createSupaAuthClient, makeJwtResolver } from '@core';
-import { escHtml, initNetworkCanvas } from '@ui';
+import { escHtml, initNetworkCanvas, buildInvoiceHTML } from '@ui';
 import { toDb as _toDb, fromDb as _fromDb, createRepository, TO_DB as _TO_DB } from '@data';
 import { STATUS, calcLineItemsTotal, officeVatRate, daysDiff, formatDateUK, localDateStr } from '@business';
 import { createOfflineQueue } from '@offline';
@@ -6823,327 +6823,31 @@ async function downloadInvPDF(){
 // Previously this whole thing lived inline inside downloadInvPDFById(),
 // which meant "regenerate and store a copy in Supabase" had nowhere to
 // hook in without duplicating ~250 lines of drawing code.
-function _buildInvoicePDFDoc(inv){
+async function _buildInvoicePDFDoc(inv){
   const t=calcInvTotal(inv);
   const vr=getVatRate();
   const {jsPDF}=window.jspdf;
   const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
-  const W=210, H=297, M=18, RW=W-M*2;
-  const dark=[22,24,35], mid=[80,85,110], light=[245,246,250];
 
-  // Determined up front — everything below (header band, watermark, totals,
-  // footer) is themed off this: violet for landlord invoices, navy/cyan for
-  // agency ones, matching the header band colour scheme in the DeepFlow
-  // login/PIN screens (see packages/ui/network-canvas.js) rather than the
-  // old single hardcoded amber accent used everywhere regardless of type.
-  const isAgency = inv.invoiceType === 'agency';
-  const accent = isAgency ? [14,165,233] : [124,58,237];       // #0EA5E9 / #7C3AED
-  const headerBg = isAgency ? [13,31,60] : [76,33,182];        // #0D1F3C / #4C1D95
-  // 3-stop gradient matching the real DeepFlow login screen band (dark →
-  // lighter mid → dark) — jsPDF has no native gradient fill, so this is
-  // approximated with 48 stacked 1px-ish strips interpolated between stops.
-  const headerStops = isAgency
-    ? [{t:0,c:[13,31,60]},{t:.5,c:[30,58,95]},{t:1,c:[10,22,40]}]
-    : [{t:0,c:[76,33,182]},{t:.5,c:[124,58,237]},{t:1,c:[55,20,110]}];
-  const drawGradient=(x,y,w,h,stops)=>{
-    const steps=48;
-    for(let i=0;i<steps;i++){
-      const t=i/(steps-1);
-      let s0=stops[0], s1=stops[stops.length-1];
-      for(let k=0;k<stops.length-1;k++){ if(t>=stops[k].t&&t<=stops[k+1].t){ s0=stops[k]; s1=stops[k+1]; break; } }
-      const lt = s1.t>s0.t ? (t-s0.t)/(s1.t-s0.t) : 0;
-      doc.setFillColor(
-        Math.round(s0.c[0]+(s1.c[0]-s0.c[0])*lt),
-        Math.round(s0.c[1]+(s1.c[1]-s0.c[1])*lt),
-        Math.round(s0.c[2]+(s1.c[2]-s0.c[2])*lt)
-      );
-      doc.rect(x,y+h*t,w,h/steps+0.6,'F');
-    }
-  };
-  // Small filled-circle separator used between contact-line items and as a
-  // section-label bullet — a drawn dot in the accent colour reads as more
-  // deliberately designed than a typed middle-dot character.
-  const dot=(x,y,c)=>{ doc.setFillColor(...c); doc.circle(x,y,0.6,'F'); };
-
-  // ── Helper: safe text with word wrap ──
-  const safeText=(txt,x,y,maxW)=>{
-    if(!txt)return;
-    const lines=doc.splitTextToSize(String(txt),maxW||80);
-    doc.text(lines,x,y);
-    return lines.length;
-  };
-
-  // ── HEADER BAND — height computed from the actual content, not a fixed
-  // guess. A fixed 44mm band meant a real logo plus a wrapped address plus
-  // a contact line could run past the band and land on the white body
-  // below it, still coloured for a dark background — pale text on white,
-  // effectively invisible. coLines is built once and used for BOTH the
-  // height calculation and the actual drawing, so the two can't drift
-  // apart the way a separate estimate (e.g. counting commas) did before.
-  const hasLogo=!!S.logoData;
-  const coLines=[];
-  if(!hasLogo) coLines.push({txt:S.coName||'Your Company',size:12,bold:true,gap:5.5});
-  if(S.coAddr) doc.splitTextToSize(S.coAddr,80).forEach(line=>coLines.push({txt:line,size:7.5,gap:3.6}));
-  const contactParts=[S.coPhone,S.coEmail,S.coWeb].filter(Boolean);
-  if(contactParts.length) coLines.push({parts:contactParts,size:7.5,gap:3.6});
-  const regParts=[(S.coVatNum&&S.vatEnabled!==false)?'VAT No: '+S.coVatNum:null, S.coReg?'Company No: '+S.coReg:null].filter(Boolean);
-  if(regParts.length) coLines.push({parts:regParts,size:7.5,gap:3.6});
-
-  const logoTop=M-8, logoH=hasLogo?18:0;
-  const textTop=hasLogo?(logoTop+logoH+6):(M-4);
-  const textBottom=coLines.reduce((yy,l)=>yy+l.gap,textTop);
-  const headerH=Math.max(40,textBottom+6);
-
-  drawGradient(0,0,W,headerH,headerStops);
-
-  // ── LOGO ──
-  if(hasLogo){
-    try{ doc.addImage(S.logoData,'PNG',M,logoTop,36,18,'','FAST'); }
-    catch(e){ console.warn('[DeepFlow]', e); }
+  // Render the real HTML/CSS template off-screen and rasterise it into the
+  // page — a genuine screenshot of genuine CSS (real gradients, card
+  // shadows, inline SVG icons), not jsPDF's rect()/text()/circle()
+  // primitives trying to describe those things by hand. See
+  // packages/ui/invoice-template.js for the template and the reasoning.
+  const html=buildInvoiceHTML({inv,S,totals:t,vatRate:vr});
+  const holder=document.createElement('div');
+  holder.style.cssText='position:fixed;left:-99999px;top:0;';
+  holder.innerHTML=html;
+  document.body.appendChild(holder);
+  try{
+    const canvas=await window.html2canvas(holder.firstElementChild,{scale:2.5,useCORS:true,backgroundColor:'#ffffff'});
+    const imgData=canvas.toDataURL('image/jpeg',0.93);
+    let w=210, h=210*canvas.height/canvas.width;
+    if(h>297){ h=297; w=297*canvas.width/canvas.height; } // shrink-to-fit rather than cut off a tall invoice
+    doc.addImage(imgData,'JPEG',(210-w)/2,0,w,h);
+  } finally {
+    holder.remove();
   }
-
-  // ── COMPANY DETAILS (left, white-on-dark) ──
-  let cy=textTop;
-  const goldDot=[253,224,71]; // warm dot regardless of theme — echoes the
-  // gold end of the real login gradient (cyan→gold), a small consistent
-  // brand thread through every invoice rather than a plain typed '·'.
-  coLines.forEach(l=>{
-    doc.setFont('helvetica',l.bold?'bold':'normal');doc.setFontSize(l.size);
-    const col=l.bold?[255,255,255]:[210,215,235];
-    if(l.parts){
-      let cx=M;
-      l.parts.forEach((p,i)=>{
-        doc.setTextColor(...col);
-        doc.text(p,cx,cy);
-        cx+=doc.getTextWidth(p);
-        if(i<l.parts.length-1){ cx+=2; dot(cx,cy-1,goldDot); cx+=2; }
-      });
-    } else {
-      doc.setTextColor(...col);
-      doc.text(l.txt,M,cy);
-    }
-    cy+=l.gap;
-  });
-
-  // ── INVOICE META (right, white-on-dark) ──
-  doc.setFont('helvetica','bold');doc.setFontSize(22);doc.setTextColor(255,255,255);
-  doc.text('INVOICE',W-M,M-6,{align:'right'});
-  doc.setFontSize(10);
-  doc.text(inv.number,W-M,M+1,{align:'right'});
-  doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(200,205,225);
-  doc.text('Issue: '+(inv.date||'—')+(inv.dueDate?'   Due: '+inv.dueDate:''),W-M,M+7,{align:'right'});
-  doc.setFont('helvetica','bold');doc.setFontSize(9);
-  const statusColour={'Paid':[74,222,128],'Awaiting Payment':[253,224,71],'Cancelled':[252,165,165],'Draft':[190,195,215]}[inv.status]||[210,215,235];
-  doc.setTextColor(...statusColour);
-  doc.text((inv.status||'Draft').toUpperCase(),W-M,M+14,{align:'right'});
-
-  // ── DIVIDER ──
-  let y=headerH+8;
-  doc.setDrawColor(220,220,230);doc.setLineWidth(0.3);doc.line(M,y,W-M,y);y+=6;
-
-  // ══════════════════════════════════════════════════════════════
-  // BILL TO SECTION - Uses SAVED invoice data (not temporary vars)
-  // ══════════════════════════════════════════════════════════════
-  const colW=(RW-10)/2;
-
-  // Section label — coloured uppercase text with a small drawn dot, not a
-  // filled grey bar, matching the artifact's actual label treatment (a
-  // coloured caption, not a badge) and using far less ink across a page
-  // that's often printed in bulk.
-  const sectionLabel=(txt,x,yy)=>{
-    dot(x+0.6,yy-1.6,accent);
-    doc.setFont('helvetica','bold');doc.setFontSize(7.5);doc.setTextColor(...accent);
-    doc.text(txt,x+3,yy);
-  };
-
-  // BILL TO header
-  sectionLabel('BILL TO',M,y+3);
-  y+=9;
-  
-  // Bill To Name (Agency or Landlord)
-  doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(...dark);
-  const billToName = inv.billToName || inv.clientName || '—';
-  doc.text(billToName,M,y);
-  let clientY = y+5;
-  
-  // Bill To Address (Agency address or Property address)
-  const billToAddr = inv.billToAddress || inv.clientAddr || '';
-  if(billToAddr){
-    doc.setFontSize(8.5);doc.setTextColor(...mid);
-    const addrLines=doc.splitTextToSize(billToAddr,colW);
-    doc.text(addrLines,M,clientY);clientY+=addrLines.length*4.5;
-  }
-  
-  // Email
-  if(inv.clientEmail){
-    doc.setFontSize(8);doc.setTextColor(...mid);
-    doc.text(inv.clientEmail,M,clientY);clientY+=5;
-  }
-  
-  // PROPERTY ADDRESS — always show regardless of invoice type
-  const propAddr = inv.propertyAddress || inv.jobAddress || inv.jobAddr || '';
-  if(propAddr && propAddr.trim()){
-    // For landlord invoices, property IS the billing address so show separately
-    // For agency invoices, property is already shown as JOB ADDRESS below Bill To
-    if(!isAgency){
-      clientY += 4;
-      sectionLabel('PROPERTY ADDRESS',M,clientY+2);
-      clientY += 7;
-      doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(...dark);
-      const propLines=doc.splitTextToSize(propAddr,colW);
-      doc.text(propLines,M,clientY);clientY+=propLines.length*4.5;
-    }
-  }
-
-  // JOB ADDRESS section for agencies
-  if(isAgency && inv.jobAddress && inv.jobAddress.trim()){
-    clientY += 4;
-    sectionLabel('PROPERTY ADDRESS',M,clientY+2);
-    clientY += 7;
-    doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(...mid);
-    const jobAddrLines=doc.splitTextToSize(inv.jobAddress,colW);
-    doc.text(jobAddrLines,M,clientY);clientY+=jobAddrLines.length*4.5;
-  }
-
-  // JOB DETAILS (right column — alongside Bill To)
-  const detailX = M + colW + 10;
-  const detailW = colW;
-  let detailY = y - (clientY - y) - 6; // align top with Bill To
-  detailY = Math.max(y, detailY);
-
-  // Job details block (right column)
-  sectionLabel('JOB DETAILS',detailX,y-9+4);
-  let djY = y - 1;
-
-  const djRow=(lbl,val)=>{
-    if(!val) return;
-    doc.setFont('helvetica','bold');doc.setFontSize(7.5);doc.setTextColor(...mid);
-    doc.text(lbl,detailX,djY);
-    doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(...dark);
-    const vLines=doc.splitTextToSize(String(val),detailW-22);
-    doc.text(vLines,detailX+22,djY);
-    djY+=vLines.length*4.5+1;
-  };
-
-  djRow('Job No:',   inv.jobNum||inv.jobRef||'');
-  djRow('Date:',     inv.jobDate?new Date(inv.jobDate+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'');
-  djRow('Engineer:', inv.engineer||'');
-  djRow('Work done:',inv.certTypes||inv.description||'');
-  // Agent details live in the footer only now (see below), gated on
-  // S.invShowAgent — no separate copy here to avoid showing it twice when
-  // the setting is on, or a stray "Agent:" row when it's off.
-
-  y = clientY + 4;
-
-  // ── LINE ITEMS TABLE ──
-  doc.setDrawColor(220,220,230);doc.line(M,y,W-M,y);y+=2;
-  // Header row
-  doc.setFillColor(...dark);doc.rect(M,y,RW,6.5,'F');
-  doc.setFont('helvetica','bold');doc.setFontSize(7.5);doc.setTextColor(200,200,220);
-  const cols=[M+2,M+90,M+113,M+133,W-M-2];
-  const hdrs=['DESCRIPTION','QTY','UNIT PRICE','VAT','TOTAL'];
-  const aligns=['left','left','left','left','right'];
-  hdrs.forEach((h,i)=>doc.text(h,cols[i],y+4.5,aligns[i]==='right'?{align:'right'}:null));
-  y+=8;
-
-  // Item rows
-  (inv.items||[]).forEach((item,ii)=>{
-    const l=(item.qty||1)*(item.unit||0);
-    const v=item.vat?l*vr/100:0;
-    const rowH=7;
-    if(y>H-50){doc.addPage();doc.setFillColor(...accent);doc.rect(0,0,W,4,'F');y=14;}
-    if(ii%2===0){doc.setFillColor(249,249,252);doc.rect(M,y-3,RW,rowH,'F');}
-    doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(...dark);
-    const dTxt=String(item.desc||'');
-    const dLines=doc.splitTextToSize(dTxt,82);
-    doc.text(dLines[0]+(dLines.length>1?'…':''),M+2,y+1);
-    doc.text(String(item.qty||1),cols[1],y+1);
-    doc.text('£'+Number(item.unit||0).toFixed(2),cols[2],y+1);
-    doc.setTextColor(item.vat?100:160,item.vat?120:160,item.vat?160:160);
-    doc.text(item.vat?vr+'%':'—',cols[3],y+1);
-    doc.setTextColor(...dark);
-    doc.text('£'+(l+v).toFixed(2),cols[4],y+1,{align:'right'});
-    y+=rowH;
-  });
-  y+=3;doc.setDrawColor(220,220,230);doc.line(M,y,W-M,y);y+=6;
-
-  // ── TOTALS (right aligned) ──
-  const tCol=W-M-50;
-  doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(...mid);
-  doc.text('Subtotal:',tCol,y);doc.text('£'+t.sub.toFixed(2),W-M,y,{align:'right'});y+=5.5;
-  doc.text(`VAT (${vr}%):`,tCol,y);doc.text('£'+t.vat.toFixed(2),W-M,y,{align:'right'});y+=6;
-
-  // Total block is a small filled gradient card (same stops as the header
-  // band) rather than plain text on a line — the one other place on the
-  // page carrying the full theme, not just an accent-coloured word. Square
-  // corners deliberately — jsPDF has no reliable rounded-rect clip here,
-  // and a gradient fill peeking past a rounded stroke's corners looks
-  // worse than a clean rectangle.
-  const totalCardH=13;
-  drawGradient(M,y-2,RW,totalCardH,headerStops);
-  doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(230,232,245);
-  doc.text('TOTAL DUE',M+5,y+6);
-  doc.setFontSize(15);doc.setTextColor(255,255,255);
-  doc.text('£'+t.grand.toFixed(2),W-M-5,y+6.5,{align:'right'});
-  y+=totalCardH+6;
-
-  // ── STATUS WATERMARK — both paid and unpaid, not just paid ──
-  const wmText={'Paid':'PAID','Awaiting Payment':'UNPAID'}[inv.status];
-  const wmColour={'Paid':[34,197,94],'Awaiting Payment':[220,38,38]}[inv.status];
-  if(wmText){
-    doc.saveGraphicsState();
-    doc.setGState(doc.GState({opacity:0.07}));
-    doc.setFont('helvetica','bold');doc.setFontSize(80);doc.setTextColor(...wmColour);
-    doc.text(wmText,W/2,H/2,{align:'center',angle:35});
-    doc.restoreGraphicsState();
-  }
-
-  // ── PAYMENT DETAILS ──
-  if(S.bankName||S.bankAcc){
-    y+=4;
-    sectionLabel('PAYMENT DETAILS',M,y+2);y+=8;
-    doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(...dark);
-    if(S.bankName)doc.text('Bank: '+S.bankName,M,y);
-    if(S.bankAcc)doc.text('Acc: '+S.bankAcc+(S.bankSort?' · Sort: '+S.bankSort:''),M+55,y);y+=5;
-    if(S.bankIBAN)doc.text('IBAN: '+S.bankIBAN,M,y);
-  }
-
-  // ── PAYMENT REFERENCE BOX ──
-  y+=8;
-  doc.setFillColor(254,248,235);doc.setDrawColor(...accent);doc.setLineWidth(0.5);
-  doc.roundedRect(M,y-3,RW,9,2,2,'FD');
-  doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(100,70,10);
-  doc.text('Please quote reference: '+inv.number+' with your payment',M+3,y+2.5);
-  y+=13;
-
-  // ── TERMS & NOTES ──
-  if(S.payTerms||S.invNotes){
-    doc.setFont('helvetica','normal');doc.setFontSize(7.5);doc.setTextColor(...mid);
-    if(S.payTerms){safeText(S.payTerms,M,y,RW);y+=5;}
-    if(S.invNotes){safeText(S.invNotes,M,y,RW);y+=5;}
-  }
-
-  // ── FOOTER — company/reg on the left, agent (if enabled) on its own
-  // line beneath, "Powered by DeepFlow" bottom-right. Agent used to only
-  // appear inline in the JOB DETAILS block with no way to switch it off —
-  // now it lives here, gated on the same Settings → Invoices → "Show
-  // agent on invoice" toggle every other agent-visibility check uses.
-  const showAgent = S.invShowAgent!==false && isAgency && inv.agentName && inv.agentName.trim();
-  doc.setDrawColor(220,220,230);doc.line(M,H-17,W-M,H-17);
-
-  doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(170,175,195);
-  const footLine1=[S.coName,S.invFooter].filter(Boolean).join('  ·  ');
-  doc.text(footLine1,M,H-12);
-  doc.text('Powered by DeepFlow',W-M,H-12,{align:'right'});
-
-  if(showAgent){
-    doc.setFontSize(6.5);doc.setTextColor(...mid);
-    const agentBits=['Instructed via agent: '+inv.agentName.trim(), inv.agentEmail&&inv.agentEmail.trim()].filter(Boolean).join('  ·  ');
-    doc.text(agentBits,M,H-7.5);
-  }
-
-  // ── BOTTOM COLOUR BAR ──
-  doc.setFillColor(...accent);doc.rect(0,H-4,W,4,'F');
 
   return doc;
 }
@@ -7151,8 +6855,8 @@ function _buildInvoicePDFDoc(inv){
 export async function downloadInvPDFById(id){
   const inv=await dGet('invoices',id);
   if(!inv){toast('Invoice not found','error');return;}
-  if(!window.jspdf){toast('PDF library not loaded — check your internet and try again','error');return;}
-  const doc=_buildInvoicePDFDoc(inv);
+  if(!window.jspdf||!window.html2canvas){toast('PDF library not loaded — check your internet and try again','error');return;}
+  const doc=await _buildInvoicePDFDoc(inv);
   doc.save((inv.number||'invoice')+'.pdf');
   await logActivity('PDF downloaded: '+inv.number,'invoice');
   toast('✅ PDF downloaded — '+inv.number,'success');
@@ -7193,11 +6897,11 @@ async function _storeInvoicePDF(inv,doc){
 // stores it; the Client Portal and bulk download then just fetch this one
 // file instead of each re-rendering their own copy from raw data.
 export async function generateAndStoreInvoicePDF(id){
-  if(!window.jspdf) return null; // library not loaded yet — will retry next edit/download
+  if(!window.jspdf||!window.html2canvas) return null; // libraries not loaded yet — will retry next edit/download
   try{
     const inv=await dGet('invoices',id);
     if(!inv) return null;
-    const doc=_buildInvoicePDFDoc(inv);
+    const doc=await _buildInvoicePDFDoc(inv);
     return await _storeInvoicePDF(inv,doc);
   }catch(e){ console.warn('[DeepFlow] Auto PDF generation failed for invoice',id,e); return null; }
 }
