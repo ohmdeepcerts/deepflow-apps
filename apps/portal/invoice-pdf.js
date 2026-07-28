@@ -20,8 +20,20 @@ export function previewInv(id){
   const inv=_INV_STORE.get(id);
   if(!inv){toast('Invoice not found');return;}
   _CURRENT_INV_ID=id;
-  const t=calcTotal(inv);const vr=_portalVatRate();
   const bd=document.getElementById('pdf-modal-bd');
+
+  // Office App generates and stores the real PDF the moment an invoice is
+  // created or edited (see generateAndStoreInvoicePDF in office/main.js) —
+  // show that fixed file instead of re-rendering the invoice from data in
+  // this browser. Only invoices from before that existed fall through to
+  // the client-side rebuild below.
+  if(inv.pdfUrl){
+    bd.innerHTML=`<iframe src="${e(inv.pdfUrl)}" style="width:100%;height:70vh;border:0;border-radius:var(--radius)" title="Invoice ${e(inv.number||'')}"></iframe>`;
+    document.getElementById('pdf-modal').classList.add('show');
+    return;
+  }
+
+  const t=calcTotal(inv);const vr=_portalVatRate();
   const items=(inv.items||[]).map(x=>{
     const l=(x.qty||1)*(x.unit||0);const v=x.vat?l*vr/100:0;
     return`<tr><td style="padding:8px;border-bottom:1px solid var(--border)">${e(x.desc||'')}</td><td style="padding:8px;text-align:center;border-bottom:1px solid var(--border)">${x.qty||1}</td><td style="padding:8px;text-align:right;border-bottom:1px solid var(--border)">£${Number(x.unit||0).toFixed(2)}</td><td style="padding:8px;text-align:right;border-bottom:1px solid var(--border)">${x.vat?vr+'%':'—'}</td><td style="padding:8px;text-align:right;border-bottom:1px solid var(--border);font-weight:700">£${(l+v).toFixed(2)}</td></tr>`;
@@ -75,6 +87,13 @@ export function closeModal(ev){
 export function downloadInvPDF(id){
   const inv=_INV_STORE.get(id);
   if(!inv){toast('Invoice not found');return;}
+  // Prefer the stored, office-generated PDF — same reasoning as previewInv.
+  if(inv.pdfUrl){
+    const a=document.createElement('a');
+    a.href=inv.pdfUrl; a.target='_blank'; a.rel='noopener'; a.download=(inv.number||'invoice')+'.pdf';
+    document.body.appendChild(a); a.click(); a.remove();
+    return;
+  }
   if(!window.jspdf){toast('PDF library loading — please wait and try again');return;}
   const{jsPDF}=window.jspdf;
   const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});

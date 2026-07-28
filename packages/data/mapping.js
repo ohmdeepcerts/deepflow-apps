@@ -32,6 +32,7 @@ export const TO_DB = {
     jobAddress: 'jobaddress', agencyName: 'agencyname', agencyAddress: 'agencyaddress',
     landlordName: 'landlordname', propertyAddress: 'propertyaddress', jobNum: 'jobnum',
     linkedInvId: 'linkedinvid', certTypes: 'certtypes', jobDate: 'jobdate', vatAmount: 'vat_amount',
+    billToOverride: 'bill_to_override', pdfUrl: 'pdf_url', pdfPath: 'pdf_path',
   },
   agents: { agencyId: 'agencyid' },
   persons: { agencyId: 'agencyid', bankName: 'bankname', bankAcc: 'bankacc', bankSort: 'banksort', bankRef: 'bankref' },

@@ -3253,6 +3253,7 @@ async function _autoInvoiceInner(j){
   await logActivity(`Draft invoice ${inv.number} auto-created for ${client.name} (${hours?hours+'h':('£'+jobPrice)})`, 'invoice');
   toast(`📄 Draft invoice ${inv.number} created — review in Invoices`,'info',5000);
   updateBadges();
+  generateAndStoreInvoicePDF(inv.id).catch(e=>console.warn('[DeepFlow] PDF generation for auto-created invoice failed',e));
   return true;
 }
 
@@ -5241,18 +5242,22 @@ function updInvTotals(){
 // No popup for description, address, date — those sync silently.
 
 // Maps invoice DB field name → job DB field name (for silent sync to the JOB record)
-// billToAddress syncs separately to persons/agencies table (see _syncInvoiceFieldToJob)
+// clientname/billtoname/billtoaddress are display-only "Bill To" fields and
+// must NOT sync to the job or the persons/agencies table — a Bill To edit
+// used to silently overwrite job.landlordname (and, via _syncBillToAddress,
+// the real landlord/agency's stored address), which defeated the one thing
+// Bill To Override exists for: showing a different billing name on an
+// invoice while the job/directory still show the real landlord. See
+// bill_to_override on the invoices table.
 const _INV_TO_JOB_FIELD = {
   description:     'description',   // invoice description ↔ job description
   jobaddress:      'address',        // property address ↔ job address
   propertyaddress: 'address',
   date:            'date',           // invoice date ↔ job date
-  clientname:      'landlordname',   // bill-to name ↔ job landlord
-  billtoname:      'landlordname',
   agentname:       'agentname',      // agent ↔ job agent
   agencyname:      'agencyname',
-  // EXCLUDED from job sync (handled separately or invoice-only):
-  // billtoaddress → syncs to persons.address or agencies.address (see _syncBillToAddress)
+  // EXCLUDED from job sync (invoice-only, never writes back):
+  // clientname, billtoname, billtoaddress — see comment above
   // notes, duedate, clientemail, clientwa, number, status, terms → invoice only
 };
 
@@ -5260,9 +5265,10 @@ async function _syncInvoiceFieldToJob(invId, dbField, dbVal){
   const fieldLower = dbField.toLowerCase();
   const isItemsChange = fieldLower === 'items';
 
-  // billToAddress syncs to the landlord/agency record — not the job
-  if(fieldLower === 'billtoaddress'){
-    _syncBillToAddress(invId, dbVal).catch(e=>console.warn('[DeepFlow] Failed to sync billing address back to the directory record for invoice',invId,'— invoice shows the new address but the person/agency record still has the old one:',e));
+  // Bill To fields are a display-only override — never sync to the job or
+  // to the persons/agencies directory. To correct a landlord or agency's
+  // real recorded address, edit it in the Directory, not on an invoice.
+  if(fieldLower === 'billtoaddress' || fieldLower === 'billtoname' || fieldLower === 'clientname'){
     return;
   }
 
@@ -5306,33 +5312,6 @@ async function _syncInvoiceFieldToJob(invId, dbField, dbVal){
     const jobNumStr = job.jobNum||job.jobnum||'';
     toast(`🔗 Job ${jobNumStr} synced (${Object.keys(patchBody).join(', ')})`,'success',2500);
   }catch(e){ console.warn('[DeepFlow] job sync failed', e); }
-}
-
-// Sync billToAddress back to the landlord (persons) or agency record
-async function _syncBillToAddress(invId, newAddr){
-  if(!newAddr) return;
-  const inv = await dGet('invoices', invId);
-  if(!inv) return;
-  const isAgency = inv.invoiceType === 'agency';
-  const clientName = inv.billToName || inv.clientName || inv.agencyName || '';
-  if(!clientName) return;
-  try{
-    if(isAgency){
-      const agencies = await dAll('agencies');
-      const agency = agencies.find(a=>(a.name||'').toLowerCase()===clientName.toLowerCase());
-      if(agency){
-        await _sb(`agencies?id=eq.${encodeURIComponent(agency.id)}`,{method:'PATCH',body:{address:newAddr},prefer:'return=minimal'});
-        toast(`🔗 Agency address updated for ${clientName}`,'success',2000);
-      }
-    } else {
-      const persons = await dAll('persons');
-      const person = persons.find(p=>(p.name||'').toLowerCase()===clientName.toLowerCase());
-      if(person){
-        await _sb(`persons?id=eq.${encodeURIComponent(person.id)}`,{method:'PATCH',body:{address:newAddr},prefer:'return=minimal'});
-        toast(`🔗 Landlord address updated for ${clientName}`,'success',2000);
-      }
-    }
-  }catch(e){ console.warn('[DeepFlow] billToAddress sync failed',e); }
 }
 
 async function _syncInvoicePriceToJob(linkedJobId, newTotal, newDesc){
@@ -6488,10 +6467,23 @@ async function viewInv(id){
     <div style="padding:14px 24px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;border-bottom:1px solid #e5e7eb;background:#f8fafc">
       <!-- BILL TO -->
       <div>
-        <div style="font-size:9px;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">BILL TO</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <div style="font-size:9px;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:1px">BILL TO</div>
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:9px;color:#94a3b8" title="Show a different billing name/address on this invoice only — the real landlord/agency record never changes">
+            <input type="checkbox" ${inv.billToOverride?'checked':''} onchange="toggleBillToOverride('${id}',this.checked)" style="cursor:pointer">Override
+          </label>
+        </div>
+        ${inv.billToOverride ? `
         <div style="font-size:13px;font-weight:700;color:#1e293b;margin-bottom:3px">${ef('clientName',inv.clientName||inv.billToName||'',{style:'font-size:13px;font-weight:700'})}</div>
         <div style="font-size:11px;color:#64748b">${ef('billToAddress',inv.billToAddress||inv.clientAddr||'',{style:'font-size:11px;color:#64748b',multi:true})}</div>
         <div style="font-size:11px;color:#94a3b8;margin-top:3px">${ef('clientEmail',inv.clientEmail||'',{style:'font-size:11px;color:#64748b'})}</div>
+        <div style="font-size:10px;color:#c2851a;margin-top:4px">Only this invoice — real record: ${escHtml(inv.landlordName||inv.agencyName||'—')}</div>
+        ` : `
+        <div style="font-size:13px;font-weight:700;color:#1e293b;margin-bottom:3px">${escHtml(inv.landlordName||inv.agencyName||inv.clientName||'—')}</div>
+        <div style="font-size:11px;color:#64748b;white-space:pre-line">${escHtml(inv.clientAddr||'')}</div>
+        <div style="font-size:11px;color:#94a3b8;margin-top:3px">${escHtml(inv.clientEmail||'')}</div>
+        <div style="font-size:10px;color:#94a3b8;margin-top:4px">Real record — edit in Directory, or tick Override to bill a different name</div>
+        `}
       </div>
       <!-- PROPERTY -->
       <div>
@@ -6624,6 +6616,23 @@ function _renderLiveItems(inv,id){
 
 
 
+// Bill To Override toggle — on/off only changes what's editable/shown on
+// THIS invoice's Bill To block. It never touches the job or the directory;
+// see bill_to_override migration + _INV_TO_JOB_FIELD for why that matters.
+async function toggleBillToOverride(invId, checked){
+  try{
+    await _sb(`invoices?id=eq.${encodeURIComponent(invId)}`,{method:'PATCH',body:{bill_to_override:checked},prefer:'return=minimal'});
+    _invalidateCache('invoices');
+    if(!checked){
+      // Reverting to the real record — clear the override text so a stale
+      // name/address can't silently resurface if Override is switched back
+      // on later without anyone re-checking what's in the fields first.
+      await _sb(`invoices?id=eq.${encodeURIComponent(invId)}`,{method:'PATCH',body:{billtoname:null,billtoaddress:null},prefer:'return=minimal'});
+    }
+    await viewInv(invId);
+  }catch(e){ toast('Could not update Bill To Override: '+(e.message||'').slice(0,80),'error'); }
+}
+
 async function _saveInvField(el){
   const field=el.dataset.field;
   const invId=el.dataset.invid;
@@ -6648,6 +6657,9 @@ async function _saveInvField(el){
       }
       // Sync field change to linked job (silently for text, popup for price)
       try{await _syncInvoiceFieldToJob(invId, _dbField, val);}catch(e){console.warn('[DeepFlow] Invoice→Job sync failed:',e);toast('⚠ Sync failed — check console','warn',3000);}
+      // Keep the stored PDF matching what's on screen — cheap enough to
+      // just always regenerate rather than track which fields matter.
+      generateAndStoreInvoicePDF(invId).catch(e=>console.warn('[DeepFlow] PDF regen after field edit failed',e));
     }catch(e){if(ind)ind.textContent='⚠ Save failed';console.warn('[DeepFlow]',e);}
   },600);
 }
@@ -6802,11 +6814,13 @@ async function downloadInvPDF(){
   await downloadInvPDFById(curInvId);
 }
 
-export async function downloadInvPDFById(id){
-  const inv=await dGet('invoices',id);
-  if(!inv){toast('Invoice not found','error');return;}
-  if(!window.jspdf){toast('PDF library not loaded — check your internet and try again','error');return;}
-
+// Builds the jsPDF doc for one invoice — the single source of truth for
+// what an invoice PDF looks like, shared by the manual download button,
+// the automatic background-generate-and-store path, and bulk download.
+// Previously this whole thing lived inline inside downloadInvPDFById(),
+// which meant "regenerate and store a copy in Supabase" had nowhere to
+// hook in without duplicating ~250 lines of drawing code.
+function _buildInvoicePDFDoc(inv){
   const t=calcInvTotal(inv);
   const vr=getVatRate();
   const {jsPDF}=window.jspdf;
@@ -7052,9 +7066,61 @@ export async function downloadInvPDFById(id){
   // ── BOTTOM COLOUR BAR ──
   doc.setFillColor(...accent);doc.rect(0,H-4,W,4,'F');
 
+  return doc;
+}
+
+export async function downloadInvPDFById(id){
+  const inv=await dGet('invoices',id);
+  if(!inv){toast('Invoice not found','error');return;}
+  if(!window.jspdf){toast('PDF library not loaded — check your internet and try again','error');return;}
+  const doc=_buildInvoicePDFDoc(inv);
   doc.save((inv.number||'invoice')+'.pdf');
   await logActivity('PDF downloaded: '+inv.number,'invoice');
   toast('✅ PDF downloaded — '+inv.number,'success');
+  // Freshen the stored copy in the background too — a manual download is
+  // as good a moment as any to know the stored PDF matches what's on
+  // screen, and it costs nothing extra since the doc is already built.
+  _storeInvoicePDF(inv,doc).catch(e=>console.warn('[DeepFlow] Background PDF store failed for',inv.number,e));
+}
+
+// Local Storage helper — same pattern as certs.js's sbStorage(), duplicated
+// rather than imported since certs.js doesn't export its copy and importing
+// across these sibling modules isn't worth the coupling for one function.
+async function _invPdfSbStorage(path,file){
+  const jwt=await _getJWT();
+  const res=await fetch(`${SB_URL}/storage/v1/object/deepflow/${path}`,{
+    method:'POST',
+    headers:{'apikey':SB_KEY,'Authorization':'Bearer '+jwt,'Content-Type':'application/pdf','x-upsert':'true'},
+    body:file
+  });
+  if(!res.ok) throw new Error('Upload failed: '+(await res.text()).slice(0,200));
+  return `${SB_URL}/storage/v1/object/public/deepflow/${path}`;
+}
+
+// Uploads an already-built PDF doc to Storage and records the URL on the
+// invoice — the "store" half of automatic generation. Callers that already
+// have a built doc (download, bulk export) pass it in to skip rebuilding.
+async function _storeInvoicePDF(inv,doc){
+  const path=`invoices/${inv.id}/${(inv.number||'invoice').replace(/[^a-z0-9-]/gi,'_')}.pdf`;
+  const blob=doc.output('blob');
+  const url=await _invPdfSbStorage(path,blob);
+  await _sb(`invoices?id=eq.${encodeURIComponent(inv.id)}`,{method:'PATCH',body:{pdf_url:url,pdf_path:path},prefer:'return=minimal'});
+  _invalidateCache('invoices');
+  return url;
+}
+
+// Automatic generation — call this after any change that affects what the
+// invoice PDF looks like (items, bill-to, status, dates). Builds fresh and
+// stores it; the Client Portal and bulk download then just fetch this one
+// file instead of each re-rendering their own copy from raw data.
+export async function generateAndStoreInvoicePDF(id){
+  if(!window.jspdf) return null; // library not loaded yet — will retry next edit/download
+  try{
+    const inv=await dGet('invoices',id);
+    if(!inv) return null;
+    const doc=_buildInvoicePDFDoc(inv);
+    return await _storeInvoicePDF(inv,doc);
+  }catch(e){ console.warn('[DeepFlow] Auto PDF generation failed for invoice',id,e); return null; }
 }
 
 async function markInvPaid(id){
@@ -7088,12 +7154,14 @@ async function markInvPaid(id){
   await logActivity(`Invoice ${inv.number} marked Paid (£${t.grand.toFixed(2)})`,'invoice');
   toast('Invoice marked as Paid','success');
   renderInvList();viewInv(id);updateBadges();
+  generateAndStoreInvoicePDF(id).catch(e=>console.warn('[DeepFlow] PDF regen after markInvPaid failed',e));
 }
 async function markInvSent(id){
   const inv=await dGet('invoices',id);
   inv.status='Awaiting Payment';await dPut('invoices',inv);
   renderInvList();viewInv(id);updateBadges();
   toast('Marked as Awaiting Payment','info');
+  generateAndStoreInvoicePDF(id).catch(e=>console.warn('[DeepFlow] PDF regen after markInvSent failed',e));
 }
 async function deleteInv(id){
   if(!getUserPerm('canDelete')){ toast('You do not have permission to delete invoices','error'); return; }
@@ -10927,6 +10995,7 @@ async function markInvUnpaid(id){
     await logActivity(`Invoice ${inv.number} marked as Unpaid (payments cleared)`,'invoice');
     toast('Invoice reset to Awaiting Payment','warn');
     renderInvList();viewInv(id);updateBadges();
+    generateAndStoreInvoicePDF(id).catch(e=>console.warn('[DeepFlow] PDF regen after markInvUnpaid failed',e));
   });
 }
 
@@ -12377,6 +12446,7 @@ async function saveInvWithJobSync(){
   renderFutureJobs();
   toast('Invoice saved ✅','success');
   if(!editInvId) viewInv(invId);
+  generateAndStoreInvoicePDF(invId).catch(e=>console.warn('[DeepFlow] PDF regen after invoice save failed',e));
   }catch(err){
     let msg = err.message||'Save failed';
     if(msg.includes('42501')||msg.includes('row-level security')){
@@ -14112,7 +14182,7 @@ Object.assign(window, {
   showColMenu, showJobAudit, showPropertyCerts, showPropPopup, showWaPanel, skipCertExpiry, smartAutofill, stmtClearFilters,
   stmtQuickRange, stmtToggleAll, stmtToggleSel, switchAuditTab, switchCertTab, switchDirSection,
   switchSetTab, teamAdd, teamChangeRole, teamRevoke, testNotifWebhook, toggleAllCerts,
-  toggleBulkSelectMode, toggleCalPane, toggleCertChip, toggleCol, toggleColPicker, toggleInvSync,
+  toggleBillToOverride, toggleBulkSelectMode, toggleCalPane, toggleCertChip, toggleCol, toggleColPicker, toggleInvSync,
   toggleNotifPanel, toggleOTHours, toggleOnlinePanel, togglePersonSelect, togglePwVis, toggleSelRow, toggleSidebar, toggleTheme,
   toggleUnassignedView, toggleUserMenu, updateCertAddrSugg, updateEngPerm, updateLogo, updatePortalContact, updInvTotals,
   uploadCertPdf, viewInv, viewPropJobs, waEngineerAllJobs, waJobsSelected, waShowEng, 

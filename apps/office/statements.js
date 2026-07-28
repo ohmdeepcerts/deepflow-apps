@@ -224,15 +224,43 @@ export function stmtToggleAll(cb) {
   if (dlBtn) dlBtn.textContent = _stmtSelected.size > 0 ? `⬇ Download ${_stmtSelected.size} PDFs` : '⬇ Bulk PDF Download';
 }
 
+// Fetches an already-generated PDF from Storage and triggers a real file
+// download via a blob URL — no popup-blocker issues in a loop, unlike
+// window.open(), and no regenerating a document that's already sitting
+// there unchanged.
+async function _downloadStoredPDF(url, filename) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('Fetch failed: ' + res.status);
+  const blob = await res.blob();
+  const objUrl = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = objUrl; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(objUrl);
+}
+
 export async function bulkDownloadPDFs() {
   const ids = _stmtSelected.size > 0 ? [..._stmtSelected] : _stmtInvoices.map(i => i.id);
   if (!ids.length) { toast('No invoices to download', 'warn'); return; }
-  toast(`Generating ${ids.length} PDFs…`, 'info', 4000);
+  toast(`Downloading ${ids.length} PDFs…`, 'info', 4000);
+  let stored = 0, generated = 0;
   for (const id of ids) {
-    await downloadInvPDFById(id);
+    const inv = await dGet('invoices', id);
+    if (inv?.pdfUrl) {
+      // Already generated and stored — just fetch the fixed file rather
+      // than rebuilding it client-side again.
+      try { await _downloadStoredPDF(inv.pdfUrl, (inv.number || 'invoice') + '.pdf'); stored++; }
+      catch (e) { console.warn('[DeepFlow] Stored PDF fetch failed, falling back to regenerate for', inv.number, e); await downloadInvPDFById(id); generated++; }
+    } else {
+      // No stored copy yet (an invoice created before this feature existed)
+      // — build and download it now; downloadInvPDFById also stores a copy
+      // in the background so next time this hits the fast path above.
+      await downloadInvPDFById(id);
+      generated++;
+    }
     await new Promise(r => setTimeout(r, 300)); // small delay between downloads
   }
-  toast(`${ids.length} PDFs downloaded ✓`, 'success');
+  toast(`${ids.length} PDFs downloaded ✓ (${stored} stored, ${generated} generated)`, 'success');
 }
 
 export async function printFilteredInvoices() {
