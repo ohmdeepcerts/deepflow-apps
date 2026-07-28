@@ -104,7 +104,6 @@ export async function downloadInvPDF(id){
   // exactly why a redesign could land in Office and this would still show
   // the old look here. One template now, not two that can drift again.
   const {jsPDF}=window.jspdf;
-  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
   const t=calcTotal(inv);
   const vr=_portalVatRate();
   const html=buildInvoiceHTML({inv,S:_S,totals:t,vatRate:vr});
@@ -112,12 +111,19 @@ export async function downloadInvPDF(id){
   holder.style.cssText='position:fixed;left:-99999px;top:0;';
   holder.innerHTML=html;
   document.body.appendChild(holder);
+  let doc;
   try{
-    const canvas=await window.html2canvas(holder.firstElementChild,{scale:2.5,useCORS:true,backgroundColor:'#ffffff'});
-    const imgData=canvas.toDataURL('image/jpeg',0.93);
+    const canvas=await window.html2canvas(holder.firstElementChild,{scale:3,useCORS:true,backgroundColor:'#ffffff'});
+    const imgData=canvas.toDataURL('image/jpeg',0.95);
     let w=210, h=210*canvas.height/canvas.width;
-    if(h>297){ h=297; w=297*canvas.width/canvas.height; }
-    doc.addImage(imgData,'JPEG',(210-w)/2,0,w,h);
+    if(h>297){
+      h=297; w=297*canvas.width/canvas.height;
+      doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+      doc.addImage(imgData,'JPEG',(210-w)/2,0,w,h);
+    } else {
+      doc=new jsPDF({orientation:'portrait',unit:'mm',format:[w,h]});
+      doc.addImage(imgData,'JPEG',0,0,w,h);
+    }
   } finally {
     holder.remove();
   }

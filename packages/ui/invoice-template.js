@@ -106,7 +106,7 @@ export function buildInvoiceHTML({ inv, S, totals, vatRate }) {
   return `
   <div class="inv-page" style="--tag:${tag}">
     <style>
-      .inv-page{width:210mm;min-height:297mm;background:#fff;color:#12151B;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;position:relative;overflow:hidden}
+      .inv-page{width:210mm;background:#fff;color:#12151B;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;position:relative;overflow:hidden}
       .inv-page *{box-sizing:border-box}
       .inv-page .num{font-variant-numeric:tabular-nums}
       .inv-page .ic{width:14px;height:14px;flex-shrink:0}
@@ -148,14 +148,15 @@ export function buildInvoiceHTML({ inv, S, totals, vatRate }) {
       .total-row .v{font-size:23px;font-weight:700}
       .pay-line{font-size:11.5px;color:#5B6472;margin-top:12px;display:flex;align-items:center;gap:6px}
       .payref-box{margin-top:16px;padding:10px 14px;background:#FEF8EB;border:1px solid #E8B84B;border-radius:8px;font-size:11.5px;color:#6B4E0C}
-      .agent-block{margin-top:18px;padding:14px 16px;border-radius:10px;border:1px solid #E6E9EF;background:#FBFCFD}
-      .agent-block .t{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--tag);margin-bottom:6px;display:flex;align-items:center;gap:6px}
-      .agent-block .n{font-size:13px;font-weight:700}
-      .agent-block .l{font-size:11.5px;color:#5B6472;margin-top:3px;display:flex;gap:14px;flex-wrap:wrap}
-      .agent-block .l span{display:inline-flex;align-items:center;gap:5px}
-      .foot{margin-top:24px;padding-top:14px;border-top:1px solid #E6E9EF;display:flex;justify-content:space-between;align-items:center}
+      .foot{margin-top:22px;padding-top:12px;border-top:1px solid #E6E9EF;display:flex;flex-direction:column;gap:9px}
+      .foot-agent{display:flex;align-items:center;gap:6px;font-size:11px;color:#5B6472;padding-bottom:9px;border-bottom:1px solid #EEF1F5}
+      .foot-agent .ic{color:var(--tag)}
+      .foot-agent b{color:#12151B}
+      .foot-row{display:flex;justify-content:space-between;align-items:flex-end}
       .foot .reg{font-size:9.5px;letter-spacing:.06em;color:#9AA3B0}
-      .foot .credit{font-size:10.5px;font-weight:700}
+      .foot .credit{text-align:right;line-height:1.5}
+      .foot .credit .tagline{font-size:9px;letter-spacing:.05em;color:#9AA3B0}
+      .foot .credit .brand-line{font-size:10.5px;font-weight:700}
       .foot .credit .brand{background:linear-gradient(135deg,#0284C7,#0EA5E9 40%,#D97706 70%,#B45309);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
       .foot .credit .plain{color:#7A8290;font-weight:600}
     </style>
@@ -214,16 +215,15 @@ export function buildInvoiceHTML({ inv, S, totals, vatRate }) {
         ? `<div class="pay-line">✓ Paid via Bank Transfer · Ref ${esc(inv.number)}</div>`
         : `<div class="payref-box">Please use <b>${esc(inv.number)}</b> as your payment reference.</div>`}
 
-      ${showAgent ? `
-      <div class="agent-block">
-        <div class="t">${icon('person')}Instructed via agent</div>
-        <div class="n">${esc(inv.agentName)}</div>
-        <div class="l">${inv.agentEmail ? `<span>${icon('mail')}${esc(inv.agentEmail)}</span>` : ''}</div>
-      </div>` : ''}
-
       <div class="foot">
-        <div class="reg">${esc(regBits)}</div>
-        <div class="credit"><span class="plain">Powered by </span><span class="brand">DeepFlow</span></div>
+        ${showAgent ? `<div class="foot-agent">${icon('person')}<span><b>${esc(inv.agentName)}</b>${inv.agentEmail ? ' · ' + esc(inv.agentEmail) : ''} — instructed via agent</span></div>` : ''}
+        <div class="foot-row">
+          <div class="reg">${esc(regBits)}</div>
+          <div class="credit">
+            <div class="tagline">Invoicing &amp; Job Management</div>
+            <div class="brand-line"><span class="plain">Powered by </span><span class="brand">DeepFlow</span></div>
+          </div>
+        </div>
       </div>
     </div>
   </div>`;

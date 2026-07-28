@@ -6474,7 +6474,7 @@ async function viewInv(id){
           </label>
         </div>
         ${inv.billToOverride ? `
-        <div style="font-size:13px;font-weight:700;color:#1e293b;margin-bottom:3px">${ef('clientName',inv.clientName||inv.billToName||'',{style:'font-size:13px;font-weight:700'})}</div>
+        <div style="font-size:13px;font-weight:700;color:#1e293b;margin-bottom:3px">${ef('billToName',inv.billToName||inv.clientName||'',{style:'font-size:13px;font-weight:700'})}</div>
         <div style="font-size:11px;color:#64748b">${ef('billToAddress',inv.billToAddress||inv.clientAddr||'',{style:'font-size:11px;color:#64748b',multi:true})}</div>
         <div style="font-size:11px;color:#94a3b8;margin-top:3px">${ef('clientEmail',inv.clientEmail||'',{style:'font-size:11px;color:#64748b'})}</div>
         <div style="font-size:10px;color:#c2851a;margin-top:4px">Only this invoice — real record: ${escHtml(inv.landlordName||inv.agencyName||'—')}</div>
@@ -6827,7 +6827,6 @@ async function _buildInvoicePDFDoc(inv){
   const t=calcInvTotal(inv);
   const vr=getVatRate();
   const {jsPDF}=window.jspdf;
-  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
 
   // Render the real HTML/CSS template off-screen and rasterise it into the
   // page — a genuine screenshot of genuine CSS (real gradients, card
@@ -6839,12 +6838,26 @@ async function _buildInvoicePDFDoc(inv){
   holder.style.cssText='position:fixed;left:-99999px;top:0;';
   holder.innerHTML=html;
   document.body.appendChild(holder);
+  let doc;
   try{
-    const canvas=await window.html2canvas(holder.firstElementChild,{scale:2.5,useCORS:true,backgroundColor:'#ffffff'});
-    const imgData=canvas.toDataURL('image/jpeg',0.93);
+    // scale:3 (was 2.5) for crisper text/lines — the template no longer
+    // forces a full-A4 canvas (see invoice-template.js), so a short
+    // invoice's canvas is much smaller than before and can afford it.
+    const canvas=await window.html2canvas(holder.firstElementChild,{scale:3,useCORS:true,backgroundColor:'#ffffff'});
+    const imgData=canvas.toDataURL('image/jpeg',0.95);
     let w=210, h=210*canvas.height/canvas.width;
-    if(h>297){ h=297; w=297*canvas.width/canvas.height; } // shrink-to-fit rather than cut off a tall invoice
-    doc.addImage(imgData,'JPEG',(210-w)/2,0,w,h);
+    if(h>297){
+      // Long invoice (many line items) — shrink to fit one standard A4
+      // page rather than growing the page indefinitely.
+      h=297; w=297*canvas.width/canvas.height;
+      doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+      doc.addImage(imgData,'JPEG',(210-w)/2,0,w,h);
+    } else {
+      // Short invoice — size the PDF page to the actual content instead
+      // of padding it out to a near-empty full A4 sheet.
+      doc=new jsPDF({orientation:'portrait',unit:'mm',format:[w,h]});
+      doc.addImage(imgData,'JPEG',0,0,w,h);
+    }
   } finally {
     holder.remove();
   }
