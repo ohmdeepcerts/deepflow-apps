@@ -6839,6 +6839,31 @@ function _buildInvoicePDFDoc(inv){
   const isAgency = inv.invoiceType === 'agency';
   const accent = isAgency ? [14,165,233] : [124,58,237];       // #0EA5E9 / #7C3AED
   const headerBg = isAgency ? [13,31,60] : [76,33,182];        // #0D1F3C / #4C1D95
+  // 3-stop gradient matching the real DeepFlow login screen band (dark →
+  // lighter mid → dark) — jsPDF has no native gradient fill, so this is
+  // approximated with 48 stacked 1px-ish strips interpolated between stops.
+  const headerStops = isAgency
+    ? [{t:0,c:[13,31,60]},{t:.5,c:[30,58,95]},{t:1,c:[10,22,40]}]
+    : [{t:0,c:[76,33,182]},{t:.5,c:[124,58,237]},{t:1,c:[55,20,110]}];
+  const drawGradient=(x,y,w,h,stops)=>{
+    const steps=48;
+    for(let i=0;i<steps;i++){
+      const t=i/(steps-1);
+      let s0=stops[0], s1=stops[stops.length-1];
+      for(let k=0;k<stops.length-1;k++){ if(t>=stops[k].t&&t<=stops[k+1].t){ s0=stops[k]; s1=stops[k+1]; break; } }
+      const lt = s1.t>s0.t ? (t-s0.t)/(s1.t-s0.t) : 0;
+      doc.setFillColor(
+        Math.round(s0.c[0]+(s1.c[0]-s0.c[0])*lt),
+        Math.round(s0.c[1]+(s1.c[1]-s0.c[1])*lt),
+        Math.round(s0.c[2]+(s1.c[2]-s0.c[2])*lt)
+      );
+      doc.rect(x,y+h*t,w,h/steps+0.6,'F');
+    }
+  };
+  // Small filled-circle separator used between contact-line items and as a
+  // section-label bullet — a drawn dot in the accent colour reads as more
+  // deliberately designed than a typed middle-dot character.
+  const dot=(x,y,c)=>{ doc.setFillColor(...c); doc.circle(x,y,0.6,'F'); };
 
   // ── Helper: safe text with word wrap ──
   const safeText=(txt,x,y,maxW)=>{
@@ -6859,17 +6884,17 @@ function _buildInvoicePDFDoc(inv){
   const coLines=[];
   if(!hasLogo) coLines.push({txt:S.coName||'Your Company',size:12,bold:true,gap:5.5});
   if(S.coAddr) doc.splitTextToSize(S.coAddr,80).forEach(line=>coLines.push({txt:line,size:7.5,gap:3.6}));
-  const contactBits=[S.coPhone,S.coEmail,S.coWeb].filter(Boolean).join('  ·  ');
-  if(contactBits) coLines.push({txt:contactBits,size:7.5,gap:3.6});
-  const regBits=[(S.coVatNum&&S.vatEnabled!==false)?'VAT No: '+S.coVatNum:null, S.coReg?'Company No: '+S.coReg:null].filter(Boolean).join('  ·  ');
-  if(regBits) coLines.push({txt:regBits,size:7.5,gap:3.6});
+  const contactParts=[S.coPhone,S.coEmail,S.coWeb].filter(Boolean);
+  if(contactParts.length) coLines.push({parts:contactParts,size:7.5,gap:3.6});
+  const regParts=[(S.coVatNum&&S.vatEnabled!==false)?'VAT No: '+S.coVatNum:null, S.coReg?'Company No: '+S.coReg:null].filter(Boolean);
+  if(regParts.length) coLines.push({parts:regParts,size:7.5,gap:3.6});
 
   const logoTop=M-8, logoH=hasLogo?18:0;
   const textTop=hasLogo?(logoTop+logoH+6):(M-4);
   const textBottom=coLines.reduce((yy,l)=>yy+l.gap,textTop);
   const headerH=Math.max(40,textBottom+6);
 
-  doc.setFillColor(...headerBg);doc.rect(0,0,W,headerH,'F');
+  drawGradient(0,0,W,headerH,headerStops);
 
   // ── LOGO ──
   if(hasLogo){
@@ -6879,10 +6904,24 @@ function _buildInvoicePDFDoc(inv){
 
   // ── COMPANY DETAILS (left, white-on-dark) ──
   let cy=textTop;
+  const goldDot=[253,224,71]; // warm dot regardless of theme — echoes the
+  // gold end of the real login gradient (cyan→gold), a small consistent
+  // brand thread through every invoice rather than a plain typed '·'.
   coLines.forEach(l=>{
     doc.setFont('helvetica',l.bold?'bold':'normal');doc.setFontSize(l.size);
-    doc.setTextColor(...(l.bold?[255,255,255]:[210,215,235]));
-    doc.text(l.txt,M,cy);
+    const col=l.bold?[255,255,255]:[210,215,235];
+    if(l.parts){
+      let cx=M;
+      l.parts.forEach((p,i)=>{
+        doc.setTextColor(...col);
+        doc.text(p,cx,cy);
+        cx+=doc.getTextWidth(p);
+        if(i<l.parts.length-1){ cx+=2; dot(cx,cy-1,goldDot); cx+=2; }
+      });
+    } else {
+      doc.setTextColor(...col);
+      doc.text(l.txt,M,cy);
+    }
     cy+=l.gap;
   });
 
@@ -6907,10 +6946,18 @@ function _buildInvoicePDFDoc(inv){
   // ══════════════════════════════════════════════════════════════
   const colW=(RW-10)/2;
 
+  // Section label — coloured uppercase text with a small drawn dot, not a
+  // filled grey bar, matching the artifact's actual label treatment (a
+  // coloured caption, not a badge) and using far less ink across a page
+  // that's often printed in bulk.
+  const sectionLabel=(txt,x,yy)=>{
+    dot(x+0.6,yy-1.6,accent);
+    doc.setFont('helvetica','bold');doc.setFontSize(7.5);doc.setTextColor(...accent);
+    doc.text(txt,x+3,yy);
+  };
+
   // BILL TO header
-  doc.setFillColor(...light);doc.rect(M,y,colW,6,'F');
-  doc.setFont('helvetica','bold');doc.setFontSize(7.5);doc.setTextColor(...mid);
-  doc.text('BILL TO',M+3,y+4);
+  sectionLabel('BILL TO',M,y+3);
   y+=9;
   
   // Bill To Name (Agency or Landlord)
@@ -6940,9 +6987,7 @@ function _buildInvoicePDFDoc(inv){
     // For agency invoices, property is already shown as JOB ADDRESS below Bill To
     if(!isAgency){
       clientY += 4;
-      doc.setFillColor(...light);doc.rect(M,clientY-2,colW,6,'F');
-      doc.setFont('helvetica','bold');doc.setFontSize(7.5);doc.setTextColor(...mid);
-      doc.text('PROPERTY ADDRESS',M+3,clientY+2);
+      sectionLabel('PROPERTY ADDRESS',M,clientY+2);
       clientY += 7;
       doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(...dark);
       const propLines=doc.splitTextToSize(propAddr,colW);
@@ -6953,9 +6998,7 @@ function _buildInvoicePDFDoc(inv){
   // JOB ADDRESS section for agencies
   if(isAgency && inv.jobAddress && inv.jobAddress.trim()){
     clientY += 4;
-    doc.setFillColor(...light);doc.rect(M,clientY-2,colW,6,'F');
-    doc.setFont('helvetica','bold');doc.setFontSize(7.5);doc.setTextColor(...mid);
-    doc.text('PROPERTY ADDRESS',M+3,clientY+2);
+    sectionLabel('PROPERTY ADDRESS',M,clientY+2);
     clientY += 7;
     doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(...mid);
     const jobAddrLines=doc.splitTextToSize(inv.jobAddress,colW);
@@ -6969,9 +7012,7 @@ function _buildInvoicePDFDoc(inv){
   detailY = Math.max(y, detailY);
 
   // Job details block (right column)
-  doc.setFillColor(...light);doc.rect(detailX,y-9,detailW,6,'F');
-  doc.setFont('helvetica','bold');doc.setFontSize(7.5);doc.setTextColor(...mid);
-  doc.text('JOB DETAILS',detailX+3,y-9+4);
+  sectionLabel('JOB DETAILS',detailX,y-9+4);
   let djY = y - 1;
 
   const djRow=(lbl,val)=>{
@@ -7030,10 +7071,21 @@ function _buildInvoicePDFDoc(inv){
   const tCol=W-M-50;
   doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(...mid);
   doc.text('Subtotal:',tCol,y);doc.text('£'+t.sub.toFixed(2),W-M,y,{align:'right'});y+=5.5;
-  doc.text(`VAT (${vr}%):`,tCol,y);doc.text('£'+t.vat.toFixed(2),W-M,y,{align:'right'});y+=2;
-  doc.setDrawColor(220,220,230);doc.line(tCol,y,W-M,y);y+=5;
-  doc.setFont('helvetica','bold');doc.setFontSize(12);doc.setTextColor(...accent);
-  doc.text('TOTAL:',tCol,y);doc.text('£'+t.grand.toFixed(2),W-M,y,{align:'right'});y+=8;
+  doc.text(`VAT (${vr}%):`,tCol,y);doc.text('£'+t.vat.toFixed(2),W-M,y,{align:'right'});y+=6;
+
+  // Total block is a small filled gradient card (same stops as the header
+  // band) rather than plain text on a line — the one other place on the
+  // page carrying the full theme, not just an accent-coloured word. Square
+  // corners deliberately — jsPDF has no reliable rounded-rect clip here,
+  // and a gradient fill peeking past a rounded stroke's corners looks
+  // worse than a clean rectangle.
+  const totalCardH=13;
+  drawGradient(M,y-2,RW,totalCardH,headerStops);
+  doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(230,232,245);
+  doc.text('TOTAL DUE',M+5,y+6);
+  doc.setFontSize(15);doc.setTextColor(255,255,255);
+  doc.text('£'+t.grand.toFixed(2),W-M-5,y+6.5,{align:'right'});
+  y+=totalCardH+6;
 
   // ── STATUS WATERMARK — both paid and unpaid, not just paid ──
   const wmText={'Paid':'PAID','Awaiting Payment':'UNPAID'}[inv.status];
@@ -7048,10 +7100,8 @@ function _buildInvoicePDFDoc(inv){
 
   // ── PAYMENT DETAILS ──
   if(S.bankName||S.bankAcc){
-    y+=2;
-    doc.setFillColor(...light);doc.rect(M,y,RW,5.5,'F');
-    doc.setFont('helvetica','bold');doc.setFontSize(7.5);doc.setTextColor(...mid);
-    doc.text('PAYMENT DETAILS',M+3,y+3.8);y+=7;
+    y+=4;
+    sectionLabel('PAYMENT DETAILS',M,y+2);y+=8;
     doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(...dark);
     if(S.bankName)doc.text('Bank: '+S.bankName,M,y);
     if(S.bankAcc)doc.text('Acc: '+S.bankAcc+(S.bankSort?' · Sort: '+S.bankSort:''),M+55,y);y+=5;
