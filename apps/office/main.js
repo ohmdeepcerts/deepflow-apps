@@ -6843,29 +6843,43 @@ function _buildInvoicePDFDoc(inv){
     return lines.length;
   };
 
-  // ── HEADER BAND ──
-  const headerH=44;
+  // ── HEADER BAND — height computed from the actual content, not a fixed
+  // guess. A fixed 44mm band meant a real logo plus a wrapped address plus
+  // a contact line could run past the band and land on the white body
+  // below it, still coloured for a dark background — pale text on white,
+  // effectively invisible. coLines is built once and used for BOTH the
+  // height calculation and the actual drawing, so the two can't drift
+  // apart the way a separate estimate (e.g. counting commas) did before.
+  const hasLogo=!!S.logoData;
+  const coLines=[];
+  if(!hasLogo) coLines.push({txt:S.coName||'Your Company',size:12,bold:true,gap:5.5});
+  if(S.coAddr) doc.splitTextToSize(S.coAddr,80).forEach(line=>coLines.push({txt:line,size:7.5,gap:3.6}));
+  const contactBits=[S.coPhone,S.coEmail,S.coWeb].filter(Boolean).join('  ·  ');
+  if(contactBits) coLines.push({txt:contactBits,size:7.5,gap:3.6});
+  const regBits=[(S.coVatNum&&S.vatEnabled!==false)?'VAT No: '+S.coVatNum:null, S.coReg?'Company No: '+S.coReg:null].filter(Boolean).join('  ·  ');
+  if(regBits) coLines.push({txt:regBits,size:7.5,gap:3.6});
+
+  const logoTop=M-8, logoH=hasLogo?18:0;
+  const textTop=hasLogo?(logoTop+logoH+6):(M-4);
+  const textBottom=coLines.reduce((yy,l)=>yy+l.gap,textTop);
+  const headerH=Math.max(40,textBottom+6);
+
   doc.setFillColor(...headerBg);doc.rect(0,0,W,headerH,'F');
 
   // ── LOGO ──
-  let logoBottom=M-4;
-  if(S.logoData){
-    try{
-      doc.addImage(S.logoData,'PNG',M,M-8,36,18,'','FAST');
-      logoBottom=M+10;
-    }catch(e){ console.warn('[DeepFlow]', e); }
+  if(hasLogo){
+    try{ doc.addImage(S.logoData,'PNG',M,logoTop,36,18,'','FAST'); }
+    catch(e){ console.warn('[DeepFlow]', e); }
   }
 
   // ── COMPANY DETAILS (left, white-on-dark) ──
-  let cy=logoBottom+5;
-  doc.setFont('helvetica','bold');doc.setFontSize(12);doc.setTextColor(255,255,255);
-  doc.text(S.coName||'Your Company',M,cy); cy+=5;
-  doc.setFont('helvetica','normal');doc.setFontSize(7.5);doc.setTextColor(210,215,235);
-  if(S.coAddr){safeText(S.coAddr,M,cy,80);cy+=3.6*(S.coAddr.split(',').length);}
-  const contactBits=[S.coPhone,S.coEmail,S.coWeb].filter(Boolean).join('  ·  ');
-  if(contactBits){doc.text(contactBits,M,cy);cy+=3.6;}
-  if(S.coVatNum&&S.vatEnabled!==false){doc.text('VAT No: '+S.coVatNum,M,cy);cy+=3.6;}
-  if(S.coReg){doc.text('Company No: '+S.coReg,M,cy);}
+  let cy=textTop;
+  coLines.forEach(l=>{
+    doc.setFont('helvetica',l.bold?'bold':'normal');doc.setFontSize(l.size);
+    doc.setTextColor(...(l.bold?[255,255,255]:[210,215,235]));
+    doc.text(l.txt,M,cy);
+    cy+=l.gap;
+  });
 
   // ── INVOICE META (right, white-on-dark) ──
   doc.setFont('helvetica','bold');doc.setFontSize(22);doc.setTextColor(255,255,255);
