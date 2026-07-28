@@ -8215,6 +8215,17 @@ async function teamAdd(authId, email){
 
 // Change an existing user's role
 async function teamChangeRole(userId, email, newRole, sel){
+  // Same gap as teamAdd() had: this dropdown's onchange only fires on a
+  // real value change, so reaching here with 'engineer' always means
+  // converting an existing office/auth-linked user INTO an engineer --
+  // which would set no phone, no pin_reset_allowed, and skip the name-
+  // collision check entirely, creating a dead-end account with none of
+  // the safety the real Add Engineer flow has. Route people there instead.
+  if(newRole==='engineer'){
+    toast('❌ Use "👷 Add Engineer" in Settings → Team to make someone an engineer','error',6000);
+    if(sel) loadTeam(); // reset the dropdown back to their real current role
+    return;
+  }
   const isEng = newRole==='engineer';
   try{
     await _sb(`users?id=eq.${userId}`,{method:'PATCH',prefer:'return=minimal',body:{
