@@ -6628,6 +6628,11 @@ async function toggleBillToOverride(invId, checked){
     await _sb(`invoices?id=eq.${encodeURIComponent(invId)}`,{method:'PATCH',body:{bill_to_override:checked},prefer:'return=minimal'});
     _invalidateCache('invoices');
     await viewInv(invId);
+    // The toggle alone changes what's on the printed invoice (whether the
+    // override name/address is active) — regenerate the stored PDF here
+    // too, not just on text-field edits, or flipping the switch with no
+    // other change leaves the stored copy showing the old state.
+    generateAndStoreInvoicePDF(invId).catch(e=>console.warn('[DeepFlow] PDF regen after override toggle failed',e));
   }catch(e){ toast('Could not update Bill To Override: '+(e.message||'').slice(0,80),'error'); }
 }
 
