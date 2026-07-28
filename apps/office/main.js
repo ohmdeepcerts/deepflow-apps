@@ -6619,16 +6619,14 @@ function _renderLiveItems(inv,id){
 // Bill To Override toggle — on/off only changes what's editable/shown on
 // THIS invoice's Bill To block. It never touches the job or the directory;
 // see bill_to_override migration + _INV_TO_JOB_FIELD for why that matters.
+// Deliberately does NOT clear billtoname/billtoaddress when switched off —
+// the override text stays saved on the invoice either way, so switching
+// back on later shows exactly what was typed before instead of a blank
+// form. The toggle controls whether it's *active*, not whether it exists.
 async function toggleBillToOverride(invId, checked){
   try{
     await _sb(`invoices?id=eq.${encodeURIComponent(invId)}`,{method:'PATCH',body:{bill_to_override:checked},prefer:'return=minimal'});
     _invalidateCache('invoices');
-    if(!checked){
-      // Reverting to the real record — clear the override text so a stale
-      // name/address can't silently resurface if Override is switched back
-      // on later without anyone re-checking what's in the fields first.
-      await _sb(`invoices?id=eq.${encodeURIComponent(invId)}`,{method:'PATCH',body:{billtoname:null,billtoaddress:null},prefer:'return=minimal'});
-    }
     await viewInv(invId);
   }catch(e){ toast('Could not update Bill To Override: '+(e.message||'').slice(0,80),'error'); }
 }
@@ -6826,7 +6824,16 @@ function _buildInvoicePDFDoc(inv){
   const {jsPDF}=window.jspdf;
   const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
   const W=210, H=297, M=18, RW=W-M*2;
-  const accent=[245,166,35], dark=[22,24,35], mid=[80,85,110], light=[245,246,250];
+  const dark=[22,24,35], mid=[80,85,110], light=[245,246,250];
+
+  // Determined up front — everything below (header band, watermark, totals,
+  // footer) is themed off this: violet for landlord invoices, navy/cyan for
+  // agency ones, matching the header band colour scheme in the DeepFlow
+  // login/PIN screens (see packages/ui/network-canvas.js) rather than the
+  // old single hardcoded amber accent used everywhere regardless of type.
+  const isAgency = inv.invoiceType === 'agency';
+  const accent = isAgency ? [14,165,233] : [124,58,237];       // #0EA5E9 / #7C3AED
+  const headerBg = isAgency ? [13,31,60] : [76,33,182];        // #0D1F3C / #4C1D95
 
   // ── Helper: safe text with word wrap ──
   const safeText=(txt,x,y,maxW)=>{
@@ -6836,54 +6843,50 @@ function _buildInvoicePDFDoc(inv){
     return lines.length;
   };
 
-  // ── TOP COLOUR BAR ──
-  doc.setFillColor(...accent);doc.rect(0,0,W,4,'F');
+  // ── HEADER BAND ──
+  const headerH=44;
+  doc.setFillColor(...headerBg);doc.rect(0,0,W,headerH,'F');
 
   // ── LOGO ──
-  let logoBottom=M;
+  let logoBottom=M-4;
   if(S.logoData){
     try{
-      doc.addImage(S.logoData,'PNG',M,M+4,36,18,'','FAST');
-      logoBottom=M+24;
+      doc.addImage(S.logoData,'PNG',M,M-8,36,18,'','FAST');
+      logoBottom=M+10;
     }catch(e){ console.warn('[DeepFlow]', e); }
   }
 
-  // ── COMPANY DETAILS (left) ──
-  let cy=logoBottom+4;
-  doc.setFont('helvetica','bold');doc.setFontSize(11);doc.setTextColor(...dark);
+  // ── COMPANY DETAILS (left, white-on-dark) ──
+  let cy=logoBottom+5;
+  doc.setFont('helvetica','bold');doc.setFontSize(12);doc.setTextColor(255,255,255);
   doc.text(S.coName||'Your Company',M,cy); cy+=5;
-  doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(...mid);
-  if(S.coAddr){safeText(S.coAddr,M,cy,70);cy+=4*(S.coAddr.split(',').length);}
-  if(S.coPhone){doc.text(S.coPhone,M,cy);cy+=4;}
-  if(S.coEmail){doc.text(S.coEmail,M,cy);cy+=4;}
-  if(S.coWeb){doc.text(S.coWeb,M,cy);cy+=4;}
-  if(S.coVatNum&&S.vatEnabled!==false){doc.text('VAT No: '+S.coVatNum,M,cy);cy+=4;}
+  doc.setFont('helvetica','normal');doc.setFontSize(7.5);doc.setTextColor(210,215,235);
+  if(S.coAddr){safeText(S.coAddr,M,cy,80);cy+=3.6*(S.coAddr.split(',').length);}
+  const contactBits=[S.coPhone,S.coEmail,S.coWeb].filter(Boolean).join('  ·  ');
+  if(contactBits){doc.text(contactBits,M,cy);cy+=3.6;}
+  if(S.coVatNum&&S.vatEnabled!==false){doc.text('VAT No: '+S.coVatNum,M,cy);cy+=3.6;}
   if(S.coReg){doc.text('Company No: '+S.coReg,M,cy);}
 
-  // ── INVOICE META (right) ──
-  doc.setFont('helvetica','bold');doc.setFontSize(28);doc.setTextColor(...accent);
-  doc.text('INVOICE',W-M,M+10,{align:'right'});
-  doc.setFontSize(10);doc.setTextColor(...dark);
-  doc.text(inv.number,W-M,M+20,{align:'right'});
-  doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(...mid);
-  doc.text('Issue date: '+(inv.date||'—'),W-M,M+28,{align:'right'});
-  if(inv.dueDate)doc.text('Due date:    '+inv.dueDate,W-M,M+34,{align:'right'});
-  doc.setFont('helvetica','bold');
-  const statusColour={'Paid':[34,197,94],'Awaiting Payment':[245,166,35],'Cancelled':[200,60,60],'Draft':[120,130,150]}[inv.status]||mid;
+  // ── INVOICE META (right, white-on-dark) ──
+  doc.setFont('helvetica','bold');doc.setFontSize(22);doc.setTextColor(255,255,255);
+  doc.text('INVOICE',W-M,M-6,{align:'right'});
+  doc.setFontSize(10);
+  doc.text(inv.number,W-M,M+1,{align:'right'});
+  doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(200,205,225);
+  doc.text('Issue: '+(inv.date||'—')+(inv.dueDate?'   Due: '+inv.dueDate:''),W-M,M+7,{align:'right'});
+  doc.setFont('helvetica','bold');doc.setFontSize(9);
+  const statusColour={'Paid':[74,222,128],'Awaiting Payment':[253,224,71],'Cancelled':[252,165,165],'Draft':[190,195,215]}[inv.status]||[210,215,235];
   doc.setTextColor(...statusColour);
-  doc.text(inv.status||'Draft',W-M,M+42,{align:'right'});
+  doc.text((inv.status||'Draft').toUpperCase(),W-M,M+14,{align:'right'});
 
   // ── DIVIDER ──
-  let y=Math.max(cy+6, 62);
+  let y=headerH+8;
   doc.setDrawColor(220,220,230);doc.setLineWidth(0.3);doc.line(M,y,W-M,y);y+=6;
 
   // ══════════════════════════════════════════════════════════════
   // BILL TO SECTION - Uses SAVED invoice data (not temporary vars)
   // ══════════════════════════════════════════════════════════════
   const colW=(RW-10)/2;
-  
-  // CRITICAL: Determine invoice type from SAVED data, not temporary variables
-  const isAgency = inv.invoiceType === 'agency';
 
   // BILL TO header
   doc.setFillColor(...light);doc.rect(M,y,colW,6,'F');
@@ -6966,7 +6969,9 @@ function _buildInvoicePDFDoc(inv){
   djRow('Date:',     inv.jobDate?new Date(inv.jobDate+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'');
   djRow('Engineer:', inv.engineer||'');
   djRow('Work done:',inv.certTypes||inv.description||'');
-  if(inv.agentName&&isAgency) djRow('Agent:',inv.agentName);
+  // Agent details live in the footer only now (see below), gated on
+  // S.invShowAgent — no separate copy here to avoid showing it twice when
+  // the setting is on, or a stray "Agent:" row when it's off.
 
   y = clientY + 4;
 
@@ -7011,12 +7016,14 @@ function _buildInvoicePDFDoc(inv){
   doc.setFont('helvetica','bold');doc.setFontSize(12);doc.setTextColor(...accent);
   doc.text('TOTAL:',tCol,y);doc.text('£'+t.grand.toFixed(2),W-M,y,{align:'right'});y+=8;
 
-  // ── PAID WATERMARK ──
-  if(inv.status==='Paid'){
+  // ── STATUS WATERMARK — both paid and unpaid, not just paid ──
+  const wmText={'Paid':'PAID','Awaiting Payment':'UNPAID'}[inv.status];
+  const wmColour={'Paid':[34,197,94],'Awaiting Payment':[220,38,38]}[inv.status];
+  if(wmText){
     doc.saveGraphicsState();
-    doc.setGState(doc.GState({opacity:0.08}));
-    doc.setFont('helvetica','bold');doc.setFontSize(80);doc.setTextColor(34,197,94);
-    doc.text('PAID',W/2,H/2,{align:'center',angle:35});
+    doc.setGState(doc.GState({opacity:0.07}));
+    doc.setFont('helvetica','bold');doc.setFontSize(80);doc.setTextColor(...wmColour);
+    doc.text(wmText,W/2,H/2,{align:'center',angle:35});
     doc.restoreGraphicsState();
   }
 
@@ -7047,21 +7054,24 @@ function _buildInvoicePDFDoc(inv){
     if(S.invNotes){safeText(S.invNotes,M,y,RW);y+=5;}
   }
 
-  // ── FOOTER LINE - Company · Agent (only for agencies) ──
-  doc.setDrawColor(220,220,230);doc.line(M,H-14,W-M,H-14);
+  // ── FOOTER — company/reg on the left, agent (if enabled) on its own
+  // line beneath, "Powered by DeepFlow" bottom-right. Agent used to only
+  // appear inline in the JOB DETAILS block with no way to switch it off —
+  // now it lives here, gated on the same Settings → Invoices → "Show
+  // agent on invoice" toggle every other agent-visibility check uses.
+  const showAgent = S.invShowAgent!==false && isAgency && inv.agentName && inv.agentName.trim();
+  doc.setDrawColor(220,220,230);doc.line(M,H-17,W-M,H-17);
+
   doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(170,175,195);
-  const footParts=[];
-  
-  // Add company name
-  if(S.coName) footParts.push(S.coName);
-  
-  // Add agent name ONLY if this is an agency job (use isAgency from above)
-  if(isAgency && inv.agentName && inv.agentName.trim()) {
-    footParts.push('Agent: ' + inv.agentName.trim());
+  const footLine1=[S.coName,S.invFooter].filter(Boolean).join('  ·  ');
+  doc.text(footLine1,M,H-12);
+  doc.text('Powered by DeepFlow',W-M,H-12,{align:'right'});
+
+  if(showAgent){
+    doc.setFontSize(6.5);doc.setTextColor(...mid);
+    const agentBits=['Instructed via agent: '+inv.agentName.trim(), inv.agentEmail&&inv.agentEmail.trim()].filter(Boolean).join('  ·  ');
+    doc.text(agentBits,M,H-7.5);
   }
-  
-  doc.text(footParts.join(' · '),M,H-9);
-  doc.text('Generated by DeepFlow',W-M,H-9,{align:'right'});
 
   // ── BOTTOM COLOUR BAR ──
   doc.setFillColor(...accent);doc.rect(0,H-4,W,4,'F');
