@@ -114,15 +114,22 @@ export async function downloadInvPDF(id){
   let doc;
   try{
     const canvas=await window.html2canvas(holder.firstElementChild,{scale:3,useCORS:true,backgroundColor:'#ffffff'});
-    const imgData=canvas.toDataURL('image/jpeg',0.95);
-    let w=210, h=210*canvas.height/canvas.width;
-    if(h>297){
-      h=297; w=297*canvas.width/canvas.height;
-      doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
-      doc.addImage(imgData,'JPEG',(210-w)/2,0,w,h);
-    } else {
-      doc=new jsPDF({orientation:'portrait',unit:'mm',format:[w,h]});
-      doc.addImage(imgData,'JPEG',0,0,w,h);
+    doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+    // Always a real portrait A4 page, one page per screen's worth of
+    // content — see the matching comment in office/main.js's
+    // _buildInvoicePDFDoc for the full reasoning.
+    const pxPerMM=canvas.width/210;
+    const pageHPx=Math.floor(297*pxPerMM);
+    let y=0, pageNum=0;
+    while(y<canvas.height){
+      const sliceHPx=Math.min(pageHPx,canvas.height-y);
+      const slice=document.createElement('canvas');
+      slice.width=canvas.width; slice.height=sliceHPx;
+      slice.getContext('2d').drawImage(canvas,0,y,canvas.width,sliceHPx,0,0,canvas.width,sliceHPx);
+      const imgData=slice.toDataURL('image/jpeg',0.95);
+      if(pageNum>0) doc.addPage();
+      doc.addImage(imgData,'JPEG',0,0,210,sliceHPx/pxPerMM);
+      y+=sliceHPx; pageNum++;
     }
   } finally {
     holder.remove();

@@ -6840,23 +6840,27 @@ async function _buildInvoicePDFDoc(inv){
   document.body.appendChild(holder);
   let doc;
   try{
-    // scale:3 (was 2.5) for crisper text/lines — the template no longer
-    // forces a full-A4 canvas (see invoice-template.js), so a short
-    // invoice's canvas is much smaller than before and can afford it.
+    // scale:3 (was 2.5) for crisper text/lines.
     const canvas=await window.html2canvas(holder.firstElementChild,{scale:3,useCORS:true,backgroundColor:'#ffffff'});
-    const imgData=canvas.toDataURL('image/jpeg',0.95);
-    let w=210, h=210*canvas.height/canvas.width;
-    if(h>297){
-      // Long invoice (many line items) — shrink to fit one standard A4
-      // page rather than growing the page indefinitely.
-      h=297; w=297*canvas.width/canvas.height;
-      doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
-      doc.addImage(imgData,'JPEG',(210-w)/2,0,w,h);
-    } else {
-      // Short invoice — size the PDF page to the actual content instead
-      // of padding it out to a near-empty full A4 sheet.
-      doc=new jsPDF({orientation:'portrait',unit:'mm',format:[w,h]});
-      doc.addImage(imgData,'JPEG',0,0,w,h);
+    doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+    // Always a real portrait A4 page — for a short invoice that just
+    // leaves blank space below the content, same as any normal document.
+    // For a long invoice (many line items) whose content is taller than
+    // one A4 page, slice the canvas into consecutive full-width A4-height
+    // bands and add one page per band, instead of ever shrinking the
+    // page or the content to force it onto a single sheet.
+    const pxPerMM=canvas.width/210;
+    const pageHPx=Math.floor(297*pxPerMM);
+    let y=0, pageNum=0;
+    while(y<canvas.height){
+      const sliceHPx=Math.min(pageHPx,canvas.height-y);
+      const slice=document.createElement('canvas');
+      slice.width=canvas.width; slice.height=sliceHPx;
+      slice.getContext('2d').drawImage(canvas,0,y,canvas.width,sliceHPx,0,0,canvas.width,sliceHPx);
+      const imgData=slice.toDataURL('image/jpeg',0.95);
+      if(pageNum>0) doc.addPage();
+      doc.addImage(imgData,'JPEG',0,0,210,sliceHPx/pxPerMM);
+      y+=sliceHPx; pageNum++;
     }
   } finally {
     holder.remove();
@@ -13933,7 +13937,7 @@ Object.assign(window, {
   engineerChangePhone, submitEngineerChangePhone, _reactivateEngineer, _confirmNewDespiteCollision, _reactivateInCollision,
   _addLiveItem, _copyJobDesc, _copyPortalLink, _editEngFromDeep, _emailPortalShare, _removeLiveItem, _renderEngDeepJobsList,
   _reqAcknowledge, _reqApproveEng, _reqCreateJob, _reqReject, _reqReopen, _reqSendReply, 
-  _saveLiveItem, _sendPLReminder, _showReqDetail, _switchEngDeepTab, _switchPLTab, _updateLiveTotal, 
+  _saveInvField, _saveLiveItem, _sendPLReminder, _showReqDetail, _switchEngDeepTab, _switchPLTab, _updateLiveTotal,
   _waPortalShare, addAccessRow, addCertTypeInline, addCreditItem, addEngRow, addExpiryToExistingCert, 
   addInvCustomText, addInvItem, addPortalContactRow, addTradeRow, applySavedView, applyThemeMode, 
   approvePortalReq, autoDetectCertTypes, autoGrow, bulkAssignEngineer, bulkCopyToDate, bulkDeleteCerts, bulkDeleteJobs,
