@@ -3624,6 +3624,28 @@ body.density-relaxed .jtable td{font-size:15px}
         </div>
 
         <div class="set-section">
+          <div class="set-title">🤖 AI Certificate Photo Extraction <span style="font-size:10px;font-weight:500;color:var(--txt3);text-transform:none;letter-spacing:0">(on by default, needs an API key to actually run)</span></div>
+          <div class="set-card">
+            <div style="font-size:12px;color:var(--txt2);margin-bottom:12px;line-height:1.6">
+              When adding a certificate, you can attach a photo of it and have the cert number, type
+              and dates read off it automatically instead of typing them by hand. Tries
+              <a href="https://aistudio.google.com/" target="_blank" style="color:var(--acc)">Gemini</a>
+              first (free tier, reads the fields directly); if this toggle is off, the Gemini key
+              isn't set, or the Gemini call fails, it falls back to
+              <a href="https://ocr.space/" target="_blank" style="color:var(--acc)">OCR.space</a>
+              (free tier, text only — you'll need to read the fields off the extracted text yourself).
+              Neither key lives in this app — they're set as Supabase Edge Function secrets
+              (<code>GEMINI_API_KEY</code>, <code>OCR_SPACE_API_KEY</code>) by whoever manages the
+              Supabase project.
+            </div>
+            <label class="fcheck">
+              <input type="checkbox" id="s-ai-extract-enabled" checked onchange="saveSettings()">
+              <strong>Try Gemini first for certificate photo extraction</strong>
+            </label>
+          </div>
+        </div>
+
+        <div class="set-section">
           <div class="set-title">🔔 Real Push Notifications <span style="font-size:10px;font-weight:500;color:var(--txt3);text-transform:none;letter-spacing:0">(off by default, free)</span></div>
           <div class="set-card">
             <div style="font-size:12px;color:var(--txt2);margin-bottom:12px;line-height:1.6">
@@ -4420,6 +4442,10 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS last_accuracy integer;</div>
 <div class="overlay" id="mo-cert">
 <div class="modal" style="max-width:520px">
   <div class="modal-title">◈ Add Certificate</div>
+  <div style="margin-bottom:12px">
+    <label class="btn btn-ghost btn-sm" style="cursor:pointer">📷 Extract from photo<input type="file" accept="image/*" style="display:none" onchange="extractCertFromPhoto(this)"></label>
+    <span id="cf-extract-status" style="font-size:12px;color:var(--txt3);margin-left:8px"></span>
+  </div>
   <div class="frow">
     <div class="fg"><label class="fl">Property Address</label><input type="text" id="cf-addr" class="fi"></div>
     <div class="fg"><label class="fl">Type</label><select id="cf-type" class="fs"><option>Gas Safety</option><option>Electrical</option><option>EPC</option><option>Other</option></select></div>

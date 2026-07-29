@@ -1193,6 +1193,66 @@ export function renderCertPdfSection(certId,url){
   }
 }
 
+// Reads cf-num/cf-expiry/cf-issue/cf-type off a photo of the certificate
+// via the extract-cert-data Edge Function (Gemini, falling back to
+// OCR.space — see that function for the fallback logic). Runs before the
+// certificate is saved, so this pre-fills the form rather than attaching
+// a permanent document — that's still the separate PDF upload below.
+const _CERT_TYPE_MAP={'eicr':'Electrical','electrical':'Electrical','gas safety':'Gas Safety','gas':'Gas Safety','pat testing':'Other','pat':'Other','epc':'EPC'};
+function _matchCertTypeOption(certType){
+  if(!certType) return null;
+  const key=String(certType).toLowerCase().trim();
+  if(_CERT_TYPE_MAP[key]) return _CERT_TYPE_MAP[key];
+  const sel=document.getElementById('cf-type');
+  const opt=sel && [...sel.options].find(o=>o.value.toLowerCase()===key);
+  return opt ? opt.value : null;
+}
+
+export async function extractCertFromPhoto(inputEl){
+  const file=inputEl.files[0];
+  inputEl.value='';
+  if(!file) return;
+  if(!file.type.startsWith('image/')){ toast('Please choose a photo (JPG/PNG)','error'); return; }
+  if(file.size>10*1024*1024){ toast(`File too large (${(file.size/1024/1024).toFixed(1)}MB) — 10MB max`,'error'); return; }
+  const status=document.getElementById('cf-extract-status');
+  if(status) status.textContent='Reading certificate…';
+  try{
+    const imageBase64=await new Promise((resolve,reject)=>{
+      const reader=new FileReader();
+      reader.onload=()=>resolve(String(reader.result).split(',')[1]||'');
+      reader.onerror=reject;
+      reader.readAsDataURL(file);
+    });
+    const jwt=await _getJWT();
+    const res=await fetch(`${SB_URL}/functions/v1/extract-cert-data`,{
+      method:'POST',
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+jwt,'Content-Type':'application/json'},
+      body:JSON.stringify({imageBase64, mimeType:file.type, preferGemini:S.aiExtractEnabled!==false})
+    });
+    const data=await res.json();
+    if(!res.ok){ if(status) status.textContent=''; toast(data.error||'Could not read the certificate','error'); return; }
+
+    if(data.source==='gemini'){
+      if(data.certNum) document.getElementById('cf-num').value=data.certNum;
+      if(data.issueDate) document.getElementById('cf-issue').value=data.issueDate;
+      if(data.expiryDate) document.getElementById('cf-expiry').value=data.expiryDate;
+      if(data.propertyAddress && !document.getElementById('cf-addr').value) document.getElementById('cf-addr').value=data.propertyAddress;
+      const matchedType=_matchCertTypeOption(data.certType);
+      if(matchedType) document.getElementById('cf-type').value=matchedType;
+      if(status) status.textContent='✅ Filled in from photo — please double-check before saving';
+      toast('📷 Certificate details extracted — please check them','success');
+    } else {
+      // OCR fallback — text only, no structured fields. Show it so the
+      // user can read the number/dates off it themselves.
+      if(status) status.innerHTML=`⚠️ AI extraction unavailable — raw text below, please fill in the fields:<div style="margin-top:6px;padding:8px;background:var(--s2);border-radius:6px;font-size:11px;white-space:pre-wrap;max-height:120px;overflow:auto">${(data.rawText||'').replace(/</g,'&lt;')}</div>`;
+      toast('Could not auto-fill — showing raw text from the photo instead','warn');
+    }
+  }catch(e){
+    if(status) status.textContent='';
+    toast('❌ Extraction failed: '+(e.message||'').slice(0,80),'error');
+  }
+}
+
 export function previewCertPdf(url){
   document.getElementById('pdf-preview-frame').src=url;
   document.getElementById('pdf-preview-open').href=url;

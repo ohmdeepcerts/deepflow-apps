@@ -10,6 +10,7 @@ import {
   certSendIndivEmail, certSendIndivWA, renderCertStats, setCremMode, generateBulkReminder,
   copyCremMsg, importCertCSV, exportCertCSV, exportCertPDF, downloadCertTemplate, renderCertDash,
   addExpiryToExistingCert, previewCertPdf, uploadCertPdf, removeCertPdf, saveCert, createRenewalJob,
+  extractCertFromPhoto,
 } from './certs.js';
 import {
   getCurDirSection, switchDirSection, renderDir, renderDirSection, updateDirTabBadges,
@@ -218,6 +219,7 @@ export let S = {
   jobPrefix:'JOB-', jobNextNum:1001,
   vatRate:20,vatEnabled:false,
   notifWebhookEnabled:false,notifWebhookUrl:'',notifOnStatusChange:true,notifOnCertReady:true,notifPushEnabled:false,notifNextTenantEta:false,
+  aiExtractEnabled:true,
   coName:'',coEmail:'',coPhone:'',coAddr:'',coVatNum:'',
   owner:'Boss',
   logoData:'',
@@ -7737,6 +7739,7 @@ function renderSettings(){
   cb('s-notif-on-cert',S.notifOnCertReady!==false);
   cb('s-notif-push-enabled',S.notifPushEnabled===true);
   cb('s-notif-next-tenant',S.notifNextTenantEta===true);
+  cb('s-ai-extract-enabled',S.aiExtractEnabled!==false);
   cb('s-sla-dash',S.slaDash!==false);
   cb('s-req-checklist',S.reqChecklist||false);
   cb('s-gas-prompt',S.gasPrompt!==false);
@@ -8827,6 +8830,7 @@ async function saveSettings(){
   if(getCB('s-notif-on-cert')!==null) S.notifOnCertReady=getCB('s-notif-on-cert');
   if(getCB('s-notif-push-enabled')!==null) S.notifPushEnabled=getCB('s-notif-push-enabled');
   if(getCB('s-notif-next-tenant')!==null) S.notifNextTenantEta=getCB('s-notif-next-tenant');
+  if(getCB('s-ai-extract-enabled')!==null) S.aiExtractEnabled=getCB('s-ai-extract-enabled');
   if(get('s-admin-pin')!==null && get('s-admin-pin')) S.adminPin=get('s-admin-pin');
 
   // Checkboxes
@@ -14101,7 +14105,7 @@ Object.assign(window, {
   dupUpdateName, dupUseExisting, duplicateInv, duplicateJob, editCertRecord, executeMerge, exportAllCSV,
   exportAuditLog, exportBackup, exportCertCSV, exportCertPDF, exportEngReport, exportEngReportPDF, 
   exportExpensesCSV, exportInvsCSV, exportMasterXLSX, exportPLCSV, exportPropsCSV, exportReportPDF, 
-  exportTSCSV, fillCreditNote, fillFromMatch, filterCerts, fuzzyAddr, generateBulkReminder, 
+  exportTSCSV, extractCertFromPhoto, fillCreditNote, fillFromMatch, filterCerts, fuzzyAddr, generateBulkReminder,
   handleAccess, handleLogoUpload, handleNotifClick, handlePriDotClick, hidePropPopup, importBackup, importCertCSV,
   invClientSelected, invNavSelect, jCalPickDate, jPickDate, jcalShiftMonth, kanbanDragOver, 
   kanbanDragStart, kanbanDrop, loadEarlierJobs, loadEngPerms, loadEngineerLocations, loadStorageDashboard, 
@@ -14120,7 +14124,7 @@ Object.assign(window, {
   saveCreditNote, saveDashNotes, saveDisposableInvoice, saveEngDefaults, saveExpense, saveInv, 
   saveJob, saveLandlordFromJob, saveNotifSettings, saveOvertimeLog, savePayment, savePerson, 
   saveProp, saveSettings, saveStandaloneProforma, searchJobForInvoice, selEngineer,
-  selectAddr, selectAllVisibleJobs, sendAllOverdueWA, sendBroadcast, sendInvEmail, sendInvWA,
+  selectAddr, selectAllVisibleJobs, sendAllOverdueEmail, sendAllOverdueWA, sendBroadcast, sendInvEmail, sendInvWA,
   showPortalInviteModal,
   sendLandlordComplete, sendLandlordWA, sendOverdueWA, sendTenantWA, sendToWA, setAccent, setCremMode, setFontSize,
   setInvFilter, setInvType, setInvView, setJRange, setJobsView, setPriFilter,
