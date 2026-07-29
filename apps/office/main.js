@@ -4167,7 +4167,7 @@ function _deriveProperties(jobs,manualProps){
     const jobsAtAddr=auto?.jobs||[];
     const llMap=new Map();
     for(const j of jobsAtAddr){
-      const name=j.landlordname||j.agencyname;
+      const name=j.landlordName||j.agencyName;
       if(name&&(!llMap.has(name)||(j.date||'')>llMap.get(name))) llMap.set(name,j.date||'');
     }
     const landlordHistory=[...llMap.entries()].sort((a,b)=>(b[1]||'').localeCompare(a[1]||'')).map(([n])=>n);
@@ -4197,7 +4197,7 @@ async function _refreshAllProps(){
 // due date for settled invoices.
 function _paymentReliability(clientName,allInvoices,allPayments){
   if(!clientName) return null;
-  const invs=allInvoices.filter(i=>i.clientname===clientName||i.landlordname===clientName||i.agencyname===clientName||i.billtoname===clientName);
+  const invs=allInvoices.filter(i=>i.clientName===clientName||i.landlordName===clientName||i.agencyName===clientName||i.billToName===clientName);
   if(!invs.length) return null;
   let onTime=0,late=0,totalDaysLate=0,outstanding=0,overdueCount=0;
   const today=TODAY();
