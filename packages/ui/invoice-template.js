@@ -116,7 +116,7 @@ export function buildInvoiceHTML({ inv, S, totals, vatRate }) {
   return `
   <div class="inv-page">
     <style>
-      .inv-page{width:210mm;background:#F7F9FC;color:#191C22;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;position:relative;overflow:hidden}
+      .inv-page{width:210mm;min-height:297mm;background:#F7F9FC;color:#191C22;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;position:relative;overflow:hidden;display:flex;flex-direction:column}
       .inv-page *{box-sizing:border-box}
       .inv-page .num{font-variant-numeric:tabular-nums}
       .inv-page .ic{width:14px;height:14px;flex-shrink:0}
@@ -131,7 +131,7 @@ export function buildInvoiceHTML({ inv, S, totals, vatRate }) {
       .co-line div{display:flex;align-items:center;gap:7px;font-size:11px;color:rgba(255,255,255,.7)}
       .co-line .ic{color:rgba(125,211,252,.9)}
       .mast-meta{text-align:right}
-      .tag-pill{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:700;letter-spacing:.04em;padding:5px 13px;border-radius:99px;margin-bottom:11px;background:${status.bg};color:${status.fg};box-shadow:0 0 0 1px rgba(255,255,255,.08) inset}
+      .tag-pill{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:700;letter-spacing:.04em;padding:5px 13px;border-radius:99px;margin-bottom:11px;box-shadow:0 0 0 1px rgba(255,255,255,.08) inset}
       .tag-pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
       .inv-no{font-size:22px;font-weight:800;letter-spacing:-.01em;color:#fff}
       .inv-sub{font-size:10px;color:rgba(255,255,255,.45);text-transform:uppercase;letter-spacing:.14em;margin-top:3px}
@@ -139,11 +139,12 @@ export function buildInvoiceHTML({ inv, S, totals, vatRate }) {
       .mast-dates .l{font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;color:rgba(255,255,255,.4)}
       .mast-dates .v{font-size:13px;font-weight:600;margin-top:2px;color:rgba(255,255,255,.92)}
 
-      .body{position:relative}
+      .body{position:relative;flex:1;display:flex;flex-direction:column}
       .body-field{position:absolute;inset:0}
       .watermark{position:absolute;left:50%;top:46%;transform:translate(-50%,-50%) rotate(-27deg);font-size:110px;font-weight:800;letter-spacing:.06em;white-space:nowrap;opacity:.15;z-index:3;pointer-events:none}
-      .stack{position:relative;z-index:1;display:flex;flex-direction:column;gap:16px;padding:28px 46px 42px}
+      .stack{position:relative;z-index:1;flex:1;display:flex;flex-direction:column;gap:16px;padding:28px 46px 42px}
       .sheet{background:rgba(255,255,255,.88);border:1px solid rgba(13,31,60,.10);border-radius:16px;box-shadow:0 16px 32px -20px rgba(13,31,60,.22),inset 0 1px 0 rgba(255,255,255,.75);padding:20px 24px}
+      .stack>.sheet:last-child{margin-top:auto}
 
       .duo{display:grid;grid-template-columns:1fr 1fr;gap:0;border-left:3px solid #0EA5E9}
       .duo>div{padding:0 20px}
@@ -195,7 +196,7 @@ export function buildInvoiceHTML({ inv, S, totals, vatRate }) {
           </div>
         </div>
         <div class="mast-meta">
-          <div class="tag-pill">${status.label}</div>
+          <div class="tag-pill" style="background:${status.bg};color:${status.fg}">${status.label}</div>
           <div class="inv-no num">${esc(inv.number)}</div>
           <div class="inv-sub">Tax Invoice</div>
           <div class="mast-dates">

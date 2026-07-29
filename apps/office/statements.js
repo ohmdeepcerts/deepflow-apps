@@ -9,6 +9,7 @@
 // inside function bodies, never at module-evaluation time.
 
 import { localDateStr } from '@business';
+import { buildInvoiceHTML } from '@ui';
 import { S, dAll, dGet, toast, nav, calcInvTotal, downloadInvPDFById } from './main.js';
 
 let _stmtSelected = new Set();
@@ -263,98 +264,29 @@ export async function bulkDownloadPDFs() {
   toast(`${ids.length} PDFs downloaded ✓ (${stored} stored, ${generated} generated)`, 'success');
 }
 
+// Same shared HTML template as every other invoice PDF surface (see
+// packages/ui/invoice-template.js) — this used to be a completely
+// separate, independently hand-drawn print view (plain Arial, orange
+// accent) that only this one "Print" button on the Statements page would
+// ever produce, so a redesign everywhere else could land and this would
+// still hand a landlord/agency the old-looking document. One template
+// now, not two that can drift apart again.
 export async function printFilteredInvoices() {
   const ids = _stmtSelected.size > 0 ? [..._stmtSelected] : _stmtInvoices.map(i => i.id);
   if (!ids.length) { toast('No invoices to print', 'warn'); return; }
-  // Build a printable HTML page with all invoices
-  const invs = await Promise.all(ids.map(id => dGet('invoices', id)));
-  const allPayments = await dAll('payments');
+  const invs = (await Promise.all(ids.map(id => dGet('invoices', id)))).filter(Boolean);
   const vr = S.vatRate || 20;
-  const accent = S.invPdfColor || '#f5a623';
 
-  let html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Invoices</title>
+  const pages = invs.map(inv => buildInvoiceHTML({ inv, S, totals: calcInvTotal(inv), vatRate: vr })).join('');
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Invoices</title>
 <style>
-  body{font-family:Arial,sans-serif;font-size:12px;color:#1a1a2e;margin:0;padding:0}
-  .page{width:210mm;min-height:297mm;padding:18mm;box-sizing:border-box;page-break-after:always;position:relative}
-  .page:last-child{page-break-after:auto}
-  h1{color:${accent};font-size:28px;margin:0}
-  .hdr{display:flex;justify-content:space-between;margin-bottom:20px}
-  .billto-hdr{background:${accent};color:#fff;padding:5px 8px;font-weight:700;font-size:10px}
-  table{width:100%;border-collapse:collapse;margin-top:10px}
-  th{background:#1e2233;color:#ccc;padding:6px 8px;text-align:left;font-size:10px}
-  td{padding:5px 8px;border-bottom:1px solid #eee;font-size:11px}
-  .total-row td{font-weight:700;font-size:13px;color:${accent}}
-  .paid-watermark{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-30deg);font-size:80px;font-weight:900;color:${accent};opacity:0.08;pointer-events:none;z-index:100}
+  body{margin:0}
+  .inv-page{page-break-after:always}
+  .inv-page:last-child{page-break-after:auto}
   @media print{@page{size:A4;margin:0}}
+</style></head><body>${pages}</body></html>`;
 
-.sql-block{
-  background:var(--bg);border:1px solid var(--border);border-radius:var(--r2);
-  padding:10px 14px;font-family:monospace;font-size:11px;color:#7dd3fc;
-  white-space:pre;overflow-x:auto;line-height:1.6;cursor:pointer
-}
-.sql-block:hover{border-color:var(--acc)}
-</style></head><body>`;
-
-  invs.filter(Boolean).forEach(inv => {
-    const t = calcInvTotal(inv);
-    const isPaid = inv.status === 'Paid';
-    html += `<div class="page">
-      ${isPaid && S.invWatermarkPaid ? '<div class="paid-watermark">PAID</div>' : ''}
-      <div class="hdr">
-        <div>
-          <div style="font-size:22px;font-weight:700;color:#1a1a2e">${S.coName || 'Your Company'}</div>
-          ${S.coAddr ? `<div style="color:#666">${S.coAddr}</div>` : ''}
-          ${S.coPhone ? `<div style="color:#666">${S.coPhone}</div>` : ''}
-          ${S.coVatNum ? `<div style="color:#666">VAT: ${S.coVatNum}</div>` : ''}
-        </div>
-        <div style="text-align:right">
-          <h1>INVOICE</h1>
-          ${S.invSubtitle ? `<div style="color:#666;font-size:11px">${S.invSubtitle}</div>` : ''}
-          <div style="font-weight:700;font-size:16px;margin-top:6px">${inv.number}</div>
-          <div style="color:#666">Date: ${inv.date}</div>
-          ${inv.dueDate ? `<div style="color:#666">Due: ${inv.dueDate}</div>` : ''}
-        </div>
-      </div>
-      <table style="margin-bottom:16px">
-        <tr>
-          <td style="width:50%;vertical-align:top">
-            <div style="font-size:10px;font-weight:700;color:#666;text-transform:uppercase;margin-bottom:4px">Bill To</div>
-            <div style="font-weight:700">${inv.clientName || '—'}</div>
-            ${inv.clientAddr ? `<div style="color:#666">${inv.clientAddr}</div>` : ''}
-          </td>
-          <td style="vertical-align:top">
-            <div style="font-size:10px;font-weight:700;color:#666;text-transform:uppercase;margin-bottom:4px">Description</div>
-            <div>${inv.description || '—'}</div>
-            ${inv.agentName ? `<div style="font-size:10px;color:#666;margin-top:4px">Sent by agent: ${inv.agentName}${inv.agencyName?' ('+inv.agencyName+')':''}</div>` : ''}
-          </td>
-        </tr>
-      </table>
-      <table>
-        <thead><tr><th>Description</th><th style="width:50px">Qty</th><th style="width:80px">Unit</th>${S.invShowVat!==false?'<th style="width:50px">VAT</th>':''}<th style="width:80px;text-align:right">Total</th></tr></thead>
-        <tbody>
-          ${(inv.items||[]).map(item => {
-            const line = (item.qty||1)*(item.unit||0);
-            const vatAmt = item.vat ? line * vr / 100 : 0;
-            return `<tr><td>${item.desc||''}</td><td>${item.qty||1}</td><td>£${Number(item.unit||0).toFixed(2)}</td>${S.invShowVat!==false?`<td>${item.vat?vr+'%':'—'}</td>`:''}<td style="text-align:right">£${(line+vatAmt).toFixed(2)}</td></tr>`;
-          }).join('')}
-        </tbody>
-        <tfoot>
-          ${S.invShowSubtotal!==false ? `<tr><td colspan="${S.invShowVat!==false?4:3}" style="text-align:right;color:#666">Subtotal</td><td style="text-align:right">£${t.sub.toFixed(2)}</td></tr>
-          <tr><td colspan="${S.invShowVat!==false?4:3}" style="text-align:right;color:#666">VAT (${vr}%)</td><td style="text-align:right">£${t.vat.toFixed(2)}</td></tr>` : ''}
-          <tr class="total-row"><td colspan="${S.invShowVat!==false?4:3}" style="text-align:right">TOTAL</td><td style="text-align:right">£${t.grand.toFixed(2)}</td></tr>
-        </tfoot>
-      </table>
-      ${S.invShowBank!==false && (S.bankName||S.bankAcc) ? `<div style="margin-top:16px;padding:10px;background:#f8f9ff;border-radius:4px;font-size:11px"><strong>Payment Details:</strong> ${S.bankName||''} ${S.bankAcc?'| Acc: '+S.bankAcc:''} ${S.bankSort?'| Sort: '+S.bankSort:''} ${S.bankIBAN?'| IBAN: '+S.bankIBAN:''}</div>` : ''}
-      ${S.invShowPayref!==false ? `<div style="margin-top:8px;padding:8px;border:1px solid ${accent};border-radius:4px;font-size:10px;color:#555">Please use invoice number <strong>${inv.number}</strong> as your payment reference</div>` : ''}
-      ${S.invShowTerms!==false && S.payTerms ? `<div style="margin-top:8px;font-size:10px;color:#888">${S.payTerms}</div>` : ''}
-      ${S.invShowNotes!==false && S.invNotes ? `<div style="font-size:10px;color:#888">${S.invNotes}</div>` : ''}
-      ${(S.invCustomTexts||[]).filter(ct=>ct.enabled).map(ct=>`<div style="margin-top:8px;font-size:10px;color:#555"><strong>${ct.label}:</strong> ${ct.content}</div>`).join('')}
-      ${S.invShowSig ? `<div style="margin-top:30px;border-top:1px solid #ccc;padding-top:6px;font-size:10px;color:#666;width:200px">${S.invSigLabel||'Authorised Signature:'}</div>` : ''}
-      ${S.invFooter ? `<div style="position:absolute;bottom:14mm;left:18mm;right:18mm;text-align:center;font-size:9px;color:#aaa">${S.invFooter}</div>` : ''}
-    </div>`;
-  });
-
-  html += '</body></html>';
   const win = window.open('', '_blank');
   win.document.write(html);
   win.document.close();
