@@ -5836,6 +5836,48 @@ async function sendAllOverdueWA(){
   toast(`📱 Opened ${sent} WhatsApp reminders`, 'success');
 }
 
+// Same overdue-invoice list as sendAllOverdueWA, sent via email instead —
+// reuses S.waOverdueTpl's placeholders in plain text, wrapped in minimal
+// HTML. Requires RESEND_API_KEY + RESEND_FROM to be set as Edge Function
+// secrets; until then the function returns a clear "not configured" error
+// per invoice rather than failing silently.
+async function sendAllOverdueEmail(){
+  const invs = await dAll('invoices');
+  const today = TODAY();
+  const overdue = invs.filter(i=>i.status==='Awaiting Payment' && i.dueDate && i.dueDate < today && i.clientEmail);
+  if(!overdue.length){ toast('No overdue invoices with a client email on file','info'); return; }
+  const confirmed = confirm(`Email overdue reminders to ${overdue.length} client${overdue.length!==1?'s':''}?`);
+  if(!confirmed) return;
+  let sent = 0, failed = 0, firstError = null;
+  const jwt = await _getJWT();
+  for(const inv of overdue){
+    const t = calcInvTotal(inv);
+    const daysOver = Math.ceil((new Date(today)-new Date(inv.dueDate))/86400000);
+    const bodyText = (S.waOverdueTpl||'Invoice {invoice_num} for £{amount} is {days_overdue} days overdue. Please arrange payment.')
+      .replace('{invoice_num}',inv.number)
+      .replace('{amount}',t.grand.toFixed(2))
+      .replace('{days_overdue}',daysOver)
+      .replace('{client_name}',inv.clientName||'')
+      .replace('{due_date}',inv.dueDate||'')
+      .replace('{company_name}',S.coName||'');
+    try{
+      const res = await fetch(`${SB_URL}/functions/v1/send-email`,{
+        method:'POST',
+        headers:{'apikey':SB_KEY,'Authorization':'Bearer '+jwt,'Content-Type':'application/json'},
+        body:JSON.stringify({
+          to: inv.clientEmail,
+          subject: `Overdue: Invoice ${inv.number} — ${S.coName||'Payment reminder'}`,
+          html: `<p>${escHtml(bodyText)}</p>`,
+          replyTo: S.coEmail||undefined,
+        })
+      });
+      if(res.ok) sent++; else { failed++; if(!firstError) firstError=(await res.json().catch(()=>({}))).error; }
+    }catch(e){ failed++; if(!firstError) firstError=e.message; }
+  }
+  if(sent) toast(`📧 Sent ${sent} email reminder${sent!==1?'s':''}${failed?`, ${failed} failed`:''}`, failed?'warn':'success');
+  else toast(firstError||'Could not send emails — check Resend setup','error');
+}
+
 // ── Invoice KPI summary for the header ──
 // ── Job → Invoice reverse sync ────────────────────────────────────────────────
 // Called directly from saveJob (awaited). Finds the linked invoice by jobId

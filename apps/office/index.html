@@ -2096,7 +2096,8 @@ body.density-relaxed .jtable td{font-size:15px}
       </div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-ghost btn-sm" onclick="exportInvsCSV()"       title="Export CSV">⬇ CSV</button>
-        <button class="btn btn-ghost btn-sm" onclick="sendAllOverdueWA()"    title="Chase overdue">📱 Chase</button>
+        <button class="btn btn-ghost btn-sm" onclick="sendAllOverdueWA()"    title="Chase overdue via WhatsApp">📱 Chase</button>
+        <button class="btn btn-ghost btn-sm" onclick="sendAllOverdueEmail()" title="Chase overdue via email">📧 Email</button>
         <button class="btn btn-ghost btn-sm" onclick="openCreditNoteModal()" title="Credit note">↩ Credit</button>
         <button class="btn btn-blue btn-sm"  onclick="openStandaloneProformaModal()" style="font-size:12px;padding:6px 14px">📄 Proforma</button>
         <button class="btn btn-sm"           onclick="openDisposableModal()" style="font-size:12px;padding:6px 14px;background:var(--s3);color:var(--txt2);border:1px solid var(--border)">🗑 Disposable</button>
