@@ -4139,8 +4139,98 @@ async function deleteCurrentJob(){
   await deleteJobById(editJid);
 }
 
+// ── Properties: auto-derived from job addresses, not a manually-typed list ──
+// The Properties tab used to be seeded ONLY from S.properties, a manual
+// Settings-page list — every property implied by real job records stayed
+// invisible until someone re-typed it in by hand, which nobody ever did.
+// This derives the real list from distinct job addresses and merges in any
+// manual entries by normalized address, so type/beds/notes overrides still
+// work — a manual entry with no matching job still shows too.
+function _normAddr(a){ return (a||'').trim().toLowerCase().replace(/\s+/g,' '); }
+
+function _deriveProperties(jobs,manualProps){
+  const byAddr=new Map();
+  for(const j of jobs){
+    if(!j.address) continue;
+    const key=_normAddr(j.address);
+    if(!byAddr.has(key)) byAddr.set(key,{address:j.address,jobs:[]});
+    byAddr.get(key).jobs.push(j);
+  }
+  const manualByAddr=new Map();
+  for(const p of (manualProps||[])){
+    if(p.address) manualByAddr.set(_normAddr(p.address),p);
+  }
+  const allKeys=new Set([...byAddr.keys(),...manualByAddr.keys()]);
+  return [...allKeys].map(key=>{
+    const auto=byAddr.get(key);
+    const manual=manualByAddr.get(key);
+    const jobsAtAddr=auto?.jobs||[];
+    const llMap=new Map();
+    for(const j of jobsAtAddr){
+      const name=j.landlordname||j.agencyname;
+      if(name&&(!llMap.has(name)||(j.date||'')>llMap.get(name))) llMap.set(name,j.date||'');
+    }
+    const landlordHistory=[...llMap.entries()].sort((a,b)=>(b[1]||'').localeCompare(a[1]||'')).map(([n])=>n);
+    return{
+      id:manual?.id||('auto_'+key.replace(/[^a-z0-9]/g,'').slice(0,32)),
+      address:manual?.address||auto?.address||'',
+      landlord:manual?.landlord||landlordHistory[0]||'',
+      landlordHistory,
+      postcode:manual?.postcode||jobsAtAddr.find(j=>j.postcode)?.postcode||'',
+      type:manual?.type||'',beds:manual?.beds||'',notes:manual?.notes||'',
+      _jobs:jobsAtAddr,
+      _isAuto:!manual,
+    };
+  }).sort((a,b)=>(a.address||'').localeCompare(b.address||''));
+}
+
+async function _refreshAllProps(){
+  allProps=_deriveProperties(await dAll('jobs'),S.properties||[]);
+}
+
+// Payment reliability — derived from this app's own invoice/payment
+// history, NOT a credit bureau product (that's a separate paid integration
+// touching real people's financial data — not what this is). Matches
+// invoices to a landlord/agency by name, the same matching every other
+// client-facing view here already uses since the FK columns aren't
+// populated on existing invoices, and compares last-payment date against
+// due date for settled invoices.
+function _paymentReliability(clientName,allInvoices,allPayments){
+  if(!clientName) return null;
+  const invs=allInvoices.filter(i=>i.clientname===clientName||i.landlordname===clientName||i.agencyname===clientName||i.billtoname===clientName);
+  if(!invs.length) return null;
+  let onTime=0,late=0,totalDaysLate=0,outstanding=0,overdueCount=0;
+  const today=TODAY();
+  for(const inv of invs){
+    const t=calcInvTotal(inv);
+    const pmts=allPayments.filter(p=>p.invId===inv.id);
+    const paid=pmts.reduce((s,p)=>s+(p.amount||0),0);
+    const bal=t.grand-paid;
+    if(bal>0.01){
+      outstanding+=bal;
+      if(inv.dueDate&&inv.dueDate<today) overdueCount++;
+    }
+    if(pmts.length&&inv.dueDate){
+      const lastPmtDate=pmts.reduce((max,p)=>(p.date&&p.date>max)?p.date:max,pmts[0].date||'');
+      const daysLate=Math.round((new Date(lastPmtDate)-new Date(inv.dueDate))/86400000);
+      if(daysLate<=0) onTime++; else { late++; totalDaysLate+=daysLate; }
+    }
+  }
+  const scored=onTime+late;
+  const avgDaysLate=late?Math.round(totalDaysLate/late):0;
+  let label='New',color='var(--txt3)';
+  if(overdueCount>0){ label='⚠️ Overdue now'; color='var(--red)'; }
+  else if(scored>0){
+    const pct=onTime/scored;
+    if(pct>=0.9){ label='✅ Excellent'; color='var(--green)'; }
+    else if(pct>=0.6){ label='🟡 Fair'; color='var(--yellow)'; }
+    else { label='🔴 Poor'; color='var(--red)'; }
+  } else if(outstanding>0.01){ label='⏳ Awaiting first payment'; color='var(--yellow)'; }
+  return{label,color,onTime,late,avgDaysLate,outstanding,invoiceCount:invs.length,overdueCount};
+}
+
 // ── Fuzzy Address Search ──
-async function initProps(){allProps=S.properties||[]}
+async function initProps(){await _refreshAllProps();}
 
 function fuzzyScore(q,h){
   q=q.toLowerCase();h=h.toLowerCase();
@@ -8738,7 +8828,7 @@ async function saveSettings(){
     console.warn('Sync error:',e);
     toast('Settings saved locally (Supabase sync failed — check connection)','warn');
   }
-  allProps=S.properties||[];
+  await _refreshAllProps();
   applyTheme(S.theme || 'light');
   if(S.accent) setAccent(S.accent);
   if(S.fontSize) setFontSize(S.fontSize);
@@ -8915,7 +9005,7 @@ async function clearAllData(){
 async function init(){
   await initDB();
   await loadSettings();
-  allProps=S.properties||[];
+  await _refreshAllProps();
 
   // Set default WA templates if empty
   if(!S.waJobTpl||S.waJobTpl.length<10){
@@ -10475,8 +10565,12 @@ let editPropId=null;
 async function renderProps(){
   const search=(document.getElementById('prop-search')?.value||'').toLowerCase();
   const llFilter=document.getElementById('prop-ll-filter')?.value||'';
-  const props=S.properties||[];
-  
+
+  // allProps is the derived+merged list (real job addresses, not a manual
+  // list someone forgot to fill in) — see _deriveProperties/_refreshAllProps.
+  await _refreshAllProps();
+  const props=allProps;
+
   // Populate landlord filter
   const lls=[...new Set(props.map(p=>p.landlord).filter(Boolean))];
   const llSel=document.getElementById('prop-ll-filter');
@@ -10484,32 +10578,47 @@ async function renderProps(){
     const cur=llSel.value;
     llSel.innerHTML='<option value="">All Landlords</option>'+lls.map(l=>`<option ${l===cur?'selected':''}>${l}</option>`).join('');
   }
-  
+
   let filtered=props;
   if(search) filtered=filtered.filter(p=>(p.address+p.landlord+p.postcode).toLowerCase().includes(search));
   if(llFilter) filtered=filtered.filter(p=>p.landlord===llFilter);
-  
-  const allJobs=await dAll('jobs');
+
   const allCerts=await dAll('certs');
-  
+  const allInvoices=await dAll('invoices');
+  const allPayments=await dAll('payments');
+  const allAttachments=await dAll('attachments');
+
   const grid=document.getElementById('props-grid');
   if(!grid) return;
-  
+
   if(!filtered.length){
-    grid.innerHTML='<div class="empty"><div class="ei">🏠</div><p>No properties yet. Add one to get started.</p></div>';
+    grid.innerHTML='<div class="empty"><div class="ei">🏠</div><p>No properties yet — they\'ll appear here automatically once a job is logged at that address.</p></div>';
     return;
   }
 
   // Build table with hover popup
   const rows=filtered.map(p=>{
+    const propJobs=p._jobs||[];
+    const jobIds=new Set(propJobs.map(j=>j.id));
+    // Cert match: precise (by jobId) with an address-substring fallback for
+    // any older cert rows that predate jobId being reliably set.
     const key=(p.address||'').toLowerCase().slice(0,20);
-    const propJobs=allJobs.filter(j=>j.address&&j.address.toLowerCase().includes(key));
-    const propCerts=allCerts.filter(c=>c.address&&c.address.toLowerCase().includes(key));
+    const propCerts=allCerts.filter(c=>jobIds.has(c.jobId)||(c.address&&c.address.toLowerCase().includes(key)));
     const now=new Date();
     const expCerts=propCerts.filter(c=>{const d=daysDiff(c.expiryDate);return d>=0&&d<=60});
     const overdueCerts=propCerts.filter(c=>daysDiff(c.expiryDate)<0);
     const openJobs=propJobs.filter(j=>j.status===STATUS.PENDING||j.status===STATUS.IN_PROGRESS);
     const completedJobs=propJobs.filter(j=>j.status===STATUS.COMPLETED);
+
+    const propInvoices=allInvoices.filter(i=>jobIds.has(i.jobId)||jobIds.has(i.linkedJobId));
+    const outstanding=propInvoices.reduce((sum,inv)=>{
+      const t=calcInvTotal(inv);
+      const paid=allPayments.filter(pm=>pm.invId===inv.id).reduce((s,pm)=>s+(pm.amount||0),0);
+      const bal=t.grand-paid;
+      return bal>0.01?sum+bal:sum;
+    },0);
+    const photoCount=allAttachments.filter(a=>jobIds.has(a.jobId)&&(a.type==='photo'||(a.mime||'').startsWith('image/'))).length;
+    const reliability=_paymentReliability(p.landlord,allInvoices,allPayments);
 
     const alertColor=overdueCerts.length?'var(--red)':expCerts.length?'var(--yellow)':'var(--acc)';
     const rowBg=overdueCerts.length?'rgba(224,82,82,.05)':expCerts.length?'rgba(240,192,48,.04)':'';
@@ -10547,6 +10656,23 @@ async function renderProps(){
           ${openJobs.length?`<span style="background:rgba(91,142,240,.15);color:var(--blue);padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700">⊞ ${openJobs.length} Open</span>`:''}
         </div>
       </div>
+
+      <div style="display:flex;gap:14px;margin-bottom:12px;padding:10px;background:var(--s2);border-radius:8px">
+        <div style="flex:1">
+          <div style="font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px">Outstanding</div>
+          <div style="font-size:15px;font-weight:700;color:${outstanding>0.01?'var(--red)':'var(--green)'}">£${outstanding.toFixed(2)}</div>
+        </div>
+        <div style="flex:1">
+          <div style="font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px">Photos</div>
+          <div style="font-size:15px;font-weight:700;color:var(--txt1)">📷 ${photoCount}</div>
+        </div>
+        ${reliability?`<div style="flex:1.4">
+          <div style="font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px">Payment Reliability</div>
+          <div style="font-size:13px;font-weight:700;color:${reliability.color}">${reliability.label}</div>
+        </div>`:''}
+      </div>
+      ${reliability&&(reliability.onTime||reliability.late)?`<div style="font-size:11px;color:var(--txt3);margin-top:-6px;margin-bottom:12px">${reliability.onTime} paid on time, ${reliability.late} late${reliability.late?` (avg ${reliability.avgDaysLate}d)`:''} · ${reliability.invoiceCount} invoice${reliability.invoiceCount===1?'':'s'} total</div>`:''}
+      ${p.landlordHistory&&p.landlordHistory.length>1?`<div style="font-size:11px;color:var(--txt3);margin-bottom:12px">🕐 Previous: ${p.landlordHistory.slice(1).join(', ')}</div>`:''}
 
       ${propCerts.length?`<div style="margin-bottom:12px">
         <div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">📋 Certificates (${propCerts.length})</div>
@@ -10599,6 +10725,8 @@ async function renderProps(){
           <span style="color:var(--txt3);font-size:11px">${propJobs.length} total</span>
         </div>
       </td>
+      <td style="padding:12px 14px;border-bottom:1px solid var(--border);text-align:right;font-size:13px;font-weight:600;color:${outstanding>0.01?'var(--red)':'var(--txt3)'}">${outstanding>0.01?'£'+outstanding.toFixed(2):'—'}</td>
+      <td style="padding:12px 14px;border-bottom:1px solid var(--border);font-size:11px;font-weight:700;color:${reliability?reliability.color:'var(--txt3)'};white-space:nowrap">${reliability?reliability.label:'—'}</td>
       <td style="padding:12px 14px;border-bottom:1px solid var(--border);text-align:right;position:relative">
         ${popup}
         <button class="btn btn-ghost btn-xs prop-arrow-btn" title="Show details"
@@ -10618,6 +10746,8 @@ async function renderProps(){
           <th style="padding:10px 14px;text-align:left;font-size:11px;color:var(--txt3);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Type</th>
           <th style="padding:10px 14px;text-align:center;font-size:11px;color:var(--txt3);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Certificates</th>
           <th style="padding:10px 14px;text-align:center;font-size:11px;color:var(--txt3);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Jobs</th>
+          <th style="padding:10px 14px;text-align:right;font-size:11px;color:var(--txt3);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Outstanding</th>
+          <th style="padding:10px 14px;text-align:left;font-size:11px;color:var(--txt3);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Payment Reliability</th>
           <th style="padding:10px 14px;text-align:right;font-size:11px;color:var(--txt3);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Details</th>
         </tr>
       </thead>
@@ -10676,7 +10806,11 @@ function hidePropPopup(){
 async function openPropModal(id){
   editPropId=id||null;
   if(id){
-    const p=(S.properties||[]).find(x=>x.id===id);
+    // allProps is the derived+merged list (_refreshAllProps), not just the
+    // manual overrides — a property with real job history but no manual
+    // record yet still needs to open here (saveProp() below then creates
+    // the override on Save, matched back to this same address).
+    const p=allProps.find(x=>x.id===id)||(S.properties||[]).find(x=>x.id===id);
     if(!p) return;
     document.getElementById('mo-prop-title').textContent='✎ Edit Property';
     document.getElementById('propf-addr').value=p.address||'';
@@ -10715,23 +10849,23 @@ async function saveProp(){
   if(idx>=0) props[idx]=obj; else props.push(obj);
   S.properties=props;
   await saveSetting('properties',props);
-  allProps=props;
+  await _refreshAllProps();
   closeModal('mo-prop');
   renderProps();
   toast('Property saved','success');
 }
 
 async function deleteCurrentProp(){
-  confirm2('Delete Property','Remove this property from the database?',async()=>{
+  confirm2('Delete Property','This clears any manual notes/type/beds for this address. If it still has job history it will keep showing here, just without those overrides.',async()=>{
     S.properties=(S.properties||[]).filter(p=>p.id!==editPropId);
     await saveSetting('properties',S.properties);
-    allProps=S.properties;
-    closeModal('mo-prop');renderProps();toast('Property deleted','warn');
+    await _refreshAllProps();
+    closeModal('mo-prop');renderProps();toast('Property record cleared','warn');
   });
 }
 
 function viewPropJobs(){
-  const p=(S.properties||[]).find(x=>x.id===editPropId);
+  const p=allProps.find(x=>x.id===editPropId)||(S.properties||[]).find(x=>x.id===editPropId);
   if(!p) return;
   closeModal('mo-prop');
   document.getElementById('j-search').value=p.address.slice(0,20);
