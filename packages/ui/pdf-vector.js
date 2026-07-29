@@ -94,8 +94,13 @@ export async function renderInvoicePDF(doc, html2canvas, { inv, S, totals, vatRa
   document.body.appendChild(holder);
   let mastHeightMM;
   try {
-    const canvas = await html2canvas(holder.firstElementChild, { scale: 2.5, useCORS: true, backgroundColor: null });
-    const imgData = canvas.toDataURL('image/jpeg', 0.88);
+    // scale 2.5 + quality 0.88 measured out at ~110KB for this image alone
+    // (nearly the whole file) — it's a gradient band with a sparse particle
+    // scatter, not fine text, so it doesn't need retina-plus density. 2.0 +
+    // 0.75 measured at ~54KB with no visible quality loss and keeps the
+    // total PDF in the same ballpark as Zoho/QuickBooks instead of 4x over.
+    const canvas = await html2canvas(holder.firstElementChild, { scale: 2.0, useCORS: true, backgroundColor: null });
+    const imgData = canvas.toDataURL('image/jpeg', 0.75);
     const pxPerMM = canvas.width / PAGE_W;
     mastHeightMM = canvas.height / pxPerMM;
     doc.addImage(imgData, 'JPEG', 0, 0, PAGE_W, mastHeightMM);
