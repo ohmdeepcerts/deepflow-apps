@@ -150,9 +150,8 @@ export function buildInvoiceHTML({ inv, S, totals, vatRate }) {
       .duo>div{padding:0 20px}
       .duo>div:first-child{padding-left:0}
       .duo>div+div{border-left:1px solid rgba(13,31,60,.09)}
-      .duo-title{display:flex;align-items:center;gap:8px;font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:#5B6472;margin:0 0 11px}
-      .duo-badge{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:7px;background:rgba(14,165,233,.13);flex-shrink:0}
-      .duo-badge .ic{color:#0EA5E9;width:12.5px;height:12.5px}
+      .duo-title{display:flex;align-items:center;gap:6px;font-size:10.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#0EA5E9;margin:0 0 8px}
+      .duo-title .ic{width:13px;height:13px}
       .duo-name{font-size:14.5px;font-weight:700;letter-spacing:-.005em}
       .duo-line{font-size:12.5px;color:#5B6472;line-height:1.7;margin-top:2px}
       .ref-line{font-size:11px;color:#9AA3B0;margin-top:8px;font-variant-numeric:tabular-nums}
@@ -167,8 +166,8 @@ export function buildInvoiceHTML({ inv, S, totals, vatRate }) {
       .total-row{display:flex;justify-content:space-between;align-items:baseline}
       .total-row .l{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#6B7280;font-weight:600}
       .total-row .v{font-size:26px;font-weight:800;color:#B8863B;letter-spacing:-.01em}
-      .pay-line{font-size:11.5px;color:#5B6472;margin-top:10px;display:flex;align-items:center;gap:6px}
-      .payref-box{margin-top:14px;padding:11px 15px;background:#FEF8EB;border:1px solid #E8B84B;border-radius:8px;font-size:11.5px;color:#6B4E0C}
+      .pay-line{padding:14px 20px;font-size:12px;color:#3F7A4C;font-weight:600;display:flex;align-items:center;gap:6px}
+      .payref-box{padding:14px 20px;background:#FEF8EB;border-color:#E8B84B;font-size:12px;color:#6B4E0C}
 
       .foot-agent{font-size:11px;color:#374151;font-weight:600;padding-bottom:11px;margin-bottom:11px;border-bottom:1px solid rgba(13,31,60,.08)}
       .foot-agent b{color:#191C22}
@@ -176,7 +175,7 @@ export function buildInvoiceHTML({ inv, S, totals, vatRate }) {
       .foot .reg{font-size:9.5px;letter-spacing:.06em;color:#9AA3B0}
       .foot .credit{text-align:right;line-height:1.5}
       .foot .credit .tagline{font-size:9px;letter-spacing:.05em;color:#9AA3B0}
-      .foot .credit .brand-line{font-size:10.5px;font-weight:700;display:flex;align-items:center;gap:5px;justify-content:flex-end}
+      .foot .credit .brand-line{font-size:10.5px;font-weight:700}
       .foot .credit .brand{background:linear-gradient(135deg,#0284C7,#0EA5E9 40%,#D97706 70%,#B45309);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
       .foot .credit .plain{color:#7A8290;font-weight:600}
     </style>
@@ -213,13 +212,13 @@ export function buildInvoiceHTML({ inv, S, totals, vatRate }) {
       <div class="stack">
         <div class="sheet duo">
           <div>
-            <div class="duo-title"><span class="duo-badge">${icon('person')}</span>Ordered By</div>
+            <div class="duo-title">${icon('person')}Ordered By</div>
             <div class="duo-name">${esc(billToName)}</div>
             <div class="duo-line">${esc(billToAddr)}${inv.clientEmail ? '<br>' + esc(inv.clientEmail) : ''}</div>
             ${inv.billToOverride ? `<div class="ref-line">Only this invoice — real record: ${esc(realName)}</div>` : ''}
           </div>
           <div>
-            <div class="duo-title"><span class="duo-badge">${icon('pin')}</span>Site of Works</div>
+            <div class="duo-title">${icon('pin')}Site of Works</div>
             <div class="duo-name">${esc(propAddr || '—')}</div>
             <div class="ref-line">Ref: ${esc(inv.jobNum || inv.jobRef || inv.number)}</div>
           </div>
@@ -234,10 +233,11 @@ export function buildInvoiceHTML({ inv, S, totals, vatRate }) {
 
         <div class="sheet total-sheet">
           <div class="total-row"><span class="l">${inv.status === 'Paid' ? 'Total Paid' : 'Total Due'}</span><span class="v num">${money(totals.grand)}</span></div>
-          ${inv.status === 'Paid'
-            ? `<div class="pay-line">✓ Paid via Bank Transfer · Ref ${esc(inv.number)}</div>`
-            : `<div class="payref-box">Please use <b>${esc(inv.number)}</b> as your payment reference.</div>`}
         </div>
+
+        ${inv.status === 'Paid'
+          ? `<div class="sheet pay-line">✓ Paid via Bank Transfer · Ref ${esc(inv.number)}</div>`
+          : `<div class="sheet payref-box">Please use <b>${esc(inv.number)}</b> as your payment reference.</div>`}
 
         <div class="sheet foot">
           ${showAgent ? `<div class="foot-agent">Agent — <b>${esc(inv.agentName)}</b></div>` : ''}
@@ -245,7 +245,7 @@ export function buildInvoiceHTML({ inv, S, totals, vatRate }) {
             <div class="reg">${esc(regBits)}</div>
             <div class="credit">
               <div class="tagline">Invoicing &amp; Job Management</div>
-              <div class="brand-line"><svg width="11" height="11" viewBox="0 0 40 40"><polygon points="20,2 35,11 35,29 20,38 5,29 5,11" fill="url(#gf)"/><path d="M22 9 12 22h7l-2 9 11-14h-7z" fill="#fff"/><defs><linearGradient id="gf" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#f59e0b"/></linearGradient></defs></svg><span class="plain">Powered by </span><span class="brand">DeepFlow</span></div>
+              <div class="brand-line"><span class="plain">Powered by </span><span class="brand">DeepFlow</span></div>
             </div>
           </div>
         </div>
