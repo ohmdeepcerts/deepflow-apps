@@ -74,9 +74,24 @@ Deno.serve(async (req) => {
     created: Date.now(),
   });
 
+  // invoices.total is a stale, never-written column — the real total comes
+  // from `items`, computed the same way create-checkout-session does (and
+  // the way calcTotal()/calcInvTotal() do client-side). Comparing against
+  // inv.total here would never flip anything to Paid, since that column
+  // reads 0 on every real invoice.
+  const { data: settingsRow } = await supabase.from('app_settings').select('value').eq('key', '__all__').maybeSingle();
+  let S: { vatEnabled?: boolean; vatRate?: number } = {};
+  if (settingsRow?.value) { try { S = typeof settingsRow.value === 'string' ? JSON.parse(settingsRow.value) : settingsRow.value; } catch { /* use {} */ } }
+  const vatRate = S.vatEnabled !== false ? (S.vatRate ?? 20) : 0;
+  const items: Array<{ qty?: number; unit?: number; vat?: boolean }> = Array.isArray(inv.items) ? inv.items : [];
+  const invoiceTotal = items.reduce((sum, it) => {
+    const line = (it.qty || 1) * (it.unit || 0);
+    return sum + line + (it.vat ? (line * vatRate) / 100 : 0);
+  }, 0);
+
   const { data: payments } = await supabase.from('payments').select('amount').eq('inv_id', invoiceId);
   const totalPaid = (payments || []).reduce((s: number, p: { amount: number }) => s + Number(p.amount || 0), 0);
-  if (totalPaid >= Number(inv.total || 0) - 0.01 && inv.status !== 'Paid') {
+  if (totalPaid >= invoiceTotal - 0.01 && inv.status !== 'Paid') {
     await supabase.from('invoices').update({ status: 'Paid' }).eq('id', invoiceId);
   }
 

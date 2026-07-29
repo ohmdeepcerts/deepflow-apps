@@ -33,7 +33,6 @@ function json(body: unknown, status = 200) {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
-  if (!STRIPE_SECRET_KEY) return json({ error: 'Payments are not configured yet — ask the office to finish Stripe setup.' }, 503);
 
   let bodyIn: { invoiceId?: string; portalType?: string; portalId?: string };
   try { bodyIn = await req.json(); } catch { return json({ error: 'Invalid request body' }, 400); }
@@ -41,6 +40,9 @@ Deno.serve(async (req) => {
   if (!invoiceId) return json({ error: 'invoiceId is required' }, 400);
 
   const supabase = createClient(SB_URL, SERVICE_KEY);
+
+  const { data: inv, error: invErr } = await supabase.from('invoices').select('*').eq('id', invoiceId).maybeSingle();
+  if (invErr || !inv) return json({ error: 'Invoice not found' }, 404);
 
   // ---- Authorize the caller against this specific invoice ----
   let authorized = false;
@@ -50,24 +52,52 @@ Deno.serve(async (req) => {
     if (userData?.user) authorized = true; // office staff — any authenticated Supabase user
   }
   if (!authorized && portalType && portalId) {
-    const col = portalType === 'agency' ? 'client_agency_id' : portalType === 'landlord' ? 'client_person_id' : null;
-    if (col) {
-      const { data: match } = await supabase.from('invoices').select('id').eq('id', invoiceId).eq(col, portalId).maybeSingle();
-      if (match) authorized = true;
+    // Mirrors portal_get_invoices exactly: try the FK match first, then
+    // fall back to matching the resolved landlord/agency name against the
+    // invoice's own text fields (compared in JS, not interpolated into a
+    // filter string, so a name containing a comma or special character
+    // can't change the query's meaning). The FK columns are unpopulated
+    // on today's real invoices, so the name fallback is the path that
+    // actually authorizes real-world Pay Now clicks right now — matching
+    // the RPC both ways keeps "can I see this invoice" and "can I pay it"
+    // in sync.
+    if (portalType === 'landlord') {
+      if (inv.client_person_id === portalId) authorized = true;
+      if (!authorized) {
+        const { data: person } = await supabase.from('persons').select('name').eq('id', portalId).maybeSingle();
+        if (person?.name && [inv.clientname, inv.landlordname, inv.billtoname].includes(person.name)) authorized = true;
+      }
+    } else if (portalType === 'agency') {
+      if (inv.client_agency_id === portalId) authorized = true;
+      if (!authorized) {
+        const { data: agency } = await supabase.from('agencies').select('name').eq('id', portalId).maybeSingle();
+        if (agency?.name && [inv.clientname, inv.agencyname, inv.billtoname].includes(agency.name)) authorized = true;
+      }
     }
   }
   if (!authorized) return json({ error: 'Not authorized to pay this invoice' }, 403);
-
-  // ---- Load invoice + outstanding balance ----
-  const { data: inv, error: invErr } = await supabase.from('invoices').select('*').eq('id', invoiceId).maybeSingle();
-  if (invErr || !inv) return json({ error: 'Invoice not found' }, 404);
   if (inv.status === 'Cancelled' || inv.status === 'Disposable') return json({ error: 'This invoice is not payable' }, 400);
+
+  // invoices.total is a stale, never-written column — every real invoice
+  // reads 0 there. The real total is computed from `items` the same way
+  // calcTotal()/calcInvTotal() do client-side; replicated here exactly
+  // (packages/business/invoice-total.js's calcLineItemsTotal) rather than
+  // trusting the column, or every invoice would look "already paid".
+  const { data: settingsRow } = await supabase.from('app_settings').select('value').eq('key', '__all__').maybeSingle();
+  let S: { vatEnabled?: boolean; vatRate?: number } = {};
+  if (settingsRow?.value) { try { S = typeof settingsRow.value === 'string' ? JSON.parse(settingsRow.value) : settingsRow.value; } catch { /* use {} */ } }
+  const vatRate = S.vatEnabled !== false ? (S.vatRate ?? 20) : 0;
+  const items: Array<{ qty?: number; unit?: number; vat?: boolean }> = Array.isArray(inv.items) ? inv.items : [];
+  const total = items.reduce((sum, it) => {
+    const line = (it.qty || 1) * (it.unit || 0);
+    return sum + line + (it.vat ? (line * vatRate) / 100 : 0);
+  }, 0);
 
   const { data: payments } = await supabase.from('payments').select('amount').eq('inv_id', invoiceId);
   const alreadyPaid = (payments || []).reduce((s: number, p: { amount: number }) => s + Number(p.amount || 0), 0);
-  const total = Number(inv.total || 0);
   const outstanding = Math.round((total - alreadyPaid) * 100) / 100;
   if (outstanding <= 0.01) return json({ error: 'This invoice is already fully paid' }, 400);
+  if (!STRIPE_SECRET_KEY) return json({ error: 'Payments are not configured yet — ask the office to finish Stripe setup.' }, 503);
 
   // ---- Create the Stripe Checkout Session (direct REST call — no SDK) ----
   const params = new URLSearchParams();
