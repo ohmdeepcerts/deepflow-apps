@@ -9,7 +9,7 @@
 // inside function bodies, never at module-evaluation time.
 
 import { localDateStr } from '@business';
-import { buildInvoiceHTML } from '@ui';
+import { buildMastheadHTML, escHtml } from '@ui';
 import { S, dAll, dGet, toast, nav, calcInvTotal, downloadInvPDFById } from './main.js';
 
 let _stmtSelected = new Set();
@@ -264,26 +264,84 @@ export async function bulkDownloadPDFs() {
   toast(`${ids.length} PDFs downloaded ✓ (${stored} stored, ${generated} generated)`, 'success');
 }
 
-// Same shared HTML template as every other invoice PDF surface (see
-// packages/ui/invoice-template.js) — this used to be a completely
-// separate, independently hand-drawn print view (plain Arial, orange
-// accent) that only this one "Print" button on the Statements page would
-// ever produce, so a redesign everywhere else could land and this would
-// still hand a landlord/agency the old-looking document. One template
-// now, not two that can drift apart again.
+// This is the one invoice surface that isn't jsPDF at all — it's real
+// HTML handed to the browser's own print engine (Ctrl+P / "Save as
+// PDF"), so it was never part of the file-size problem the rest of the
+// invoice PDF pipeline had (a browser's print-to-PDF renders real text,
+// not a screenshot). It still shares the masthead builder
+// (packages/ui/invoice-template.js) so the branded header matches every
+// other invoice surface exactly, with a plain-CSS body alongside it —
+// real gradients are fine here since nothing rasterises this.
+const _STATUS_PILL = {
+  Paid: { label: 'Paid', bg: 'rgba(74,222,128,.16)', fg: '#86EFAC' },
+  'Awaiting Payment': { label: 'Awaiting Payment', bg: 'rgba(253,224,71,.16)', fg: '#FDE68A' },
+  Cancelled: { label: 'Cancelled', bg: 'rgba(252,165,165,.16)', fg: '#FCA5A5' },
+  Draft: { label: 'Draft', bg: 'rgba(203,213,225,.16)', fg: '#CBD5E1' },
+};
+function _printInvoicePage(inv, vr) {
+  const t = calcInvTotal(inv);
+  const isAgency = inv.invoiceType === 'agency';
+  const billToName = inv.billToName || inv.clientName || '—';
+  const billToAddr = inv.billToAddress || inv.clientAddr || '';
+  const propAddr = inv.propertyAddress || inv.jobAddress || inv.jobAddr || '';
+  const showAgent = S.invShowAgent !== false && isAgency && inv.agentName && inv.agentName.trim();
+  const regBits = [S.invFooter, (S.coVatNum && S.vatEnabled !== false) ? 'VAT ' + S.coVatNum : null].filter(Boolean).join(' · ');
+  const isPaid = inv.status === 'Paid';
+  const items = (inv.items || []).map(it => {
+    const line = (it.qty || 1) * (it.unit || 0);
+    const v = it.vat ? line * vr / 100 : 0;
+    return `<tr><td>${escHtml(it.desc || '')}</td><td class="r">£${(line + v).toFixed(2)}</td></tr>`;
+  }).join('');
+  return `<div class="pp-page">
+    ${buildMastheadHTML({ inv, S, status: _STATUS_PILL[inv.status] || _STATUS_PILL.Draft })}
+    <div class="pp-body">
+      <div class="pp-cols">
+        <div><div class="pp-lbl">Ordered By</div><div class="pp-name">${escHtml(billToName)}</div><div class="pp-line">${escHtml(billToAddr)}</div></div>
+        <div><div class="pp-lbl">Site of Works</div><div class="pp-name">${escHtml(propAddr || '—')}</div><div class="pp-line">Ref: ${escHtml(inv.jobNum || inv.jobRef || inv.number)}</div></div>
+      </div>
+      <table class="pp-tbl"><thead><tr><th>Description</th><th class="r">Total</th></tr></thead><tbody>${items}</tbody></table>
+      <div class="pp-total"><span class="l">${isPaid ? 'Total Paid' : 'Total Due'}</span><span class="v">£${t.grand.toFixed(2)}</span></div>
+      ${isPaid ? `<div class="pp-paid">✓ Paid via Bank Transfer · Ref ${escHtml(inv.number)}</div>` : `<div class="pp-payref">Please use <b>${escHtml(inv.number)}</b> as your payment reference.</div>`}
+      <div class="pp-foot">
+        ${showAgent ? `<div class="pp-agent">Agent — <b>${escHtml(inv.agentName)}</b></div>` : ''}
+        <div class="pp-foot-row"><span>${escHtml(regBits)}</span><span class="pp-credit">Powered by DeepFlow</span></div>
+      </div>
+    </div>
+  </div>`;
+}
 export async function printFilteredInvoices() {
   const ids = _stmtSelected.size > 0 ? [..._stmtSelected] : _stmtInvoices.map(i => i.id);
   if (!ids.length) { toast('No invoices to print', 'warn'); return; }
   const invs = (await Promise.all(ids.map(id => dGet('invoices', id)))).filter(Boolean);
   const vr = S.vatRate || 20;
 
-  const pages = invs.map(inv => buildInvoiceHTML({ inv, S, totals: calcInvTotal(inv), vatRate: vr })).join('');
+  const pages = invs.map(inv => _printInvoicePage(inv, vr)).join('');
 
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Invoices</title>
 <style>
-  body{margin:0}
-  .inv-page{page-break-after:always}
-  .inv-page:last-child{page-break-after:auto}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;color:#191C22}
+  .pp-page{width:210mm;min-height:297mm;page-break-after:always;display:flex;flex-direction:column}
+  .pp-page:last-child{page-break-after:auto}
+  .pp-body{flex:1;display:flex;flex-direction:column;padding:10mm 18mm 14mm;gap:8mm}
+  .pp-cols{display:grid;grid-template-columns:1fr 1fr;border-left:1mm solid #0EA5E9}
+  .pp-cols>div{padding:0 6mm}
+  .pp-cols>div+div{border-left:.25mm solid #D8DCE3}
+  .pp-lbl{font-size:8.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#0EA5E9;margin-bottom:2mm}
+  .pp-name{font-size:12px;font-weight:700}
+  .pp-line{font-size:10px;color:#6B7280;margin-top:1mm}
+  table.pp-tbl{width:100%;border-collapse:collapse}
+  table.pp-tbl th{font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:#8A8F98;text-align:left;font-weight:700;padding:0 0 2mm;border-bottom:.4mm solid #191C22}
+  table.pp-tbl th.r,table.pp-tbl td.r{text-align:right}
+  table.pp-tbl td{font-size:11px;padding:2mm 0;border-bottom:.2mm solid #EEF1F6}
+  .pp-total{margin-top:2mm;padding:4mm 6mm;border-radius:1.5mm;display:flex;justify-content:space-between;align-items:baseline;background:linear-gradient(90deg,#0d1f3c,#1e3a5f,#0a1628)}
+  .pp-total .l{font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.7)}
+  .pp-total .v{font-size:17px;font-weight:800;color:#F2C14E}
+  .pp-payref{margin-top:2mm;padding:3mm 6mm;border:.25mm solid #E8B84B;border-radius:1.5mm;background:#FEF8EB;font-size:10px;color:#6B4E0C}
+  .pp-paid{margin-top:2mm;font-size:10px;font-weight:700;color:#3F7A4C}
+  .pp-foot{margin-top:auto;padding-top:3mm;border-top:.25mm solid #D8DCE3}
+  .pp-agent{font-size:10px;color:#374151;font-weight:600;padding-bottom:2mm;margin-bottom:2mm;border-bottom:.2mm solid #EEF1F6}
+  .pp-foot-row{display:flex;justify-content:space-between;font-size:8.5px;color:#9CA3AF}
+  .pp-credit{font-weight:700;color:#0EA5E9}
   @media print{@page{size:A4;margin:0}}
 </style></head><body>${pages}</body></html>`;
 

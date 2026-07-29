@@ -11,7 +11,7 @@
 // it. _d/_S are likewise live bindings: each is assigned exactly once,
 // during INIT, and never reassigned again.
 
-import { escText as e, buildInvoiceHTML } from '@ui';
+import { escText as e, renderInvoicePDF } from '@ui';
 import { _INV_STORE, _d, _S, toast, calcTotal, _portalVatRate, fd, refreshIcons } from './main.js';
 
 let _CURRENT_INV_ID=null;
@@ -97,43 +97,18 @@ export async function downloadInvPDF(id){
   }
   if(!window.jspdf||!window.html2canvas){toast('PDF library loading — please wait and try again');return;}
 
-  // Same shared HTML template as the Office App (packages/ui/invoice-
-  // template.js), rasterised the same way — this file used to be a
-  // completely separate, independently hand-drawn jsPDF design that only
-  // an invoice without a stored pdfUrl yet would ever hit, which is
-  // exactly why a redesign could land in Office and this would still show
-  // the old look here. One template now, not two that can drift again.
+  // Same shared renderer as the Office App (packages/ui/pdf-vector.js) —
+  // real vector text/shapes for the body, a small rendered image only for
+  // the masthead. This file used to be a completely separate,
+  // independently hand-drawn jsPDF design that only an invoice without a
+  // stored pdfUrl yet would ever hit, which is exactly why a redesign
+  // could land in Office and this would still show the old look here.
+  // One renderer now, not two that can drift again.
   const {jsPDF}=window.jspdf;
   const t=calcTotal(inv);
   const vr=_portalVatRate();
-  const html=buildInvoiceHTML({inv,S:_S,totals:t,vatRate:vr});
-  const holder=document.createElement('div');
-  holder.style.cssText='position:fixed;left:-99999px;top:0;';
-  holder.innerHTML=html;
-  document.body.appendChild(holder);
-  let doc;
-  try{
-    const canvas=await window.html2canvas(holder.firstElementChild,{scale:3,useCORS:true,backgroundColor:'#ffffff'});
-    doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
-    // Always a real portrait A4 page, one page per screen's worth of
-    // content — see the matching comment in office/main.js's
-    // _buildInvoicePDFDoc for the full reasoning.
-    const pxPerMM=canvas.width/210;
-    const pageHPx=Math.floor(297*pxPerMM);
-    let y=0, pageNum=0;
-    while(y<canvas.height){
-      const sliceHPx=Math.min(pageHPx,canvas.height-y);
-      const slice=document.createElement('canvas');
-      slice.width=canvas.width; slice.height=sliceHPx;
-      slice.getContext('2d').drawImage(canvas,0,y,canvas.width,sliceHPx,0,0,canvas.width,sliceHPx);
-      const imgData=slice.toDataURL('image/jpeg',0.95);
-      if(pageNum>0) doc.addPage();
-      doc.addImage(imgData,'JPEG',0,0,210,sliceHPx/pxPerMM);
-      y+=sliceHPx; pageNum++;
-    }
-  } finally {
-    holder.remove();
-  }
+  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  await renderInvoicePDF(doc,window.html2canvas,{inv,S:_S,totals:t,vatRate:vr});
   doc.save((inv.number||'invoice')+'.pdf');
   toast('Invoice downloaded');
 }

@@ -1,5 +1,5 @@
 import { SB_URL, SB_KEY, restFetch, createSupaAuthClient, makeJwtResolver } from '@core';
-import { escHtml, initNetworkCanvas, buildInvoiceHTML } from '@ui';
+import { escHtml, initNetworkCanvas, renderInvoicePDF } from '@ui';
 import { toDb as _toDb, fromDb as _fromDb, createRepository, TO_DB as _TO_DB } from '@data';
 import { STATUS, calcLineItemsTotal, officeVatRate, daysDiff, formatDateUK, localDateStr } from '@business';
 import { createOfflineQueue } from '@offline';
@@ -6827,44 +6827,14 @@ async function _buildInvoicePDFDoc(inv){
   const t=calcInvTotal(inv);
   const vr=getVatRate();
   const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
 
-  // Render the real HTML/CSS template off-screen and rasterise it into the
-  // page — a genuine screenshot of genuine CSS (real gradients, card
-  // shadows, inline SVG icons), not jsPDF's rect()/text()/circle()
-  // primitives trying to describe those things by hand. See
-  // packages/ui/invoice-template.js for the template and the reasoning.
-  const html=buildInvoiceHTML({inv,S,totals:t,vatRate:vr});
-  const holder=document.createElement('div');
-  holder.style.cssText='position:fixed;left:-99999px;top:0;';
-  holder.innerHTML=html;
-  document.body.appendChild(holder);
-  let doc;
-  try{
-    // scale:3 (was 2.5) for crisper text/lines.
-    const canvas=await window.html2canvas(holder.firstElementChild,{scale:3,useCORS:true,backgroundColor:'#ffffff'});
-    doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
-    // Always a real portrait A4 page — for a short invoice that just
-    // leaves blank space below the content, same as any normal document.
-    // For a long invoice (many line items) whose content is taller than
-    // one A4 page, slice the canvas into consecutive full-width A4-height
-    // bands and add one page per band, instead of ever shrinking the
-    // page or the content to force it onto a single sheet.
-    const pxPerMM=canvas.width/210;
-    const pageHPx=Math.floor(297*pxPerMM);
-    let y=0, pageNum=0;
-    while(y<canvas.height){
-      const sliceHPx=Math.min(pageHPx,canvas.height-y);
-      const slice=document.createElement('canvas');
-      slice.width=canvas.width; slice.height=sliceHPx;
-      slice.getContext('2d').drawImage(canvas,0,y,canvas.width,sliceHPx,0,0,canvas.width,sliceHPx);
-      const imgData=slice.toDataURL('image/jpeg',0.95);
-      if(pageNum>0) doc.addPage();
-      doc.addImage(imgData,'JPEG',0,0,210,sliceHPx/pxPerMM);
-      y+=sliceHPx; pageNum++;
-    }
-  } finally {
-    holder.remove();
-  }
+  // Only the masthead is a rendered image (real CSS gradient + particle
+  // scatter, matching the login screen exactly); everything else is real
+  // PDF text and vector shapes via jsPDF/jsPDF-AutoTable, which is what
+  // keeps the file a few tens of KB instead of the few hundred a
+  // full-page screenshot cost. See packages/ui/pdf-vector.js.
+  await renderInvoicePDF(doc,window.html2canvas,{inv,S,totals:t,vatRate:vr});
 
   return doc;
 }
