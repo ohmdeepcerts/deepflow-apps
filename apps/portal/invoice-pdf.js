@@ -12,9 +12,35 @@
 // during INIT, and never reassigned again.
 
 import { escText as e, renderInvoicePDF } from '@ui';
-import { _INV_STORE, _d, _S, toast, calcTotal, _portalVatRate, fd, refreshIcons } from './main.js';
+import { SB_URL, SB_KEY } from '@core';
+import { _INV_STORE, _d, _S, toast, calcTotal, _portalVatRate, fd, refreshIcons, ptype, token } from './main.js';
 
 let _CURRENT_INV_ID=null;
+
+// Only landlord/agency portals can pay — matches create-checkout-session's
+// own authorization, which checks client_person_id/client_agency_id and
+// has no path for the agent view (agents don't hold the invoice's money).
+const _payable=(inv)=> (ptype==='landlord'||ptype==='agency') && inv.status!=='Paid' && inv.status!=='Cancelled' && inv.status!=='Disposable';
+
+export async function payInvoice(id){
+  const inv=_INV_STORE.get(id);
+  if(!inv){toast('Invoice not found');return;}
+  const btn=document.getElementById('pay-now-btn');
+  if(btn){btn.disabled=true;btn.textContent='Redirecting to secure checkout…';}
+  try{
+    const res=await fetch(`${SB_URL}/functions/v1/create-checkout-session`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY},
+      body:JSON.stringify({invoiceId:id, portalType:ptype, portalId:token})
+    });
+    const data=await res.json();
+    if(!res.ok||!data.url){toast(data.error||'Could not start checkout — please try again','error');if(btn){btn.disabled=false;btn.textContent='Pay Now';}return;}
+    window.location.href=data.url;
+  }catch(err){
+    toast('Could not reach the payment service — please try again','error');
+    if(btn){btn.disabled=false;btn.textContent='Pay Now';}
+  }
+}
 
 export function previewInv(id){
   const inv=_INV_STORE.get(id);
@@ -28,7 +54,9 @@ export function previewInv(id){
   // this browser. Only invoices from before that existed fall through to
   // the client-side rebuild below.
   if(inv.pdfUrl){
-    bd.innerHTML=`<iframe src="${e(inv.pdfUrl)}" style="width:100%;height:70vh;border:0;border-radius:var(--radius)" title="Invoice ${e(inv.number||'')}"></iframe>`;
+    bd.innerHTML=`
+      ${_payable(inv)?`<div style="display:flex;justify-content:flex-end;margin-bottom:10px"><button id="pay-now-btn" class="dl" onclick="payInvoice('${id}')" style="background:var(--success,#16a34a)">Pay Now — £${calcTotal(inv).grand.toFixed(2)}</button></div>`:''}
+      <iframe src="${e(inv.pdfUrl)}" style="width:100%;height:70vh;border:0;border-radius:var(--radius)" title="Invoice ${e(inv.number||'')}"></iframe>`;
     document.getElementById('pdf-modal').classList.add('show');
     return;
   }
@@ -71,6 +99,7 @@ export function previewInv(id){
       </div>
       ${inv.status==='Paid'?`<div style="text-align:center;padding:20px;border:3px solid var(--success);color:var(--success);font-size:28px;font-weight:800;transform:rotate(-5deg);opacity:0.8;border-radius:var(--radius)">PAID</div>`:''}
       ${inv.status==='Awaiting Payment'?`<div style="text-align:center;padding:14px;border:3px solid #dc2626;color:#dc2626;font-size:22px;font-weight:800;transform:rotate(-5deg);opacity:0.8;border-radius:var(--radius)">UNPAID</div>`:''}
+      ${_payable(inv)?`<div style="margin-top:16px"><button id="pay-now-btn" class="dl" onclick="payInvoice('${id}')" style="width:100%;justify-content:center;padding:14px;font-size:15px;background:var(--success,#16a34a)">Pay Now — £${t.grand.toFixed(2)}</button></div>`:''}
       <div style="font-size:11px;color:var(--text-tertiary);text-align:center;margin-top:20px">Please quote reference ${e(inv.number||'—')} with your payment</div>
     </div>`;
   document.getElementById('pdf-modal').classList.add('show');

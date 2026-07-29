@@ -9,7 +9,7 @@ import { FROM_DB } from '@data';
 import { calcLineItemsTotal, portalVatRate } from '@business';
 import './hero-canvas.js';
 import { vRequest, toggleReqDetail, handleFiles, submitReq, setRenewalData } from './request-wizard.js';
-import { previewInv, downloadCurrentInv, closeModal } from './invoice-pdf.js';
+import { previewInv, downloadCurrentInv, closeModal, payInvoice } from './invoice-pdf.js';
 import { vProperties, setPropSearch, setPropSort } from './properties.js';
 import { vCerts, certCard, previewCertPdf, closeCertPdfPreview, preFillRenewal, getPreviewCert, setCertView, setCertSort, setCertDir } from './certs.js';
 
@@ -110,7 +110,7 @@ function _computeChangesSinceLastVisit(jobs, certs, invoices, token){
   try{ localStorage.setItem(key, JSON.stringify(snapshot)); }catch(err){}
   return changes;
 }
-const token=P.get('id'), ptype=P.get('type')||'landlord';
+export const token=P.get('id'), ptype=P.get('type')||'landlord';
 
 // ── PUSH NOTIFICATIONS ───────────────────────────────────────────────────────
 // Free Web Push (VAPID) — no third-party service, no account. See
@@ -1209,7 +1209,7 @@ Object.assign(window, {
   _pinSubmitEntry, _pinSubmitSetup, closeCertPdfPreview, closeContactModal,
   closeHelpModal, closeLb, closeModal, closeSearch, copyToClipboard,
   downloadCurrentInv, enablePushNotifications, exportCSV, go, handleFiles,
-  openContactModal, openSearch, performSearch, preFillRenewal,
+  openContactModal, openSearch, payInvoice, performSearch, preFillRenewal,
   previewCertPdf, setCertDir, setCertSort, setCertView, setPropSearch,
   setPropSort, shareCert, shareCurrentPreviewCert, submitReq, toast,
   toggleAgentFilter, toggleNotif, toggleReqDetail, toggleTheme,
