@@ -6827,7 +6827,7 @@ async function _buildInvoicePDFDoc(inv){
   const t=calcInvTotal(inv);
   const vr=getVatRate();
   const {jsPDF}=window.jspdf;
-  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4',floatPrecision:2});
 
   // Only the masthead is a rendered image (real CSS gradient + particle
   // scatter, matching the login screen exactly); everything else is real

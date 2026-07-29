@@ -107,7 +107,7 @@ export async function downloadInvPDF(id){
   const {jsPDF}=window.jspdf;
   const t=calcTotal(inv);
   const vr=_portalVatRate();
-  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4',floatPrecision:2});
   await renderInvoicePDF(doc,window.html2canvas,{inv,S:_S,totals:t,vatRate:vr});
   doc.save((inv.number||'invoice')+'.pdf');
   toast('Invoice downloaded');
