@@ -188,12 +188,21 @@ export async function renderInvoicePDF(doc, html2canvas, { inv, S, totals, vatRa
     y = MARGIN;
   }
 
+  // Clip the gradient strips to a rounded-rect path so the band gets soft
+  // corners like the payref box below it, instead of the strips' own sharp
+  // edges showing through — costs nothing (still pure vector), unlike a
+  // raster shadow/rounding trick would.
+  doc.saveGraphicsState();
+  doc.roundedRect(MARGIN, y, CONTENT_W, totalBandH, 2, 2, null);
+  doc.clip();
+  doc.discardPath();
   const strips = 60, stripW = CONTENT_W / strips;
   for (let i = 0; i < strips; i++) {
     const [r, g, b] = navyGradientColorAt(i / (strips - 1));
     doc.setFillColor(r, g, b);
     doc.rect(MARGIN + i * stripW, y, stripW + 0.3, totalBandH, 'F');
   }
+  doc.restoreGraphicsState();
   doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(255, 255, 255);
   doc.text((isPaid ? 'TOTAL PAID' : 'TOTAL DUE'), MARGIN + 6, y + totalBandH / 2 + 1.2, { renderingMode: 'fill' });
   doc.setFontSize(15); doc.setTextColor(242, 193, 78);
