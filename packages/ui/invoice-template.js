@@ -8,21 +8,31 @@
 // template is genuine HTML+CSS; whatever the browser can render, the PDF
 // gets, because the PDF page IS a screenshot of this.
 //
-// Deliberately excluded: backdrop-filter (blur) — html2canvas's support
-// for it is inconsistent across versions, and a card that quietly loses
-// its blur and just shows a flat fill is a worse failure mode than never
-// promising blur in the first place. The "glass" look here comes from a
-// translucent fill + border + soft shadow, which html2canvas renders
-// reliably. Also excluded: the animated network canvas — nothing can
-// animate on a static PDF page — replaced with a fixed (not moving)
-// scatter of the same nodes/lines/stars, deterministic per invoice id so
-// it looks intentional rather than random noise on every regeneration.
+// Design: a masthead band directly behind the company name uses the exact
+// same background as the app's own login/lock screen (see
+// packages/ui/network-canvas.js — same gradient, same cyan node colour,
+// same gold twinkle colour), because that's the one place an invoice is
+// required to look like it came from this app. Everything below it is a
+// near-white, ink-light body — stacked "glass" cards (translucent fill +
+// fine border + soft shadow, no blur) rather than a second dark fill,
+// because a fully dark invoice would just drink a real printer's ink.
+// True blur was tested directly against html2canvas 1.4.1 and confirmed a
+// silent no-op (a blurred test card rasterised pixel-identical to an
+// unblurred one), which is why "glass" here never reaches for
+// backdrop-filter. Also excluded for the same html2canvas-safety reason:
+// text-stroke, clip-path, color-mix.
+//
+// The masthead's node/star scatter is seeded from the invoice's own id —
+// deterministic, not random — so the same invoice always regenerates the
+// same background (download it twice, get pixel-identical results) while
+// a different invoice gets a genuinely different pattern. That's
+// intentional, not a bug.
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money = (n) => '£' + (Number(n) || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 // Small deterministic PRNG (mulberry32) seeded from the invoice id/number
-// so the "network" scatter is stable across regenerations of the same
+// so the network scatter is stable across regenerations of the same
 // invoice instead of jittering every time it's saved.
 function seededRandom(seed) {
   let a = 0;
@@ -35,22 +45,26 @@ function seededRandom(seed) {
   };
 }
 
-function networkSvg(seed, tint, w, h) {
+// Same palette as the real login/lock-screen canvas (network-canvas.js):
+// gradient handled by the caller's CSS; here just the node/line/star
+// colours. `strength` scales every alpha down for the faint whole-body
+// watermark version without duplicating the generator.
+function networkField(seed, w, h, nodeCount, starCount, strength) {
   const rnd = seededRandom(seed);
-  const nodeCount = 16, starCount = 4;
-  const nodes = Array.from({ length: nodeCount }, () => ({ x: rnd() * w, y: rnd() * h, r: rnd() < 0.15 ? 2.6 : 1.3 }));
+  const s = strength ?? 1;
+  const nodes = Array.from({ length: nodeCount }, () => ({ x: rnd() * w, y: rnd() * h, r: rnd() < 0.12 ? 3 : 1.4 }));
   let lines = '';
   for (let i = 0; i < nodes.length; i++) for (let j = i + 1; j < nodes.length; j++) {
     const n = nodes[i], m = nodes[j];
     const d = Math.hypot(n.x - m.x, n.y - m.y);
-    if (d < w * 0.22) lines += `<line x1="${n.x.toFixed(1)}" y1="${n.y.toFixed(1)}" x2="${m.x.toFixed(1)}" y2="${m.y.toFixed(1)}" stroke="rgba(${tint},.35)" stroke-width="1"/>`;
+    if (d < w * 0.2) lines += `<line x1="${n.x.toFixed(1)}" y1="${n.y.toFixed(1)}" x2="${m.x.toFixed(1)}" y2="${m.y.toFixed(1)}" stroke="rgba(125,211,252,${(0.28 * s).toFixed(3)})" stroke-width="1"/>`;
   }
-  const dots = nodes.map(n => `<circle cx="${n.x.toFixed(1)}" cy="${n.y.toFixed(1)}" r="${n.r}" fill="rgba(${tint},.75)"/>`).join('');
+  const dots = nodes.map(n => `<circle cx="${n.x.toFixed(1)}" cy="${n.y.toFixed(1)}" r="${n.r}" fill="rgba(125,211,252,${(0.75 * s).toFixed(3)})"/>`).join('');
   const stars = Array.from({ length: starCount }, () => {
-    const x = rnd() * w, y = rnd() * h, r = 1.4 + rnd() * 2.2;
-    return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(r * 3).toFixed(1)}" fill="rgba(255,215,60,.18)"/><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(r * 0.4).toFixed(1)}" fill="rgba(255,241,168,.9)"/>`;
+    const x = rnd() * w, y = rnd() * h, r = 1.3 + rnd() * 2.3;
+    return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(r * 3).toFixed(1)}" fill="rgba(255,215,60,${(0.2 * s).toFixed(3)})"/><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(r * 0.4).toFixed(1)}" fill="rgba(255,241,168,${Math.min(1, 0.9 * s).toFixed(3)})"/>`;
   }).join('');
-  return `<svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg" style="position:absolute;inset:0;width:100%;height:100%">${lines}${dots}${stars}</svg>`;
+  return `<svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%">${lines}${dots}${stars}</svg>`;
 }
 
 const ICONS = {
@@ -73,12 +87,6 @@ const icon = (name, cls = '') => `<svg class="ic ${cls}" viewBox="0 0 24 24" fil
  */
 export function buildInvoiceHTML({ inv, S, totals, vatRate }) {
   const isAgency = inv.invoiceType === 'agency';
-  const tag = isAgency ? '#0EA5E9' : '#7C3AED';
-  const bandCss = isAgency
-    ? 'linear-gradient(135deg,#0d1f3c 0%,#1e3a5f 55%,#0a1628 100%)'
-    : 'linear-gradient(135deg,#4C1D95 0%,#7C3AED 55%,#3b1670 100%)';
-  const tint = isAgency ? '125,211,252' : '196,165,250';
-  const badgeBg = isAgency ? 'rgba(14,165,233,.13)' : 'rgba(124,58,237,.13)';
   const hasLogo = !!S.logoData;
 
   const billToName = inv.billToName || inv.clientName || '—';
@@ -103,17 +111,18 @@ export function buildInvoiceHTML({ inv, S, totals, vatRate }) {
   }).join('');
 
   const regBits = [S.invFooter, (S.coVatNum && S.vatEnabled !== false) ? 'VAT ' + S.coVatNum : null].filter(Boolean).join(' · ');
+  const seed = inv.id || inv.number || 'x';
 
   return `
-  <div class="inv-page" style="--tag:${tag}">
+  <div class="inv-page">
     <style>
-      .inv-page{width:210mm;background:#fff;color:#12151B;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;position:relative;overflow:hidden}
+      .inv-page{width:210mm;background:#F7F9FC;color:#191C22;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;position:relative;overflow:hidden}
       .inv-page *{box-sizing:border-box}
       .inv-page .num{font-variant-numeric:tabular-nums}
       .inv-page .ic{width:14px;height:14px;flex-shrink:0}
-      .accent-bar{height:5px;background:linear-gradient(90deg,var(--tag) 0%,var(--tag) 78%,#F2C14E 100%)}
-      .head-band{position:relative;background:${bandCss};padding:30px 46px 26px;overflow:hidden}
-      .head-content{position:relative;z-index:1;display:flex;justify-content:space-between;align-items:flex-start}
+
+      .masthead{position:relative;background:linear-gradient(150deg,#0d1f3c 0%,#1e3a5f 55%,#0a1628 100%);padding:30px 46px}
+      .mast-row{position:relative;z-index:1;display:flex;justify-content:space-between;align-items:flex-start}
       .brand{display:flex;gap:14px;align-items:flex-start}
       .brand img{width:40px;height:40px;object-fit:contain;border-radius:8px;background:#fff;padding:3px}
       .brand .mark{width:40px;height:40px;flex-shrink:0}
@@ -129,33 +138,39 @@ export function buildInvoiceHTML({ inv, S, totals, vatRate }) {
       .mast-dates{display:flex;gap:24px;margin-top:15px;justify-content:flex-end}
       .mast-dates .l{font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;color:rgba(255,255,255,.4)}
       .mast-dates .v{font-size:13px;font-weight:600;margin-top:2px;color:rgba(255,255,255,.92)}
-      .pad{padding:34px 46px 42px;position:relative}
-      .watermark{position:absolute;left:50%;top:52%;transform:translate(-50%,-50%) rotate(-27deg);font-size:118px;font-weight:800;letter-spacing:.06em;white-space:nowrap;opacity:.12;z-index:5;pointer-events:none}
-      .duo{position:relative;display:grid;grid-template-columns:1fr 1fr;gap:22px;padding:0 0 28px}
-      .duo::before{content:"";position:absolute;top:-14px;left:4%;width:180px;height:180px;background:var(--tag);opacity:.13;filter:blur(42px);border-radius:50%;z-index:0}
-      .duo::after{content:"";position:absolute;bottom:-24px;right:4%;width:150px;height:150px;background:#0EA5E9;opacity:.09;filter:blur(42px);border-radius:50%;z-index:0}
-      .duo>div{position:relative;z-index:1;background:rgba(247,249,252,.9);border:1px solid #E6E9EF;border-left:3px solid var(--tag);border-radius:12px;padding:19px 21px;box-shadow:0 16px 32px -20px rgba(20,20,30,.32)}
-      .duo-title{display:flex;align-items:center;gap:9px;font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:#5B6472;margin:0 0 13px}
-      .duo-badge{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:7px;background:${badgeBg};flex-shrink:0}
-      .duo-badge .ic{color:var(--tag);width:12.5px;height:12.5px}
+
+      .body{position:relative}
+      .body-field{position:absolute;inset:0}
+      .watermark{position:absolute;left:50%;top:46%;transform:translate(-50%,-50%) rotate(-27deg);font-size:110px;font-weight:800;letter-spacing:.06em;white-space:nowrap;opacity:.15;z-index:3;pointer-events:none}
+      .stack{position:relative;z-index:1;display:flex;flex-direction:column;gap:16px;padding:28px 46px 42px}
+      .sheet{background:rgba(255,255,255,.88);border:1px solid rgba(13,31,60,.10);border-radius:16px;box-shadow:0 16px 32px -20px rgba(13,31,60,.22),inset 0 1px 0 rgba(255,255,255,.75);padding:20px 24px}
+
+      .duo{display:grid;grid-template-columns:1fr 1fr;gap:0;border-left:3px solid #0EA5E9}
+      .duo>div{padding:0 20px}
+      .duo>div:first-child{padding-left:0}
+      .duo>div+div{border-left:1px solid rgba(13,31,60,.09)}
+      .duo-title{display:flex;align-items:center;gap:8px;font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:#5B6472;margin:0 0 11px}
+      .duo-badge{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:7px;background:rgba(14,165,233,.13);flex-shrink:0}
+      .duo-badge .ic{color:#0EA5E9;width:12.5px;height:12.5px}
       .duo-name{font-size:14.5px;font-weight:700;letter-spacing:-.005em}
       .duo-line{font-size:12.5px;color:#5B6472;line-height:1.7;margin-top:2px}
       .ref-line{font-size:11px;color:#9AA3B0;margin-top:8px;font-variant-numeric:tabular-nums}
-      table.svc{width:100%;border-collapse:collapse;margin-top:4px}
+
+      table.svc{width:100%;border-collapse:collapse}
       table.svc th{font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#7A8290;text-align:left;padding:0 0 11px;border-bottom:1.5px solid #12151B}
       table.svc th.r,table.svc td.r{text-align:right}
       table.svc td{font-size:13px;padding:12px 0;border-bottom:1px solid #EEF1F5}
-      table.svc tbody tr:nth-child(even) td{background:#FBFCFD}
-      .total-row{margin-top:20px;padding:17px 21px;border-radius:10px;display:flex;justify-content:space-between;align-items:baseline;background:${bandCss};color:#fff;box-shadow:0 14px 28px -16px rgba(20,20,30,.42),inset 0 1px 0 rgba(255,255,255,.14)}
-      .total-row .l{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.72)}
-      .total-row .v{font-size:26px;font-weight:800;letter-spacing:-.01em}
-      .pay-line{font-size:11.5px;color:#5B6472;margin-top:13px;display:flex;align-items:center;gap:6px}
-      .payref-box{margin-top:16px;padding:11px 15px;background:#FEF8EB;border:1px solid #E8B84B;border-radius:8px;font-size:11.5px;color:#6B4E0C}
-      .foot{margin-top:24px;padding-top:15px;position:relative;display:flex;flex-direction:column;gap:9px}
-      .foot::before{content:"";position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--tag),transparent 55%)}
-      .foot-agent{display:flex;align-items:center;gap:6px;font-size:11px;color:#5B6472;padding-bottom:9px;border-bottom:1px solid #EEF1F5}
-      .foot-agent .ic{color:var(--tag)}
-      .foot-agent b{color:#12151B}
+      table.svc tbody tr:nth-child(even) td{background:rgba(14,165,233,.028)}
+
+      .total-sheet{border-left:3px solid #B8863B;background:linear-gradient(120deg,rgba(184,134,59,.08),rgba(255,255,255,.88))}
+      .total-row{display:flex;justify-content:space-between;align-items:baseline}
+      .total-row .l{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#6B7280;font-weight:600}
+      .total-row .v{font-size:26px;font-weight:800;color:#B8863B;letter-spacing:-.01em}
+      .pay-line{font-size:11.5px;color:#5B6472;margin-top:10px;display:flex;align-items:center;gap:6px}
+      .payref-box{margin-top:14px;padding:11px 15px;background:#FEF8EB;border:1px solid #E8B84B;border-radius:8px;font-size:11.5px;color:#6B4E0C}
+
+      .foot-agent{font-size:11px;color:#374151;font-weight:600;padding-bottom:11px;margin-bottom:11px;border-bottom:1px solid rgba(13,31,60,.08)}
+      .foot-agent b{color:#191C22}
       .foot-row{display:flex;justify-content:space-between;align-items:flex-end}
       .foot .reg{font-size:9.5px;letter-spacing:.06em;color:#9AA3B0}
       .foot .credit{text-align:right;line-height:1.5}
@@ -165,10 +180,9 @@ export function buildInvoiceHTML({ inv, S, totals, vatRate }) {
       .foot .credit .plain{color:#7A8290;font-weight:600}
     </style>
 
-    <div class="accent-bar"></div>
-    <div class="head-band">
-      ${networkSvg(inv.id || inv.number || 'x', tint, 700, 160)}
-      <div class="head-content">
+    <div class="masthead">
+      ${networkField(seed, 700, 210, 26, 6)}
+      <div class="mast-row">
         <div class="brand">
           ${hasLogo ? `<img src="${S.logoData}">` : `<svg class="mark" viewBox="0 0 40 40"><polygon points="20,2 35,11 35,29 20,38 5,29 5,11" fill="url(#g1)"/><path d="M22 9 12 22h7l-2 9 11-14h-7z" fill="#fff"/><defs><linearGradient id="g1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#f59e0b"/></linearGradient></defs></svg>`}
           <div>
@@ -192,40 +206,46 @@ export function buildInvoiceHTML({ inv, S, totals, vatRate }) {
       </div>
     </div>
 
-    <div class="pad">
+    <div class="body">
+      <div class="body-field">${networkField(seed + '-body', 700, 900, 30, 8, 0.16)}</div>
       ${wm ? `<div class="watermark" style="color:${wm.color}">${wm.text}</div>` : ''}
-      <div class="duo">
-        <div>
-          <div class="duo-title"><span class="duo-badge">${icon('person')}</span>Ordered By</div>
-          <div class="duo-name">${esc(billToName)}</div>
-          <div class="duo-line">${esc(billToAddr)}${inv.clientEmail ? '<br>' + esc(inv.clientEmail) : ''}</div>
-          ${inv.billToOverride ? `<div class="ref-line">Only this invoice — real record: ${esc(realName)}</div>` : ''}
+      <div class="stack">
+        <div class="sheet duo">
+          <div>
+            <div class="duo-title"><span class="duo-badge">${icon('person')}</span>Ordered By</div>
+            <div class="duo-name">${esc(billToName)}</div>
+            <div class="duo-line">${esc(billToAddr)}${inv.clientEmail ? '<br>' + esc(inv.clientEmail) : ''}</div>
+            ${inv.billToOverride ? `<div class="ref-line">Only this invoice — real record: ${esc(realName)}</div>` : ''}
+          </div>
+          <div>
+            <div class="duo-title"><span class="duo-badge">${icon('pin')}</span>Site of Works</div>
+            <div class="duo-name">${esc(propAddr || '—')}</div>
+            <div class="ref-line">Ref: ${esc(inv.jobNum || inv.jobRef || inv.number)}</div>
+          </div>
         </div>
-        <div>
-          <div class="duo-title"><span class="duo-badge">${icon('pin')}</span>Site of Works</div>
-          <div class="duo-name">${esc(propAddr || '—')}</div>
-          <div class="ref-line">Ref: ${esc(inv.jobNum || inv.jobRef || inv.number)}</div>
+
+        <div class="sheet">
+          <table class="svc">
+            <thead><tr><th>Description</th><th class="r">Total</th></tr></thead>
+            <tbody>${items}</tbody>
+          </table>
         </div>
-      </div>
 
-      <table class="svc">
-        <thead><tr><th>Description</th><th class="r">Total</th></tr></thead>
-        <tbody>${items}</tbody>
-      </table>
+        <div class="sheet total-sheet">
+          <div class="total-row"><span class="l">${inv.status === 'Paid' ? 'Total Paid' : 'Total Due'}</span><span class="v num">${money(totals.grand)}</span></div>
+          ${inv.status === 'Paid'
+            ? `<div class="pay-line">✓ Paid via Bank Transfer · Ref ${esc(inv.number)}</div>`
+            : `<div class="payref-box">Please use <b>${esc(inv.number)}</b> as your payment reference.</div>`}
+        </div>
 
-      <div class="total-row"><span class="l">${inv.status === 'Paid' ? 'Total Paid' : 'Total Due'}</span><span class="v num">${money(totals.grand)}</span></div>
-
-      ${inv.status === 'Paid'
-        ? `<div class="pay-line">✓ Paid via Bank Transfer · Ref ${esc(inv.number)}</div>`
-        : `<div class="payref-box">Please use <b>${esc(inv.number)}</b> as your payment reference.</div>`}
-
-      <div class="foot">
-        ${showAgent ? `<div class="foot-agent">${icon('person')}<span><b>${esc(inv.agentName)}</b>${inv.agentEmail ? ' · ' + esc(inv.agentEmail) : ''} — instructed via agent</span></div>` : ''}
-        <div class="foot-row">
-          <div class="reg">${esc(regBits)}</div>
-          <div class="credit">
-            <div class="tagline">Invoicing &amp; Job Management</div>
-            <div class="brand-line"><svg width="11" height="11" viewBox="0 0 40 40"><polygon points="20,2 35,11 35,29 20,38 5,29 5,11" fill="url(#gf)"/><path d="M22 9 12 22h7l-2 9 11-14h-7z" fill="#fff"/><defs><linearGradient id="gf" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#f59e0b"/></linearGradient></defs></svg><span class="plain">Powered by </span><span class="brand">DeepFlow</span></div>
+        <div class="sheet foot">
+          ${showAgent ? `<div class="foot-agent">Agent — <b>${esc(inv.agentName)}</b></div>` : ''}
+          <div class="foot-row">
+            <div class="reg">${esc(regBits)}</div>
+            <div class="credit">
+              <div class="tagline">Invoicing &amp; Job Management</div>
+              <div class="brand-line"><svg width="11" height="11" viewBox="0 0 40 40"><polygon points="20,2 35,11 35,29 20,38 5,29 5,11" fill="url(#gf)"/><path d="M22 9 12 22h7l-2 9 11-14h-7z" fill="#fff"/><defs><linearGradient id="gf" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#f59e0b"/></linearGradient></defs></svg><span class="plain">Powered by </span><span class="brand">DeepFlow</span></div>
+            </div>
           </div>
         </div>
       </div>
