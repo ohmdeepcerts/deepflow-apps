@@ -12698,6 +12698,7 @@ const _patchCmdSearch = ()=>{
         if(overlay)overlay.style.display='none';
         await init();
         applyUserPermissions();
+        _refreshAdminNavVisibility(); // Same as the fresh-PIN-entry path below — this session-restore path (the one taken on every normal reload once already logged in) was missing this call entirely, so P&L Dashboard stayed hidden for admins whose session just auto-restored.
         startRealtimeSync();
         setTimeout(async()=>{
           try{await loadSettings();renderDash();updateBadges();}catch(e){console.warn('[DeepFlow]',e);}
