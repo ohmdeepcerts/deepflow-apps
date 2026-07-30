@@ -170,6 +170,11 @@ body{font-family:var(--fm),'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoj
 nav{flex:1;padding:10px 0;overflow-y:auto}
 .ns{padding:10px 16px 4px;font-size:11px;letter-spacing:2px;color:var(--txt3);text-transform:uppercase}
 .ni{display:flex;align-items:center;gap:10px;padding:11px 16px;cursor:pointer;color:var(--txt2);font-size:var(--fs-sm);font-family:var(--fh);font-weight:500;border-left:2px solid transparent;transition:color .18s var(--ease),background .18s var(--ease),border-color .18s var(--ease);position:relative}
+/* Admin/Manager-only nav items: driven by a single class on <body> (set once
+   in _refreshAdminNavVisibility) rather than per-element inline styles, so
+   visibility doesn't depend on exactly when each item exists in the DOM. */
+.admin-only-nav{display:none}
+body.show-admin-nav .admin-only-nav{display:flex}
 .ni:hover{color:var(--txt);background:var(--s3)}
 .ni.active{color:var(--acc);border-left-color:var(--acc);background:var(--acc-soft)}
 .ni .ico{transition:transform .18s var(--ease)}
@@ -1635,7 +1640,7 @@ body.density-relaxed .jtable td{font-size:15px}
     <div class="ni" data-pg="inv"><span class="ico">◎</span>Invoices <span class="nbadge yellow" id="nb-inv" style="display:none">0</span></div>
     <div class="ni" data-pg="stmt"><span class="ico">📋</span>Statements</div>
     <div class="ni" data-pg="req"><span class="ico">📬</span>Job Requests <span class="nbadge" id="nb-req" style="display:none;background:#e05252">0</span></div>
-    <div class="ni admin-only-nav" onclick="openPLDashboard()" style="display:none"><span class="ico">📊</span>P&L Dashboard</div>
+    <div class="ni admin-only-nav" onclick="openPLDashboard()"><span class="ico">📊</span>P&L Dashboard</div>
     <div class="ns">Records</div>
     <div class="ni" data-pg="dir" id="ni-dir"><span class="ico">◉</span>Directories <span class="nbadge green" id="nb-dir" style="display:none;font-size:9px">▸</span></div>
     <!-- Sub-nav for directories (shown when dir is active) -->
@@ -1645,7 +1650,7 @@ body.density-relaxed .jtable td{font-size:15px}
     <div class="ns">Maps & Tracking</div>
     <div class="ni" data-pg="map"><span class="ico">🗺</span>Live Maps</div>
     <div class="ns">Workforce</div>
-    <div class="ni admin-only-nav" data-pg="engrep" style="display:none"><span class="ico">👷</span>Engineer Reports</div>
+    <div class="ni admin-only-nav" data-pg="engrep"><span class="ico">👷</span>Engineer Reports</div>
     <div class="ni" data-pg="audit"><span class="ico">🔍</span>Audit Log <span style="font-size:9px;background:rgba(185,28,28,.15);color:#b91c1c;padding:1px 5px;border-radius:6px;margin-left:4px;font-weight:700">Admin</span></div>
     <div id="sidebar-user-badge"></div>
   </nav>

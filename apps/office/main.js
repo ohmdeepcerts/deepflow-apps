@@ -1421,11 +1421,6 @@ async function doLogin(){
     if(window._loginCanvasStop)window._loginCanvasStop();
     applyUserPermissions();
     _refreshAdminNavVisibility(); // Show/hide admin-only nav items
-    // Some admin-only nav items (e.g. P&L Dashboard) have been observed
-    // staying hidden despite the call above — root cause not fully pinned
-    // down, but a second pass a beat later is cheap and makes the toggle
-    // eventually-consistent regardless of whatever timing race causes it.
-    setTimeout(_refreshAdminNavVisibility, 500);
     if(emergencyMode){
       setTimeout(()=>toast('⚠️ Emergency admin access used — profile auto-restored. Check Settings → Team.','warn',8000),1000);
     } else {
@@ -1698,12 +1693,15 @@ export function getUserPerm(perm){
   return true;
 }
 
-// Show/hide admin-only sidebar nav items based on user role
+// Show/hide admin-only sidebar nav items based on user role. Driven by a
+// single class on <body> (see .admin-only-nav / .show-admin-nav in
+// index.html) rather than looping and setting each element's inline style —
+// the per-element version was found to leave some items stuck hidden
+// depending on exactly when they existed in the DOM relative to this call;
+// a body-level class applies via CSS cascade regardless of that timing.
 function _refreshAdminNavVisibility(){
   const isAdminOrManager = !_appUser || _appUser.role==='Admin' || _appUser.role==='Manager';
-  document.querySelectorAll('.admin-only-nav').forEach(el=>{
-    el.style.display = isAdminOrManager ? '' : 'none';
-  });
+  document.body.classList.toggle('show-admin-nav', isAdminOrManager);
 }
 
 let jDate=TODAY();
