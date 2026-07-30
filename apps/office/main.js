@@ -1421,6 +1421,11 @@ async function doLogin(){
     if(window._loginCanvasStop)window._loginCanvasStop();
     applyUserPermissions();
     _refreshAdminNavVisibility(); // Show/hide admin-only nav items
+    // Some admin-only nav items (e.g. P&L Dashboard) have been observed
+    // staying hidden despite the call above — root cause not fully pinned
+    // down, but a second pass a beat later is cheap and makes the toggle
+    // eventually-consistent regardless of whatever timing race causes it.
+    setTimeout(_refreshAdminNavVisibility, 500);
     if(emergencyMode){
       setTimeout(()=>toast('⚠️ Emergency admin access used — profile auto-restored. Check Settings → Team.','warn',8000),1000);
     } else {
@@ -5838,11 +5843,64 @@ async function sendAllOverdueWA(){
   toast(`📱 Opened ${sent} WhatsApp reminders`, 'success');
 }
 
+// Blob -> base64 (no "data:...;base64," prefix) — Resend's REST API wants
+// attachment content as a bare base64 string.
+function _blobToBase64(blob){
+  return new Promise((resolve,reject)=>{
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).split(',',2)[1]||'');
+    r.onerror = reject;
+    r.readAsDataURL(blob);
+  });
+}
+
+// Branded HTML for the overdue-reminder email — table-based layout (email
+// clients, especially Outlook, don't reliably support flex/grid), same navy
+// (#0d1f3c) used across the invoice PDF/masthead so it reads as the same
+// document family rather than a plain-text afterthought. The full line-item
+// breakdown lives in the attached PDF, not here — this is a summary+nudge.
+function _overdueEmailHtml(inv, t, daysOver, bodyText){
+  const addrLine = [S.coAddr, S.coPhone, S.coEmail, S.coWeb].filter(Boolean).map(escHtml).join(' &nbsp;·&nbsp; ');
+  return `
+<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;background:#f2f4f8;padding:24px 12px">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;margin:0 auto;background:#fff;border-radius:10px;overflow:hidden">
+    <tr><td style="background:linear-gradient(135deg,#0d1f3c,#1e3a5f,#0a1628);padding:26px 32px">
+      <div style="color:#fff;font-size:19px;font-weight:800;letter-spacing:.2px">${escHtml(S.coName||'')}</div>
+      ${S.coAddr?`<div style="color:#9fb4d1;font-size:12px;margin-top:3px">${escHtml(S.coAddr)}</div>`:''}
+    </td></tr>
+    <tr><td style="padding:28px 32px 6px">
+      <span style="display:inline-block;background:#fef2f2;color:#b91c1c;font-size:11px;font-weight:700;letter-spacing:.4px;padding:5px 12px;border-radius:20px;text-transform:uppercase">⚠ ${daysOver} day${daysOver!==1?'s':''} overdue</span>
+      <div style="font-size:15px;color:#1e293b;margin-top:16px;line-height:1.55">${escHtml(bodyText)}</div>
+    </td></tr>
+    <tr><td style="padding:10px 32px 26px">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border:1px solid #e5e9f0;border-radius:8px">
+        <tr>
+          <td style="padding:16px 18px">
+            <div style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.5px">Invoice</div>
+            <div style="font-size:16px;font-weight:700;color:#0d1f3c;margin-top:3px">${escHtml(inv.number||'')}</div>
+          </td>
+          <td style="padding:16px 18px;text-align:right">
+            <div style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.5px">Amount Due</div>
+            <div style="font-size:21px;font-weight:800;color:#b91c1c;margin-top:2px">£${t.grand.toFixed(2)}</div>
+          </td>
+        </tr>
+        <tr><td colspan="2" style="padding:0 18px 15px;font-size:12px;color:#64748b">Due ${escHtml(formatDateUK(inv.dueDate)||inv.dueDate||'')} &nbsp;·&nbsp; please quote <b>${escHtml(inv.number||'')}</b> as your payment reference</td></tr>
+      </table>
+    </td></tr>
+    <tr><td style="padding:16px 32px;border-top:1px solid #eef1f5;background:#fafbfc">
+      <div style="font-size:11px;color:#94a3b8;line-height:1.6">${addrLine}<br>Full invoice attached as PDF.</div>
+    </td></tr>
+  </table>
+</div>`;
+}
+
 // Same overdue-invoice list as sendAllOverdueWA, sent via email instead —
-// reuses S.waOverdueTpl's placeholders in plain text, wrapped in minimal
-// HTML. Requires RESEND_API_KEY + RESEND_FROM to be set as Edge Function
-// secrets; until then the function returns a clear "not configured" error
-// per invoice rather than failing silently.
+// reuses S.waOverdueTpl's placeholders in plain text, wrapped in the branded
+// HTML above, with the real invoice PDF attached (same doc as the
+// download/portal copy — see _buildInvoicePDFDoc). Requires the configured
+// email provider's secrets to be set as Edge Function secrets; until then
+// the function returns a clear "not configured" error per invoice rather
+// than failing silently.
 async function sendAllOverdueEmail(){
   const invs = await dAll('invoices');
   const today = TODAY();
@@ -5850,6 +5908,7 @@ async function sendAllOverdueEmail(){
   if(!overdue.length){ toast('No overdue invoices with a client email on file','info'); return; }
   const confirmed = confirm(`Email overdue reminders to ${overdue.length} client${overdue.length!==1?'s':''}?`);
   if(!confirmed) return;
+  const canAttachPdf = !!(window.jspdf && window.html2canvas);
   let sent = 0, failed = 0, firstError = null;
   const jwt = await _getJWT();
   for(const inv of overdue){
@@ -5862,6 +5921,14 @@ async function sendAllOverdueEmail(){
       .replace('{client_name}',inv.clientName||'')
       .replace('{due_date}',inv.dueDate||'')
       .replace('{company_name}',S.coName||'');
+    let attachments;
+    if(canAttachPdf){
+      try{
+        const doc = await _buildInvoicePDFDoc(inv);
+        const b64 = await _blobToBase64(doc.output('blob'));
+        attachments = [{filename:(inv.number||'invoice')+'.pdf', content:b64}];
+      }catch(e){ console.warn('[DeepFlow] Could not attach PDF to overdue email for',inv.number,e); }
+    }
     try{
       const res = await fetch(`${SB_URL}/functions/v1/send-email`,{
         method:'POST',
@@ -5869,8 +5936,9 @@ async function sendAllOverdueEmail(){
         body:JSON.stringify({
           to: inv.clientEmail,
           subject: `Overdue: Invoice ${inv.number} — ${S.coName||'Payment reminder'}`,
-          html: `<p>${escHtml(bodyText)}</p>`,
+          html: _overdueEmailHtml(inv, t, daysOver, bodyText),
           replyTo: S.coEmail||undefined,
+          attachments,
         })
       });
       if(res.ok) sent++; else { failed++; if(!firstError) firstError=(await res.json().catch(()=>({}))).error; }
