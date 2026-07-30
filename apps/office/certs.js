@@ -19,7 +19,7 @@ import { STATUS, daysDiff, formatDateUK, localDateStr } from '@business';
 import {
   S, dAll, dGet, dPut, dDel, toast, confirm2, uid, TODAY, logActivity,
   updateBadges, nav, closeModal, openModal, _getJWT, setJDate, _sb,
-  saveCertExpiry, skipCertExpiry, setPendCertJob,
+  saveCertExpiry, skipCertExpiry, setPendCertJob, _sendEmail, _certReadyEmailHtml,
 } from './main.js';
 
 let _certTab='dash';
@@ -1278,10 +1278,33 @@ export async function uploadCertPdf(inputEl){
     renderCertPdfSection(certId,url);
     toast('✅ Certificate PDF uploaded','success');
     logActivity(`Certificate PDF uploaded for ${document.getElementById('cf-addr')?.value||'certificate'}`,'cert');
+    _maybeEmailCertReady(certId,url).catch(e=>console.warn('[DeepFlow] Cert-ready email failed',e));
   }catch(e){
     toast('❌ Upload failed: '+(e.message||'').slice(0,80),'error');
     renderCertPdfSection(certId,null);
   }
+}
+
+// Auto-emails the client the moment their certificate PDF is actually
+// ready — the previous flow left the office to remember to tell anyone.
+// Prefers the cert's own .email field; most certs are created straight
+// from a job though, where that field is never filled in, so falls back
+// to the linked job's landlord/agency email. Silently does nothing if
+// neither is on file — a missing address shouldn't block the upload.
+async function _maybeEmailCertReady(certId, pdfUrl){
+  const c=await dGet('certs',certId);
+  if(!c) return;
+  let email=c.email;
+  if(!email && c.jobId){
+    const job=await dGet('jobs',c.jobId);
+    email=job?.landlordEmail||job?.agencyEmail||null;
+  }
+  if(!email) return;
+  await _sendEmail({
+    to: email,
+    subject: `Your ${c.type||'Compliance'} Certificate — ${c.address||''}`,
+    html: _certReadyEmailHtml(c, pdfUrl),
+  });
 }
 
 export async function removeCertPdf(){

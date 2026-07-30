@@ -43,13 +43,14 @@ function parseFrom(str: string): { name?: string; email: string } {
 
 type Attachment = { filename: string; content: string };
 
-async function sendViaResend(to: string, subject: string, html: string, replyTo: string | undefined, attachments: Attachment[]) {
+async function sendViaResend(to: string, subject: string, html: string, replyTo: string | undefined, attachments: Attachment[], cc: string | undefined) {
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       from: RESEND_FROM,
       to: [to],
+      cc: cc ? [cc] : undefined,
       subject,
       html,
       reply_to: replyTo || undefined,
@@ -62,13 +63,13 @@ async function sendViaResend(to: string, subject: string, html: string, replyTo:
   return result.id as string;
 }
 
-async function sendViaSendGrid(to: string, subject: string, html: string, replyTo: string | undefined, attachments: Attachment[]) {
+async function sendViaSendGrid(to: string, subject: string, html: string, replyTo: string | undefined, attachments: Attachment[], cc: string | undefined) {
   const from = parseFrom(SENDGRID_FROM!);
   const res = await fetch('https://api.sendgrid.com/v3/mail/send', {
     method: 'POST',
     headers: { Authorization: `Bearer ${SENDGRID_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      personalizations: [{ to: [{ email: to }] }],
+      personalizations: [{ to: [{ email: to }], cc: cc ? [{ email: cc }] : undefined }],
       from,
       reply_to: replyTo ? { email: replyTo } : undefined,
       subject,
@@ -97,11 +98,11 @@ Deno.serve(async (req) => {
   if (!userData?.user) return json({ error: 'Not authorized' }, 401);
 
   let body: {
-    to?: string; subject?: string; html?: string; replyTo?: string;
+    to?: string; subject?: string; html?: string; replyTo?: string; cc?: string;
     attachments?: { filename?: string; content?: string }[];
   };
   try { body = await req.json(); } catch { return json({ error: 'Invalid request body' }, 400); }
-  const { to, subject, html, replyTo, attachments } = body;
+  const { to, subject, html, replyTo, cc, attachments } = body;
   if (!to || !subject || !html) return json({ error: 'to, subject and html are required' }, 400);
 
   const validAttachments: Attachment[] = (attachments || []).filter(
@@ -113,13 +114,13 @@ Deno.serve(async (req) => {
       if (!SENDGRID_API_KEY || !SENDGRID_FROM) {
         return json({ error: 'SendGrid is not configured yet — ask the office to finish setup.' }, 503);
       }
-      const id = await sendViaSendGrid(to, subject, html, replyTo, validAttachments);
+      const id = await sendViaSendGrid(to, subject, html, replyTo, validAttachments, cc);
       return json({ id });
     } else {
       if (!RESEND_API_KEY || !RESEND_FROM) {
         return json({ error: 'Email is not configured yet — ask the office to finish Resend setup.' }, 503);
       }
-      const id = await sendViaResend(to, subject, html, replyTo, validAttachments);
+      const id = await sendViaResend(to, subject, html, replyTo, validAttachments, cc);
       return json({ id });
     }
   } catch (e) {

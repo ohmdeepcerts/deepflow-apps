@@ -5852,12 +5852,28 @@ function _blobToBase64(blob){
   });
 }
 
-// Branded HTML for the overdue-reminder email — table-based layout (email
+// Low-level send — every automatic-email call site (overdue reminders,
+// invoice-ready, payment receipts, cert-ready) goes through this so the
+// fetch/auth/error-shape logic exists in exactly one place.
+export async function _sendEmail({to, cc, subject, html, attachments, replyTo}){
+  try{
+    const jwt = await _getJWT();
+    const res = await fetch(`${SB_URL}/functions/v1/send-email`,{
+      method:'POST',
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+jwt,'Content-Type':'application/json'},
+      body:JSON.stringify({to, cc, subject, html, attachments, replyTo: replyTo===undefined?(S.coEmail||undefined):replyTo})
+    });
+    if(res.ok) return {ok:true};
+    return {ok:false, error:(await res.json().catch(()=>({}))).error||'Email send failed'};
+  }catch(e){ return {ok:false, error:e.message}; }
+}
+
+// Shared shell for every transactional email — table-based layout (email
 // clients, especially Outlook, don't reliably support flex/grid), same navy
-// (#0d1f3c) used across the invoice PDF/masthead so it reads as the same
-// document family rather than a plain-text afterthought. The full line-item
-// breakdown lives in the attached PDF, not here — this is a summary+nudge.
-function _overdueEmailHtml(inv, t, daysOver, bodyText){
+// (#0d1f3c) used across the invoice PDF/masthead so every email reads as
+// the same document family instead of a plain-text afterthought. Callers
+// supply just the body content between the header and footer.
+function _brandedEmailShell(bodyHtml){
   const addrLine = [S.coAddr, S.coPhone, S.coEmail, S.coWeb].filter(Boolean).map(escHtml).join(' &nbsp;·&nbsp; ');
   return `
 <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;background:#f2f4f8;padding:24px 12px">
@@ -5866,30 +5882,82 @@ function _overdueEmailHtml(inv, t, daysOver, bodyText){
       <div style="color:#fff;font-size:19px;font-weight:800;letter-spacing:.2px">${escHtml(S.coName||'')}</div>
       ${S.coAddr?`<div style="color:#9fb4d1;font-size:12px;margin-top:3px">${escHtml(S.coAddr)}</div>`:''}
     </td></tr>
-    <tr><td style="padding:28px 32px 6px">
-      <span style="display:inline-block;background:#fef2f2;color:#b91c1c;font-size:11px;font-weight:700;letter-spacing:.4px;padding:5px 12px;border-radius:20px;text-transform:uppercase">⚠ ${daysOver} day${daysOver!==1?'s':''} overdue</span>
-      <div style="font-size:15px;color:#1e293b;margin-top:16px;line-height:1.55">${escHtml(bodyText)}</div>
-    </td></tr>
-    <tr><td style="padding:10px 32px 26px">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border:1px solid #e5e9f0;border-radius:8px">
-        <tr>
-          <td style="padding:16px 18px">
-            <div style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.5px">Invoice</div>
-            <div style="font-size:16px;font-weight:700;color:#0d1f3c;margin-top:3px">${escHtml(inv.number||'')}</div>
-          </td>
-          <td style="padding:16px 18px;text-align:right">
-            <div style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.5px">Amount Due</div>
-            <div style="font-size:21px;font-weight:800;color:#b91c1c;margin-top:2px">£${t.grand.toFixed(2)}</div>
-          </td>
-        </tr>
-        <tr><td colspan="2" style="padding:0 18px 15px;font-size:12px;color:#64748b">Due ${escHtml(formatDateUK(inv.dueDate)||inv.dueDate||'')} &nbsp;·&nbsp; please quote <b>${escHtml(inv.number||'')}</b> as your payment reference</td></tr>
-      </table>
-    </td></tr>
+    <tr><td style="padding:28px 32px 6px">${bodyHtml}</td></tr>
     <tr><td style="padding:16px 32px;border-top:1px solid #eef1f5;background:#fafbfc">
-      <div style="font-size:11px;color:#94a3b8;line-height:1.6">${addrLine}<br>Full invoice attached as PDF.</div>
+      <div style="font-size:11px;color:#94a3b8;line-height:1.6">${addrLine}</div>
     </td></tr>
   </table>
 </div>`;
+}
+function _emailBadge(text, bg, fg){
+  return `<span style="display:inline-block;background:${bg};color:${fg};font-size:11px;font-weight:700;letter-spacing:.4px;padding:5px 12px;border-radius:20px;text-transform:uppercase">${text}</span>`;
+}
+// A two-column label/value card (invoice no. / amount, etc) — the visual
+// anchor of every email below the badge+message.
+function _emailInfoCard(leftLabel, leftValue, rightLabel, rightValue, rightColor, footNote){
+  return `
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border:1px solid #e5e9f0;border-radius:8px;margin-top:16px">
+  <tr>
+    <td style="padding:16px 18px">
+      <div style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.5px">${escHtml(leftLabel)}</div>
+      <div style="font-size:16px;font-weight:700;color:#0d1f3c;margin-top:3px">${escHtml(leftValue)}</div>
+    </td>
+    <td style="padding:16px 18px;text-align:right">
+      <div style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.5px">${escHtml(rightLabel)}</div>
+      <div style="font-size:21px;font-weight:800;color:${rightColor};margin-top:2px">${escHtml(rightValue)}</div>
+    </td>
+  </tr>
+  ${footNote?`<tr><td colspan="2" style="padding:0 18px 15px;font-size:12px;color:#64748b">${footNote}</td></tr>`:''}
+</table>`;
+}
+
+function _overdueEmailHtml(inv, t, daysOver, bodyText){
+  return _brandedEmailShell(`
+    ${_emailBadge(`⚠ ${daysOver} day${daysOver!==1?'s':''} overdue`,'#fef2f2','#b91c1c')}
+    <div style="font-size:15px;color:#1e293b;margin-top:16px;line-height:1.55">${escHtml(bodyText)}</div>
+    ${_emailInfoCard('Invoice', inv.number||'', 'Amount Due', '£'+t.grand.toFixed(2), '#b91c1c',
+      `Due ${escHtml(formatDateUK(inv.dueDate)||inv.dueDate||'')} &nbsp;·&nbsp; please quote <b>${escHtml(inv.number||'')}</b> as your payment reference`)}
+    <div style="font-size:11px;color:#94a3b8;margin-top:12px">Full invoice attached as PDF.</div>
+  `);
+}
+
+// Sent the moment an invoice is issued (Invoices → Send button) — replaces
+// the old mailto: draft that made the office download the PDF and attach
+// it by hand. The PDF is attached server-side here instead.
+function _invoiceReadyEmailHtml(inv, t){
+  return _brandedEmailShell(`
+    ${_emailBadge('🧾 New Invoice','#eff6ff','#1d4ed8')}
+    <div style="font-size:15px;color:#1e293b;margin-top:16px;line-height:1.55">Dear ${escHtml(inv.clientName||'Client')},<br><br>Please find your invoice attached.</div>
+    ${_emailInfoCard('Invoice', inv.number||'', 'Amount Due', '£'+t.grand.toFixed(2), '#0d1f3c',
+      `Due ${escHtml(formatDateUK(inv.dueDate)||inv.dueDate||'')} &nbsp;·&nbsp; please quote <b>${escHtml(inv.number||'')}</b> as your payment reference`)}
+    ${S.payTerms?`<div style="font-size:12px;color:#64748b;margin-top:14px">${escHtml(S.payTerms)}</div>`:''}
+  `);
+}
+
+// Sent the moment an invoice is marked (or becomes) fully Paid.
+function _paymentReceiptEmailHtml(inv, amount){
+  return _brandedEmailShell(`
+    ${_emailBadge('✅ Payment Received','#f0fdf4','#15803d')}
+    <div style="font-size:15px;color:#1e293b;margin-top:16px;line-height:1.55">Dear ${escHtml(inv.clientName||'Client')},<br><br>Thank you — we've received your payment.</div>
+    ${_emailInfoCard('Invoice', inv.number||'', 'Amount Paid', '£'+amount.toFixed(2), '#15803d',
+      `Paid ${escHtml(formatDateUK(TODAY()))}`)}
+  `);
+}
+
+// Sent the moment a certificate PDF is uploaded (i.e. the cert is actually
+// ready) — links to the stored PDF rather than attaching it, since these
+// are scanned compliance documents (EICR/Gas Safety reports etc) that can
+// run several MB, well past what's sensible to inline as a base64 email
+// attachment.
+export function _certReadyEmailHtml(cert, pdfUrl){
+  return _brandedEmailShell(`
+    ${_emailBadge('📜 Certificate Ready','#f0fdf4','#15803d')}
+    <div style="font-size:15px;color:#1e293b;margin-top:16px;line-height:1.55">Dear ${escHtml(cert.landlord||'Client')},<br><br>Your ${escHtml(cert.type||'compliance')} certificate for <b>${escHtml(cert.address||'')}</b> is ready.</div>
+    <div style="text-align:center;margin-top:20px">
+      <a href="${pdfUrl}" style="display:inline-block;background:#0d1f3c;color:#fff;font-size:13px;font-weight:700;padding:12px 28px;border-radius:8px;text-decoration:none">📥 Download Certificate</a>
+    </div>
+    ${cert.expiryDate?`<div style="font-size:12px;color:#64748b;margin-top:16px;text-align:center">Valid until ${escHtml(formatDateUK(cert.expiryDate))}</div>`:''}
+  `);
 }
 
 // Same overdue-invoice list as sendAllOverdueWA, sent via email instead —
@@ -5908,7 +5976,6 @@ async function sendAllOverdueEmail(){
   if(!confirmed) return;
   const canAttachPdf = !!(window.jspdf && window.html2canvas);
   let sent = 0, failed = 0, firstError = null;
-  const jwt = await _getJWT();
   for(const inv of overdue){
     const t = calcInvTotal(inv);
     const daysOver = Math.ceil((new Date(today)-new Date(inv.dueDate))/86400000);
@@ -5927,20 +5994,13 @@ async function sendAllOverdueEmail(){
         attachments = [{filename:(inv.number||'invoice')+'.pdf', content:b64}];
       }catch(e){ console.warn('[DeepFlow] Could not attach PDF to overdue email for',inv.number,e); }
     }
-    try{
-      const res = await fetch(`${SB_URL}/functions/v1/send-email`,{
-        method:'POST',
-        headers:{'apikey':SB_KEY,'Authorization':'Bearer '+jwt,'Content-Type':'application/json'},
-        body:JSON.stringify({
-          to: inv.clientEmail,
-          subject: `Overdue: Invoice ${inv.number} — ${S.coName||'Payment reminder'}`,
-          html: _overdueEmailHtml(inv, t, daysOver, bodyText),
-          replyTo: S.coEmail||undefined,
-          attachments,
-        })
-      });
-      if(res.ok) sent++; else { failed++; if(!firstError) firstError=(await res.json().catch(()=>({}))).error; }
-    }catch(e){ failed++; if(!firstError) firstError=e.message; }
+    const r = await _sendEmail({
+      to: inv.clientEmail,
+      subject: `Overdue: Invoice ${inv.number} — ${S.coName||'Payment reminder'}`,
+      html: _overdueEmailHtml(inv, t, daysOver, bodyText),
+      attachments,
+    });
+    if(r.ok) sent++; else { failed++; if(!firstError) firstError=r.error; }
   }
   if(sent) toast(`📧 Sent ${sent} email reminder${sent!==1?'s':''}${failed?`, ${failed} failed`:''}`, failed?'warn':'success');
   else toast(firstError||'Could not send emails — check Resend setup','error');
@@ -6978,17 +7038,25 @@ async function openInvSendModal(id){
 
 async function sendInvEmail(){
   const id=window._sendInvId;
-  await downloadInvPDFById(id);
   const inv=await dGet('invoices',id);
+  if(!inv.clientEmail){ toast('No client email on file for this invoice — add one in Directory, then try again','error'); return; }
+  if(!window.jspdf||!window.html2canvas){ toast('PDF library not loaded — check your internet and try again','error'); return; }
   const t=calcInvTotal(inv);
-  const sub=encodeURIComponent(`Invoice ${inv.number} from ${S.coName||'Us'}`);
-  const body=encodeURIComponent(`Dear ${inv.clientName},\n\nPlease find your invoice ${inv.number} for £${t.grand.toFixed(2)} attached.\n\nPlease use invoice number ${inv.number} as your payment reference.\n\n${S.payTerms||''}\n\nKind regards,\n${S.coName||''}\n${S.coPhone||''}`);
-  const ccPart=inv.agentCC?`&cc=${encodeURIComponent(inv.agentCC)}`:'';
-  window.open(`mailto:${inv.clientEmail||''}?subject=${sub}&body=${body}${ccPart}`);
+  const doc=await _buildInvoicePDFDoc(inv);
+  const b64=await _blobToBase64(doc.output('blob'));
+  const r=await _sendEmail({
+    to: inv.clientEmail,
+    cc: inv.agentCC||undefined,
+    subject: `Invoice ${inv.number} from ${S.coName||'Us'}`,
+    html: _invoiceReadyEmailHtml(inv, t),
+    attachments: [{filename:(inv.number||'invoice')+'.pdf', content:b64}],
+  });
+  if(!r.ok){ toast(r.error||'Could not send email — check email setup','error'); return; }
   inv.status='Awaiting Payment';await dPut('invoices',inv);
+  _storeInvoicePDF(inv,doc).catch(e=>console.warn('[DeepFlow] Background PDF store failed for',inv.number,e));
   renderInvList();viewInv(id);updateBadges();
   closeModal('mo-inv-send');
-  toast(`PDF downloaded. Mail client opened.${inv.agentCC?' Agent CC: '+inv.agentCC:''}`, 'success');
+  toast(`📧 Invoice emailed to ${inv.clientEmail}${inv.agentCC?' (CC: '+inv.agentCC+')':''}`,'success');
 }
 
 async function sendInvWA(){
@@ -7093,6 +7161,17 @@ export async function generateAndStoreInvoicePDF(id){
   }catch(e){ console.warn('[DeepFlow] Auto PDF generation failed for invoice',id,e); return null; }
 }
 
+// Fire-and-forget — a missing client email shouldn't block the payment
+// actually being recorded, so this never throws into its caller.
+function _maybeSendPaymentReceipt(inv, amount){
+  if(!inv.clientEmail) return;
+  _sendEmail({
+    to: inv.clientEmail,
+    subject: `Payment Received — Invoice ${inv.number} — ${S.coName||''}`,
+    html: _paymentReceiptEmailHtml(inv, amount),
+  }).catch(e=>console.warn('[DeepFlow] Payment receipt email failed for',inv.number,e));
+}
+
 async function markInvPaid(id){
   const inv=await dGet('invoices',id);
   if(!inv) return;
@@ -7122,6 +7201,7 @@ async function markInvPaid(id){
   inv.status='Paid';
   await dPut('invoices',inv);
   await logActivity(`Invoice ${inv.number} marked Paid (£${t.grand.toFixed(2)})`,'invoice');
+  _maybeSendPaymentReceipt(inv, t.grand);
   toast('Invoice marked as Paid','success');
   renderInvList();viewInv(id);updateBadges();
   generateAndStoreInvoicePDF(id).catch(e=>console.warn('[DeepFlow] PDF regen after markInvPaid failed',e));
@@ -12036,6 +12116,7 @@ async function savePayment(){
     if(totalPaid>=t.grand-0.01){
       inv.status='Paid';
       await dPut('invoices',inv);
+      _maybeSendPaymentReceipt(inv, totalPaid);
       toast('Invoice fully paid! Status updated.','success');
     } else {
       toast(`Payment of £${amount.toFixed(2)} recorded. Outstanding: £${(t.grand-totalPaid).toFixed(2)}`,'success');
