@@ -5843,13 +5843,22 @@ async function sendAllOverdueWA(){
 
 // Blob -> base64 (no "data:...;base64," prefix) — Resend's REST API wants
 // attachment content as a bare base64 string.
-function _blobToBase64(blob){
+export function _blobToBase64(blob){
   return new Promise((resolve,reject)=>{
     const r = new FileReader();
     r.onload = () => resolve(String(r.result).split(',',2)[1]||'');
     r.onerror = reject;
     r.readAsDataURL(blob);
   });
+}
+
+// Kept byte-identical across the invoice-ready, overdue-reminder and
+// payment-receipt emails on purpose — most email clients (Gmail, Outlook)
+// group messages into one thread by matching subject line, so every email
+// about the same invoice using this exact string is what keeps them
+// together as one conversation instead of three separate threads.
+function _invEmailSubject(inv){
+  return `Invoice ${inv.number} — ${S.coName||''}`;
 }
 
 // Low-level send — every automatic-email call site (overdue reminders,
@@ -5996,7 +6005,7 @@ async function sendAllOverdueEmail(){
     }
     const r = await _sendEmail({
       to: inv.clientEmail,
-      subject: `Overdue: Invoice ${inv.number} — ${S.coName||'Payment reminder'}`,
+      subject: _invEmailSubject(inv),
       html: _overdueEmailHtml(inv, t, daysOver, bodyText),
       attachments,
     });
@@ -7047,7 +7056,7 @@ async function sendInvEmail(){
   const r=await _sendEmail({
     to: inv.clientEmail,
     cc: inv.agentCC||undefined,
-    subject: `Invoice ${inv.number} from ${S.coName||'Us'}`,
+    subject: _invEmailSubject(inv),
     html: _invoiceReadyEmailHtml(inv, t),
     attachments: [{filename:(inv.number||'invoice')+'.pdf', content:b64}],
   });
@@ -7167,7 +7176,7 @@ function _maybeSendPaymentReceipt(inv, amount){
   if(!inv.clientEmail) return;
   _sendEmail({
     to: inv.clientEmail,
-    subject: `Payment Received — Invoice ${inv.number} — ${S.coName||''}`,
+    subject: _invEmailSubject(inv),
     html: _paymentReceiptEmailHtml(inv, amount),
   }).catch(e=>console.warn('[DeepFlow] Payment receipt email failed for',inv.number,e));
 }

@@ -19,7 +19,7 @@ import { STATUS, daysDiff, formatDateUK, localDateStr } from '@business';
 import {
   S, dAll, dGet, dPut, dDel, toast, confirm2, uid, TODAY, logActivity,
   updateBadges, nav, closeModal, openModal, _getJWT, setJDate, _sb,
-  saveCertExpiry, skipCertExpiry, setPendCertJob, _sendEmail, _certReadyEmailHtml,
+  saveCertExpiry, skipCertExpiry, setPendCertJob, _sendEmail, _certReadyEmailHtml, _blobToBase64,
 } from './main.js';
 
 let _certTab='dash';
@@ -1300,10 +1300,24 @@ async function _maybeEmailCertReady(certId, pdfUrl){
     email=job?.landlordEmail||job?.agencyEmail||null;
   }
   if(!email) return;
+  // Attach the actual PDF, not just the download link — the link stays in
+  // the email body too as a fallback for the rare oversized cert. 15MB is
+  // well past any realistic scanned EICR/Gas Safety report; only a genuine
+  // outlier would ever hit it.
+  let attachments;
+  try{
+    const blob=await fetch(pdfUrl).then(r=>r.blob());
+    if(blob.size>15*1024*1024){
+      console.warn('[DeepFlow] Cert PDF too large to attach ('+(blob.size/1024/1024).toFixed(1)+'MB) — sending link only');
+    } else {
+      attachments=[{filename:(c.certNum||c.type||'certificate').replace(/[^a-z0-9-]/gi,'_')+'.pdf', content:await _blobToBase64(blob)}];
+    }
+  }catch(e){ console.warn('[DeepFlow] Could not fetch cert PDF to attach, sending link only',e); }
   await _sendEmail({
     to: email,
     subject: `Your ${c.type||'Compliance'} Certificate — ${c.address||''}`,
     html: _certReadyEmailHtml(c, pdfUrl),
+    attachments,
   });
 }
 
