@@ -88,8 +88,11 @@ export async function renderDirSection(section){
 
 export async function renderLandlordsSection(){
   const search = (document.getElementById('dir-search-landlords')?.value||'').toLowerCase();
+  const showArchived = document.getElementById('dir-show-archived-landlords')?.checked||false;
   let ps = await dAll('persons');
   ps = ps.filter(p=>(p.roles||[]).includes('landlord'));
+  const archivedCount = ps.filter(p=>p.archived).length;
+  if(!showArchived) ps = ps.filter(p=>!p.archived);
   if(search) ps = ps.filter(p=>(p.name+p.phone+p.email).toLowerCase().includes(search));
   // Sort
   const sortMode=document.getElementById('dir-sort-landlords')?.value||'name';
@@ -98,8 +101,9 @@ export async function renderLandlordsSection(){
   const jobs = await dAll('jobs');
   const grid = document.getElementById('dir-grid-landlords');
   if(!grid) return;
-  if(!ps.length){grid.innerHTML='<div class="empty"><div class="ei">🏠</div><p>No landlords yet. Click "+ Add Landlord" to get started.</p></div>';return}
-  grid.innerHTML = ps.map(p=>buildPersonCard(p, invs, 'var(--blue)', jobs)).join('');
+  const archiveHint = archivedCount ? `<div style="text-align:center;font-size:11px;color:var(--txt3);padding:8px 0;grid-column:1/-1">${archivedCount} archived landlord${archivedCount!==1?'s':''} ${showArchived?'shown':'hidden'} — <a href="#" onclick="event.preventDefault();const cb=document.getElementById('dir-show-archived-landlords');cb.checked=!cb.checked;renderDirSection('landlords')" style="color:var(--acc)">${showArchived?'hide':'show'} them</a></div>` : '';
+  if(!ps.length){grid.innerHTML='<div class="empty"><div class="ei">🏠</div><p>No landlords yet. Click "+ Add Landlord" to get started.</p></div>'+archiveHint;return}
+  grid.innerHTML = ps.map(p=>buildPersonCard(p, invs, 'var(--blue)', jobs)).join('')+archiveHint;
 }
 
 export async function renderSubcontractorsSection(){
@@ -469,12 +473,13 @@ export function buildPersonCard(p, invs, topColor, jobs){
   // Role color
   const roleCol=isLandlord?'var(--blue)':(p.roles||[]).includes('client')?'var(--green)':(p.roles||[]).includes('engineer')?'var(--acc)':'var(--purple)';
 
-  return`<div class="dir-card-v2" style="--card-color:${topColor};--card-color2:${roleCol}" onclick="${bulkMode?`togglePersonSelect('${p.id}')`:`openPersonModal('${p.id}')`}">
+  return`<div class="dir-card-v2" style="--card-color:${topColor};--card-color2:${roleCol}${p.archived?';opacity:.55;filter:grayscale(.4)':''}" onclick="${bulkMode?`togglePersonSelect('${p.id}')`:`openPersonModal('${p.id}')`}">
     <div class="card-top"></div>
     <!-- Bulk checkbox -->
     ${bulkMode?`<div class="bulk-chk ${isSelected?'on':''}" onclick="event.stopPropagation();togglePersonSelect('${p.id}')">${isSelected?'✓':''}</div>`:''}
     <!-- Owed badge -->
     ${owed>0?`<div class="owed-badge">£${owed.toFixed(0)} owed</div>`:''}
+    ${p.archived?`<div class="owed-badge" style="background:var(--s2);color:var(--txt3);border-color:var(--border);left:8px;right:auto">🗄 Archived</div>`:''}
     <div class="card-body">
       <div class="card-head">
         <div class="card-avatar">${initials}</div>
@@ -647,6 +652,8 @@ export async function fillFromMatch(store, id){
     document.getElementById('mo-person-title').textContent = '✎ Edit Person';
     document.getElementById('btn-del-person').style.display = '';
     document.getElementById('btn-wa-person').style.display = r.wa?'':'none';
+    const archBtn=document.getElementById('btn-archive-person');
+    if(archBtn){ archBtn.style.display=''; archBtn.textContent=r.archived?'↩ Restore':'🗄 Archive'; }
   } else if(store==='agencies'){
     editAgencyId = id;
     document.getElementById('agf-name').value  = r.name||'';
@@ -917,6 +924,12 @@ export async function openPersonModal(id){
     if(agGrp) agGrp.style.display = agencies.length ? '' : 'none';
     document.getElementById('btn-del-person').style.display='';
     document.getElementById('btn-wa-person').style.display=p.wa?'':'none';
+    const archBtn=document.getElementById('btn-archive-person');
+    if(archBtn){
+      archBtn.style.display='';
+      archBtn.textContent=p.archived?'↩ Restore':'🗄 Archive';
+      archBtn.title=p.archived?'Bring this person back into the active list':'Hide from the active list — keeps all jobs, invoices and certs intact';
+    }
   } else {
     document.getElementById('mo-person-title').textContent='👤 Add Person';
     ['pf-name','pf-phone','pf-email','pf-wa','pf-addr','pf-notes','pf-rate'].forEach(x=>document.getElementById(x).value='');
@@ -927,8 +940,34 @@ export async function openPersonModal(id){
     if(agGrp) agGrp.style.display = agencies.length ? '' : 'none';
     document.getElementById('btn-del-person').style.display='none';
     document.getElementById('btn-wa-person').style.display='none';
+    const archBtn=document.getElementById('btn-archive-person');
+    if(archBtn) archBtn.style.display='none';
   }
   openModal('mo-person'); setTimeout(()=>wireAutoSave('persons'),100);
+}
+
+export async function toggleArchivePerson(){
+  if(!editPid) return;
+  const p = await dGet('persons', editPid);
+  if(!p) return;
+  const next = !p.archived;
+  confirm2(
+    next?'Archive this landlord?':'Restore this landlord?',
+    next
+      ? `"${p.name}" will be hidden from the active Landlords list. Their jobs, invoices and certificates all stay exactly as they are — this isn't a delete, and you can restore them any time.`
+      : `"${p.name}" will reappear in the active Landlords list.`,
+    async()=>{
+      // dPut's upsert is a genuine INSERT ... ON CONFLICT DO UPDATE, not a
+      // column-level PATCH — a payload missing NOT NULL columns like `name`
+      // fails constraint validation before the conflict branch even runs,
+      // so this has to carry the full row, not just {id, archived}.
+      await dPut('persons',{...p, archived:next});
+      await logActivity(`${next?'Archived':'Restored'} person: ${p.name}`,'person');
+      closeModal('mo-person');
+      renderDir(); renderDirSection(curDirSection);
+      toast(next?'Landlord archived':'Landlord restored','success');
+    }
+  );
 }
 
 let _personSaving=false;

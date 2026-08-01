@@ -2480,6 +2480,7 @@ body.density-relaxed .jtable td{font-size:15px}
                 <option value="recent">Sort: Recent</option>
                 <option value="jobs">Sort: Job Count</option>
               </select>
+              <label class="fcheck" style="font-size:12px;white-space:nowrap" title="Archived landlords are hidden by default — their jobs, invoices and certs stay intact"><input type="checkbox" id="dir-show-archived-landlords" onchange="renderDirSection('landlords')"> Show archived</label>
             </div>
             <div class="tb-right">
               <button class="btn btn-ghost btn-sm" id="dir-bulk-btn-landlords" onclick="toggleBulkSelectMode('landlords')">☐ Bulk Select</button>
@@ -4310,6 +4311,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS last_accuracy integer;</div>
   </div>
   <div class="modal-actions">
     <button class="btn btn-red btn-sm" id="btn-del-person" style="display:none;margin-right:auto" onclick="deleteCurrentPerson()">Delete</button>
+    <button class="btn btn-ghost btn-sm" id="btn-archive-person" style="display:none" onclick="toggleArchivePerson()">🗄 Archive</button>
     <button class="btn btn-ghost" onclick="closeModal('mo-person')">Cancel</button>
     <button class="btn btn-wa btn-sm" id="btn-wa-person" style="display:none" onclick="openPersonWA()">📱 WhatsApp</button>
     <button class="btn btn-acc" onclick="savePerson()">Save</button>

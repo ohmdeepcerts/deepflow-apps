@@ -14,7 +14,7 @@ import {
 } from './certs.js';
 import {
   getCurDirSection, switchDirSection, renderDir, renderDirSection, updateDirTabBadges,
-  openPersonModal, openPersonModalFor, savePerson, deleteCurrentPerson, openPersonWA,
+  openPersonModal, openPersonModalFor, savePerson, deleteCurrentPerson, openPersonWA, toggleArchivePerson,
   openAgencyModal, saveAgency, deleteCurrentAgency, openAgentModal, saveAgent, deleteCurrentAgent,
   openEngDir, matchDir, fillFromMatch, openImportModal,
 } from './directory.js';
@@ -14327,6 +14327,7 @@ Object.assign(window, {
   openBroadcast, openCertForm, openCmd, openCreditNoteModal, openDisposableModal, openEngDeepReport, 
   openEngDir, openExpenseModal, openImportModal, openInvSendModal, openJobForInvoice, openJobModal, openJobModalByNum, openMergeModal,
   openOvertimeModal, openPLDashboard, openPaymentModal, openPersonModal, openPersonModalFor, openPersonWA,
+  toggleArchivePerson,
   openPropModal, openStandaloneProformaModal, openWhatsApp, postComment, previewCertPdf,
   previewWaTemplate, printFilteredInvoices, printProforma, quickConfirm, quickEditPrice, quickEditTime, quickStatus,
   removeCertPdf, removeInvCustomText, renderAuditLog, renderCertStats, renderCertTable, renderClientPicker,
