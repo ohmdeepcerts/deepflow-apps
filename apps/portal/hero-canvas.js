@@ -17,7 +17,10 @@ function initHeroCanvas(){
     canvas=document.getElementById('hero-canvas');
     if(!canvas) return;
     current=initNetworkCanvas(canvas,{
-      nodeCount:50, packetCount:14, starCount:70,
+      // Cut down from 50/14/70 — a shorter banner (see index.html's .hero,
+      // no more button row inside it) doesn't need this much going on in
+      // the background; it was reading as visual noise, not sparkle.
+      nodeCount:22, packetCount:6, starCount:18,
       sizeCanvas(){
         const p=canvas.parentElement;
         canvas.width=p?p.offsetWidth:600;

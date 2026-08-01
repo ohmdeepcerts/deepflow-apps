@@ -211,7 +211,14 @@ export async function renderInvoicePDF(doc, html2canvas, { inv, S, totals, vatRa
 
   if (isPaid) {
     doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(63, 122, 71);
-    doc.text(`✓ Paid via Bank Transfer · Ref ${inv.number}`, MARGIN, y + 4);
+    // No checkmark glyph here — jsPDF's standard "helvetica" font has no
+    // Unicode support beyond WinAnsi, and a character like ✓ outside that
+    // range corrupts the position array for the *entire* string that
+    // follows it in the same doc.text() call (every real character ends
+    // up with a stray extra character between it — a real, previously
+    // shipped bug, not a hypothetical one). The green colour + placement
+    // right under "TOTAL PAID" already says "paid" without it.
+    doc.text(`Paid via Bank Transfer · Ref ${inv.number}`, MARGIN, y + 4);
     y += 9;
   } else {
     doc.setFillColor(254, 248, 235); doc.setDrawColor(232, 184, 75); doc.setLineWidth(0.3);

@@ -62,9 +62,13 @@ export function previewInv(id){
   }
 
   const t=calcTotal(inv);const vr=_portalVatRate();
+  // No VAT column/row at all when VAT isn't applicable — a "VAT (0%) £0.00"
+  // line was showing on every invoice regardless of whether VAT was ever
+  // in the picture, which reads as a mistake rather than a deliberate zero.
+  const vatApplies=vr>0;
   const items=(inv.items||[]).map(x=>{
     const l=(x.qty||1)*(x.unit||0);const v=x.vat?l*vr/100:0;
-    return`<tr><td style="padding:8px;border-bottom:1px solid var(--border)">${e(x.desc||'')}</td><td style="padding:8px;text-align:center;border-bottom:1px solid var(--border)">${x.qty||1}</td><td style="padding:8px;text-align:right;border-bottom:1px solid var(--border)">£${Number(x.unit||0).toFixed(2)}</td><td style="padding:8px;text-align:right;border-bottom:1px solid var(--border)">${x.vat?vr+'%':'—'}</td><td style="padding:8px;text-align:right;border-bottom:1px solid var(--border);font-weight:700">£${(l+v).toFixed(2)}</td></tr>`;
+    return`<tr><td style="padding:8px;border-bottom:1px solid var(--border)">${e(x.desc||'')}</td><td style="padding:8px;text-align:center;border-bottom:1px solid var(--border)">${x.qty||1}</td><td style="padding:8px;text-align:right;border-bottom:1px solid var(--border)">£${Number(x.unit||0).toFixed(2)}</td>${vatApplies?`<td style="padding:8px;text-align:right;border-bottom:1px solid var(--border)">${x.vat?vr+'%':'—'}</td>`:''}<td style="padding:8px;text-align:right;border-bottom:1px solid var(--border);font-weight:700">£${(l+v).toFixed(2)}</td></tr>`;
   }).join('');
   bd.innerHTML=`
     <div style="max-width:560px;margin:0 auto">
@@ -86,14 +90,14 @@ export function previewInv(id){
       </div>
       <table style="width:100%;font-size:13px;border-collapse:collapse;margin-bottom:20px">
         <thead><tr style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-tertiary);border-bottom:2px solid var(--border)">
-          <th style="text-align:left;padding:8px">Description</th><th style="padding:8px">Qty</th><th style="padding:8px;text-align:right">Unit</th><th style="padding:8px;text-align:right">VAT</th><th style="padding:8px;text-align:right">Total</th>
+          <th style="text-align:left;padding:8px">Description</th><th style="padding:8px">Qty</th><th style="padding:8px;text-align:right">Unit</th>${vatApplies?'<th style="padding:8px;text-align:right">VAT</th>':''}<th style="padding:8px;text-align:right">Total</th>
         </tr></thead>
         <tbody>${items}</tbody>
       </table>
       <div style="display:flex;justify-content:flex-end;margin-bottom:20px">
         <div style="width:240px">
           <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px"><span>Subtotal</span><span>£${t.sub.toFixed(2)}</span></div>
-          <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px"><span>VAT (${vr}%)</span><span>£${t.vat.toFixed(2)}</span></div>
+          ${vatApplies?`<div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px"><span>VAT (${vr}%)</span><span>£${t.vat.toFixed(2)}</span></div>`:''}
           <div style="display:flex;justify-content:space-between;padding:10px 0;border-top:2px solid var(--border);font-size:16px;font-weight:800"><span>Total</span><span>£${t.grand.toFixed(2)}</span></div>
         </div>
       </div>

@@ -6,7 +6,7 @@
 import { SB_KEY, restFetch } from '@core';
 import { escText as e, escAttr as ea, initNetworkCanvas } from '@ui';
 import { FROM_DB } from '@data';
-import { calcLineItemsTotal, portalVatRate } from '@business';
+import { calcLineItemsTotal, portalVatRate, STATUS } from '@business';
 import './hero-canvas.js';
 import { vRequest, toggleReqDetail, handleFiles, submitReq, setRenewalData } from './request-wizard.js';
 import { previewInv, downloadCurrentInv, closeModal, payInvoice } from './invoice-pdf.js';
@@ -802,7 +802,6 @@ function vOverview(d){
   const alerts=d.certs.filter(c=>!c.noExpiry&&c.expiryDate&&dd(c.expiryDate)<=60)
     .sort((a,b)=>dd(a.expiryDate)-dd(b.expiryDate)).slice(0,4)
     .map(c=>{const df=dd(c.expiryDate);return`<div class="alert ${df<0?'al-r':'al-y'}"><i data-lucide="alert-triangle" style="width:16px;height:16px"></i><div><strong>${e(c.type)}</strong> · ${e(c.address||'Property')} · ${df<0?`Expired ${Math.abs(df)}d ago`:`Expires in ${df} day${df!==1?'s':''}`}</div></div>`;}).join('');
-  const label=d.type==='agency'?'Agency':d.type==='agent'?'Agent':'Landlord';
 
   // Agent filter bar for agency view (multi-select)
   const isAgency=d.type==='agency';
@@ -819,9 +818,11 @@ function vOverview(d){
       </div>
     </div>`:'';
 
-  // Upcoming items (next 7 days)
+  // Upcoming items (next 7 days) — date alone isn't enough here, a job
+  // whose scheduled date happens to fall in this window but is already
+  // Completed/Invoiced/Cancelled isn't "upcoming" anymore, it's done.
   const now=new Date();
-  const upcomingJobs=d.jobs.filter(j=>j.date&&Math.ceil((new Date(j.date)-now)/86400000)<=7&&Math.ceil((new Date(j.date)-now)/86400000)>=0).slice(0,2);
+  const upcomingJobs=d.jobs.filter(j=>j.date&&Math.ceil((new Date(j.date)-now)/86400000)<=7&&Math.ceil((new Date(j.date)-now)/86400000)>=0&&j.status!==STATUS.COMPLETED&&j.status!==STATUS.INVOICED&&j.status!==STATUS.CANCELLED).slice(0,2);
   const upcomingCerts=d.certs.filter(c=>!c.noExpiry&&c.expiryDate&&dd(c.expiryDate)<=7&&dd(c.expiryDate)>=0).slice(0,2);
   const upcomingHtml=[...upcomingJobs.map(j=>`<div class="act-item"><div class="act-dot" style="background:var(--accent)"></div><div class="act-body"><div class="act-title">Job scheduled · ${e(j.address||'')}</div><div class="act-meta">${fd(j.date)} · ${e(j.status||'')}</div></div></div>`),
     ...upcomingCerts.map(c=>`<div class="act-item"><div class="act-dot" style="background:var(--danger)"></div><div class="act-body"><div class="act-title">Certificate expires · ${e(c.type||'')}</div><div class="act-meta">${e(c.address||'')} · ${fd(c.expiryDate)}</div></div></div>`)]
@@ -831,15 +832,10 @@ function vOverview(d){
     <div class="hero">
       <canvas id="hero-canvas" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0"></canvas>
       <div class="hero-inner">
-        <div class="hero-ey">✦ ${label} Portal</div>
         <div class="hero-n" id="hero-greeting">Welcome, ${e(d.name)}</div>
         <div class="hero-s">Live overview of your properties, jobs &amp; certificates managed by ${e(d.coName)}.</div>
-        <div class="hero-row">
-          <button class="hbtn p" data-action="go" data-target="request"><i data-lucide="plus" style="width:14px;height:14px"></i> New Job</button>
-          <button class="hbtn" data-action="go" data-target="certs"><i data-lucide="file-check" style="width:14px;height:14px"></i> Certificates</button>
-          <button class="hbtn" data-action="go" data-target="invoices"><i data-lucide="receipt" style="width:14px;height:14px"></i> Invoices</button>
-        </div>
         ${agentFilterBar}
+        <div class="hero-tag">Job Portal &amp; Invoicing by DeepFlow Pro</div>
       </div>
     </div>
 

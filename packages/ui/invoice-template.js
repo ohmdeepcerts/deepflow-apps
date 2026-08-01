@@ -57,7 +57,12 @@ const ICONS = {
   mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M4 7l8 6 8-6"/>',
   globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.8 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.8-3.8-9S9.5 5.6 12 3z"/>',
 };
-const icon = (name) => `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]}</svg>`;
+// stroke is a literal colour, not currentColor — html2canvas has known
+// trouble resolving currentColor/CSS-inherited colour on inline SVGs
+// (renders as a blank/white box instead of the icon), so this bakes in
+// the one colour these icons are ever actually shown in rather than
+// relying on that resolution succeeding.
+const icon = (name) => `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="rgba(125,211,252,.9)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]}</svg>`;
 
 /**
  * Builds the self-contained HTML for just the masthead band, ready to be
@@ -86,7 +91,6 @@ export function buildMastheadHTML({ inv, S, status }) {
       .wordmark{font-size:20px;font-weight:800;letter-spacing:-.01em;color:#fff}
       .co-line{margin-top:10px;display:flex;flex-direction:column;gap:5px}
       .co-line div{display:flex;align-items:center;gap:7px;font-size:11px;color:rgba(255,255,255,.7)}
-      .co-line .ic{color:rgba(125,211,252,.9)}
       .mast-meta{text-align:right}
       .tag-pill{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:700;letter-spacing:.04em;padding:5px 13px;border-radius:99px;margin-bottom:11px;box-shadow:0 0 0 1px rgba(255,255,255,.08) inset}
       .tag-pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
