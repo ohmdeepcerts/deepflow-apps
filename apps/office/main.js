@@ -3984,7 +3984,9 @@ async function saveJob(){
     // Keep Directory in sync automatically — see _resolveLandlordPerson's
     // own comment for why this used to be a separate, easy-to-miss step.
     if(getUserPerm('seeLandlord') && (j.landlordName || j.landlordPhone)){
-      j.clientPersonId = await _resolveLandlordPerson(j.landlordName, j.landlordPhone, j.landlordEmail, j.landlordAddr, j.landlordWA, j.landlordNotes);
+      const _llr = await _resolveLandlordPerson(j.landlordName, j.landlordPhone, j.landlordEmail, j.landlordAddr, j.landlordWA, j.landlordNotes);
+      if(_llr.cancelled){ toast('Save cancelled — fix the landlord details and try again','info'); return; }
+      j.clientPersonId = _llr.id;
     }
     await dPut('jobs',j);
     _invalidateJobCache();
@@ -4726,8 +4728,11 @@ async function dupUpdateName(id, context){
 }
 
 // Resolves a job's landlord fields to a real Directory person record and
-// returns that person's id (for job.clientPersonId) — or null if there's
-// nothing to link (no name/phone) or the office chose not to link one.
+// returns {id, cancelled}. id is the person's id for job.clientPersonId —
+// null if there's nothing to link (no name/phone). cancelled is true only
+// when the office backed out of a conflicting-contact-details prompt via
+// the true Cancel button — callers must abort the whole save in that case,
+// not just skip the link, so a typo can be fixed before anything commits.
 //
 // This used to only run when someone remembered to click the separate
 // "Save to Directories" button below — saving the JOB itself never touched
@@ -4739,8 +4744,17 @@ async function dupUpdateName(id, context){
 // Directory and impossible to invite to the Client Portal. Now this runs
 // on every job save automatically, and asks before overwriting conflicting
 // contact details instead of guessing.
+//
+// The conflict prompt is a real 3-way choice (update / save-as-new /
+// cancel-and-fix), not the update-or-silently-create-new 2-way it started
+// as. confirm2's Alt button always resolves onCancel first (to unblock the
+// Promise) and then fires altAction ~50ms later — so a straight `resolve()`
+// in each callback can't tell "true Cancel" apart from "Alt, mid-flight".
+// Instead onCancel defers its resolve by 80ms (comfortably after Alt's
+// 50ms), and altAction resolves immediately when it does fire — whichever
+// resolves first wins, `finish()` guards against the loser firing after.
 async function _resolveLandlordPerson(name, phone, email, addr, wa, notes){
-  if(!name && !phone) return null;
+  if(!name && !phone) return {id:null};
   const persons = await dAll('persons');
   let existing = name ? persons.find(p=>p.name.toLowerCase()===name.toLowerCase()) : null;
   if(!existing && phone) existing = persons.find(p=>p.phone&&p.phone.replace(/\s/g,'')===phone.replace(/\s/g,''));
@@ -4749,16 +4763,20 @@ async function _resolveLandlordPerson(name, phone, email, addr, wa, notes){
     const phoneConflict = phone && existing.phone && existing.phone.replace(/\s/g,'')!==phone.replace(/\s/g,'');
     const emailConflict = email && existing.email && existing.email.toLowerCase()!==email.toLowerCase();
     if(phoneConflict || emailConflict){
-      const updateExisting = await new Promise(resolve=>{
+      let resolved=false;
+      const choice = await new Promise(resolve=>{
+        const finish=v=>{ if(resolved)return; resolved=true; resolve(v); };
         confirm2(
           'Same landlord, or someone new?',
-          `"${existing.name}" is already in your Directory${existing.phone?` — phone ${existing.phone}`:''}${existing.email?` — email ${existing.email}`:''}.\n\nThis job has different contact details on it${phone?` (phone ${phone})`:''}${email?` (email ${email})`:''}.\n\nIs this the same landlord (their number/email just changed) or a different person who happens to share the name?`,
-          ()=>resolve(true),
-          ()=>resolve(false),
-          {okText:'Same person — update Directory'}
+          `"${existing.name}" is already in your Directory${existing.phone?` — phone ${existing.phone}`:''}${existing.email?` — email ${existing.email}`:''}.\n\nThis job has different contact details on it${phone?` (phone ${phone})`:''}${email?` (email ${email})`:''}.\n\nIs this the same landlord (their number/email just changed), a different person who happens to share the name, or was it a typo?`,
+          ()=>finish('update'),
+          ()=>setTimeout(()=>finish('cancel'),80),
+          {okText:'Same person — update Directory', altText:'Different person — save as new', altAction:()=>finish('create')}
         );
       });
-      if(!updateExisting) existing=null; // treat as a distinct person — falls through to creation below
+      if(choice==='cancel') return {id:null, cancelled:true};
+      if(choice==='create') existing=null; // treat as a distinct person — falls through to creation below
+      // choice==='update' falls through with `existing` set, to the merge below
     }
   }
 
@@ -4771,11 +4789,11 @@ async function _resolveLandlordPerson(name, phone, email, addr, wa, notes){
     existing.notes = notes || existing.notes;
     if(!(existing.roles||[]).includes('landlord')) existing.roles=[...(existing.roles||[]),'landlord'];
     await dPut('persons', existing);
-    return existing.id;
+    return {id:existing.id};
   } else {
     const p = {id:uid(), name:name||phone, phone, email, address:addr, wa, notes, roles:['landlord'], created:Date.now()};
     await dPut('persons', p);
-    return p.id;
+    return {id:p.id};
   }
 }
 
@@ -4791,8 +4809,9 @@ async function saveLandlordFromJob(){
   const addr = document.getElementById('jf-ll-addr').value.trim();
   const wa = document.getElementById('jf-ll-wa').value.trim();
   const notes = document.getElementById('jf-ll-notes').value.trim();
-  const id = await _resolveLandlordPerson(name, phone, email, addr, wa, notes);
-  if(id) toast(`Landlord saved${!name?' (phone as name)':''}`,'success');
+  const r = await _resolveLandlordPerson(name, phone, email, addr, wa, notes);
+  if(r.cancelled) return;
+  if(r.id) toast(`Landlord saved${!name?' (phone as name)':''}`,'success');
 }
 
 // Save agency from job tab 3

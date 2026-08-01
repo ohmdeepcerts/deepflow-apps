@@ -117,12 +117,12 @@ export function certCard(c,d){
     </div>`;
   }else{ringHTML=`<div class="expiry-ring"><div class="val" style="font-size:10px;color:var(--text-tertiary)">N/A</div></div>`;}
   const pdfUrl=c.pdf_url||c.url;
-  // Renew button is its own fixed-width grid column (see .cc in index.html)
-  // rather than living inside the actions cell — that way its column is
-  // always reserved, present or not, so the ring and "View Certificate"
-  // never shift position depending on whether a given cert happens to be
-  // expiring. An empty column is invisible but still takes its own space.
-  const renewBtn=(isS||isE)?`<button class="dl g cc-renew" onclick="preFillRenewal(${ea(JSON.stringify(c))})" title="Renew Request"><i data-lucide="refresh-cw" style="width:14px;height:14px"></i></button>`:`<span class="cc-renew"></span>`;
+  // Renew, the expiry ring, and the actions button live together in one
+  // tightly-packed .cc-meta group (see .cc in index.html) — renew comes
+  // FIRST so when it's absent there's no dead reserved gap before the ring,
+  // and since the group is right-aligned as a whole, "View Certificate"
+  // still lines up consistently across rows either way.
+  const renewBtn=(isS||isE)?`<button class="dl g cc-renew" onclick="preFillRenewal(${ea(JSON.stringify(c))})" title="Renew Request"><i data-lucide="refresh-cw" style="width:14px;height:14px"></i></button>`:'';
   return`<div class="cc">
     <div class="cc-ic" style="background:${col}22;color:${col};border-color:${col}44"><i data-lucide="${ic}" style="width:20px;height:20px"></i></div>
     <div class="cc-body">
@@ -134,10 +134,12 @@ export function certCard(c,d){
         ${c.certNum?`<span style="font-size:11px;color:var(--text-secondary)">Ref: ${e(c.certNum)}</span>`:''}
       </div>
     </div>
-    ${ringHTML}
-    ${renewBtn}
-    <div class="cc-actions">
-      ${pdfUrl?`<button class="dl" onclick="previewCertPdf(${ea(JSON.stringify(pdfUrl))},${ea(JSON.stringify(c))})">View Certificate</button>`:`<span class="dl g" style="cursor:default;opacity:.5;font-size:11px">No PDF</span>`}
+    <div class="cc-meta">
+      ${renewBtn}
+      ${ringHTML}
+      <div class="cc-actions">
+        ${pdfUrl?`<button class="dl" onclick="previewCertPdf(${ea(JSON.stringify(pdfUrl))},${ea(JSON.stringify(c))})">View Certificate</button>`:`<span class="dl g" style="cursor:default;opacity:.5;font-size:11px">No PDF</span>`}
+      </div>
     </div>
   </div>`;
 }

@@ -192,37 +192,37 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:1
 .cb-o:hover{box-shadow:0 4px 20px var(--success-bg)}
 
 /* ── CERT CARD ── */
-/* 5 fixed tracks — icon, flexible body, ring, renew, actions — one column
-   per direct child of .cc, in DOM order. Renew is always rendered (a real
-   button or an empty same-slot placeholder, see certCard()) so its column
-   is reserved either way and the ring/View-Certificate button never shift
-   left or right depending on whether a given cert happens to be expiring. */
-.cc{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;margin-bottom:10px;box-shadow:var(--shadow-sm);display:grid;grid-template-columns:44px 1fr 48px 32px 136px;align-items:center;gap:14px;transition:var(--transition);position:relative;overflow:hidden;}
+/* 3 grid tracks — icon, flexible body, and one auto-sized "meta" group —
+   one column per direct child of .cc. The meta group is a tight flex row
+   (renew? → expiry ring → View Certificate) so it never has dead reserved
+   space when renew is absent; since body is 1fr and meta is auto, meta
+   still lands pinned to the card's right edge either way, so View
+   Certificate stays consistently aligned across rows. */
+.cc{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;margin-bottom:10px;box-shadow:var(--shadow-sm);display:grid;grid-template-columns:44px 1fr auto;align-items:center;gap:14px;transition:var(--transition);position:relative;overflow:hidden;}
 .cc:hover{box-shadow:var(--shadow-md);transform:translateY(-1px)}
 .cc-ic{width:44px;height:44px;border-radius:12px;background:var(--surface-elevated);display:flex;align-items:center;justify-content:center;color:var(--text-secondary);flex-shrink:0;border:1px solid var(--border);}
 .cc-body{min-width:0}
 .cc-t{font-size:14px;font-weight:700;margin-bottom:3px}
 .cc-a{font-size:12px;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cc-m{display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap}
-.cc-renew{width:32px;height:32px;padding:0!important;display:inline-flex;align-items:center;justify-content:center}
-.cc-actions{display:flex;justify-content:flex-end}
+.cc-meta{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.cc-renew{width:32px;height:32px;padding:0!important;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.cc-actions{display:flex;justify-content:flex-end;flex-shrink:0}
 .pill{font-size:11px;font-weight:700;padding:3px 10px;border-radius:100px;display:inline-flex;align-items:center;gap:4px;}
 .p-ok{background:var(--success-light);color:var(--success);border:1px solid var(--success-bg)}
 .p-s{background:var(--warning-light);color:var(--warning);border:1px solid var(--warning-bg)}
 .p-e{background:var(--danger-light);color:var(--danger);border:1px solid var(--danger-bg)}
 .p-n{background:var(--border-subtle);color:var(--text-tertiary);border:1px solid var(--border)}
 
-/* Mobile: 5 columns crammed into a phone width is what was producing the
+/* Mobile: cramming everything into one row is what was producing the
    mangled truncated address text — .cc-body was being squeezed to almost
    nothing. Stack instead: icon+details on their own full-width row, then
-   the ring/renew/actions on a second row underneath. */
+   the meta group (renew/ring/actions) on a second row underneath. */
 @media(max-width:640px){
-  .cc{grid-template-columns:40px 1fr 1fr;grid-template-areas:"ic body body" "ring renew actions";row-gap:12px;padding:14px;}
+  .cc{grid-template-columns:40px 1fr;grid-template-areas:"ic body" "meta meta";row-gap:12px;padding:14px;}
   .cc-ic{grid-area:ic}
   .cc-body{grid-area:body}
-  .expiry-ring{grid-area:ring;justify-self:start}
-  .cc-renew{grid-area:renew;justify-self:start}
-  .cc-actions{grid-area:actions;justify-self:end}
+  .cc-meta{grid-area:meta;justify-content:flex-end}
 }
 
 /* ── EXPIRY RING ── */
