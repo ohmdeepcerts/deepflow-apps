@@ -18,6 +18,7 @@ export const TO_DB = {
     agencyName: 'agencyname', agencyPhone: 'agencyphone', agencyEmail: 'agencyemail',
     agencyNotes: 'agencynotes', agentName: 'agentname', agentPhone: 'agentphone',
     agentEmail: 'agentemail', _sortOrder: 'sortorder', invNumber: 'invnumber', linkedInvId: 'linkedinvid',
+    clientPersonId: 'client_person_id',
   },
   certs: {
     issueDate: 'issuedate', expiryDate: 'expirydate', certNum: 'certnum', jobId: 'jobid',

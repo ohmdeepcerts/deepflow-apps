@@ -3967,6 +3967,7 @@ async function saveJob(){
     landlordAddr:document.getElementById('jf-ll-addr').value.trim(),
     landlordWA:document.getElementById('jf-ll-wa').value.trim(),
     landlordNotes:document.getElementById('jf-ll-notes').value.trim(),
+    clientPersonId:existingJob?.clientPersonId||null,
     agencyName:document.getElementById('jf-agency').value.trim(),
     agencyPhone:document.getElementById('jf-agency-phone').value.trim(),
     agencyEmail:document.getElementById('jf-agency-email').value.trim(),
@@ -3980,6 +3981,11 @@ async function saveJob(){
   const btn=document.querySelector('#mo-job .modal-actions .btn-acc');
   if(btn){btn.disabled=true;btn.textContent='Saving...';}
   try{
+    // Keep Directory in sync automatically — see _resolveLandlordPerson's
+    // own comment for why this used to be a separate, easy-to-miss step.
+    if(getUserPerm('seeLandlord') && (j.landlordName || j.landlordPhone)){
+      j.clientPersonId = await _resolveLandlordPerson(j.landlordName, j.landlordPhone, j.landlordEmail, j.landlordAddr, j.landlordWA, j.landlordNotes);
+    }
     await dPut('jobs',j);
     _invalidateJobCache();
     if(existingJob&&existingJob.status!==j.status){
@@ -4719,43 +4725,74 @@ async function dupUpdateName(id, context){
   }
 }
 
-// Save landlord from job — saves even without a name (uses phone as identifier)
-async function saveLandlordFromJob(){
-  const name = document.getElementById('jf-ll-name').value.trim();
-  const phone = document.getElementById('jf-ll-phone').value.trim();
-  const email = document.getElementById('jf-ll-email').value.trim();
-
-  // Must have at least phone or name
-  if(!name && !phone){toast('Enter at least a phone number or name','warn');return}
-
-  // Display name: use name if available, otherwise use phone
-  const displayName = name || phone;
-
+// Resolves a job's landlord fields to a real Directory person record and
+// returns that person's id (for job.clientPersonId) — or null if there's
+// nothing to link (no name/phone) or the office chose not to link one.
+//
+// This used to only run when someone remembered to click the separate
+// "Save to Directories" button below — saving the JOB itself never touched
+// the persons table at all, so a brand-new landlord's details went nowhere
+// unless that button was clicked, and typing an EXISTING landlord's name
+// with different contact info (a typo, or a genuinely different person who
+// happens to share the name) would either silently overwrite their real
+// phone/email or silently create nothing — either way, invisible in
+// Directory and impossible to invite to the Client Portal. Now this runs
+// on every job save automatically, and asks before overwriting conflicting
+// contact details instead of guessing.
+async function _resolveLandlordPerson(name, phone, email, addr, wa, notes){
+  if(!name && !phone) return null;
   const persons = await dAll('persons');
-  // Match by name first, then by phone
   let existing = name ? persons.find(p=>p.name.toLowerCase()===name.toLowerCase()) : null;
   if(!existing && phone) existing = persons.find(p=>p.phone&&p.phone.replace(/\s/g,'')===phone.replace(/\s/g,''));
 
   if(existing){
-    if(name && existing.name !== name) existing.name = name; // update name if provided
+    const phoneConflict = phone && existing.phone && existing.phone.replace(/\s/g,'')!==phone.replace(/\s/g,'');
+    const emailConflict = email && existing.email && existing.email.toLowerCase()!==email.toLowerCase();
+    if(phoneConflict || emailConflict){
+      const updateExisting = await new Promise(resolve=>{
+        confirm2(
+          'Same landlord, or someone new?',
+          `"${existing.name}" is already in your Directory${existing.phone?` — phone ${existing.phone}`:''}${existing.email?` — email ${existing.email}`:''}.\n\nThis job has different contact details on it${phone?` (phone ${phone})`:''}${email?` (email ${email})`:''}.\n\nIs this the same landlord (their number/email just changed) or a different person who happens to share the name?`,
+          ()=>resolve(true),
+          ()=>resolve(false),
+          {okText:'Same person — update Directory'}
+        );
+      });
+      if(!updateExisting) existing=null; // treat as a distinct person — falls through to creation below
+    }
+  }
+
+  if(existing){
+    if(name && existing.name !== name) existing.name = name;
     existing.phone = phone || existing.phone;
     existing.email = email || existing.email;
-    existing.address = document.getElementById('jf-ll-addr').value.trim() || existing.address;
-    existing.wa = document.getElementById('jf-ll-wa').value.trim() || existing.wa;
-    existing.notes = document.getElementById('jf-ll-notes').value.trim() || existing.notes;
+    existing.address = addr || existing.address;
+    existing.wa = wa || existing.wa;
+    existing.notes = notes || existing.notes;
     if(!(existing.roles||[]).includes('landlord')) existing.roles=[...(existing.roles||[]),'landlord'];
     await dPut('persons', existing);
-    toast('Landlord updated in directories','success');
+    return existing.id;
   } else {
-    const p = {id:uid(), name:displayName,
-      phone, email,
-      address: document.getElementById('jf-ll-addr').value.trim(),
-      wa: document.getElementById('jf-ll-wa').value.trim(),
-      notes: document.getElementById('jf-ll-notes').value.trim(),
-      roles:['landlord'], created:Date.now()};
+    const p = {id:uid(), name:name||phone, phone, email, address:addr, wa, notes, roles:['landlord'], created:Date.now()};
     await dPut('persons', p);
-    toast(`Landlord saved${!name?' (phone as name)':''}`,'success');
+    return p.id;
   }
+}
+
+// Manual "Save to Directories" button — same resolver as the automatic
+// save-on-job-save path, just triggered on demand and reading straight
+// from the form (useful to save a landlord's details before the rest of
+// the job form is filled in, or without saving the job at all).
+async function saveLandlordFromJob(){
+  const name = document.getElementById('jf-ll-name').value.trim();
+  const phone = document.getElementById('jf-ll-phone').value.trim();
+  const email = document.getElementById('jf-ll-email').value.trim();
+  if(!name && !phone){toast('Enter at least a phone number or name','warn');return}
+  const addr = document.getElementById('jf-ll-addr').value.trim();
+  const wa = document.getElementById('jf-ll-wa').value.trim();
+  const notes = document.getElementById('jf-ll-notes').value.trim();
+  const id = await _resolveLandlordPerson(name, phone, email, addr, wa, notes);
+  if(id) toast(`Landlord saved${!name?' (phone as name)':''}`,'success');
 }
 
 // Save agency from job tab 3
