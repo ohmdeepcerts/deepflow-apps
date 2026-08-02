@@ -2655,7 +2655,7 @@ body.density-relaxed .jtable td{font-size:15px}
 
   <!-- PROPERTIES -->
   <div class="page" id="pg-props">
-    <div style="padding:18px">
+    <div style="padding:18px;flex:1;overflow-y:auto;min-height:0">
       <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
         <div style="font-family:var(--fh);font-size:18px;font-weight:700">🏠 Properties Database</div>
         <input type="search" class="fi" id="prop-search" placeholder="Search address or landlord…" oninput="renderProps()" style="max-width:240px">
@@ -2667,6 +2667,7 @@ body.density-relaxed .jtable td{font-size:15px}
           <button class="btn btn-acc btn-sm" onclick="openPropModal()">+ Add Property</button>
         </div>
       </div>
+      <div id="props-kpis" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px"></div>
       <div id="props-grid"></div>
     </div>
   </div>

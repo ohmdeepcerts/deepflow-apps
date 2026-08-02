@@ -10853,8 +10853,10 @@ async function renderProps(){
     return;
   }
 
-  // Build table with hover popup
-  const rows=filtered.map(p=>{
+  // Build one enriched record per property first, so both the KPI summary
+  // and the cards below read from the same computed numbers instead of
+  // scanning allCerts/allInvoices/allPayments twice.
+  const enriched=filtered.map(p=>{
     const propJobs=p._jobs||[];
     const jobIds=new Set(propJobs.map(j=>j.id));
     // Cert match: precise (by jobId) with an address-substring fallback for
@@ -10877,187 +10879,81 @@ async function renderProps(){
     const photoCount=allAttachments.filter(a=>jobIds.has(a.jobId)&&(a.type==='photo'||(a.mime||'').startsWith('image/'))).length;
     const reliability=_paymentReliability(p.landlord,allInvoices,allPayments);
 
-    const alertColor=overdueCerts.length?'var(--red)':expCerts.length?'var(--yellow)':'var(--acc)';
-    const rowBg=overdueCerts.length?'rgba(224,82,82,.05)':expCerts.length?'rgba(240,192,48,.04)':'';
+    return {p,propJobs,propCerts,expCerts,overdueCerts,openJobs,completedJobs,outstanding,photoCount,reliability};
+  });
 
-    // Build popup HTML
-    const certLines=propCerts.slice(0,8).map(c=>{
-      const d=daysDiff(c.expiryDate);
-      const col=d<0?'var(--red)':d<=30?'var(--yellow)':d<=60?'#f0c030':'var(--green)';
-      const label=d<0?`Expired ${Math.abs(d)}d ago`:d<=60?`Expires in ${d}d`:`Valid (${d}d)`;
-      return`<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);gap:8px">
-        <div>
-          <div style="font-size:12px;font-weight:600;color:var(--txt1)">${c.type||'Cert'}</div>
-          <div style="font-size:11px;color:var(--txt3)">${c.certNum||'—'}</div>
-        </div>
-        <span style="font-size:11px;color:${col};font-weight:600;white-space:nowrap">${label}</span>
-      </div>`;
-    }).join('');
-
-    const jobLines=openJobs.slice(0,5).map(j=>`
-      <div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:1px solid var(--border)">
-        <span style="color:var(--txt1)">${j.description||j.trade||'Job'}</span>
-        <span class="badge ${j.status===STATUS.PENDING?'b-pending':'b-progress'}" style="font-size:10px">${j.status}</span>
+  // ── KPI summary row ──
+  const kpiEl=document.getElementById('props-kpis');
+  if(kpiEl){
+    const withOverdue=enriched.filter(e=>e.overdueCerts.length).length;
+    const withOpenJobs=enriched.filter(e=>e.openJobs.length).length;
+    const totalOutstanding=enriched.reduce((s,e)=>s+e.outstanding,0);
+    const kpis=[
+      {val:enriched.length,lbl:'Properties',sub:'matching filters',pk:'var(--acc)',ic:'🏠',deco:'🏘️',onclick:''},
+      {val:withOverdue,lbl:'Overdue Certs',sub:'need urgent action',pk:'var(--red)',ic:'❌',deco:'🚨',onclick:"nav('certs');setTimeout(()=>switchCertTab('expiring'),60)"},
+      {val:withOpenJobs,lbl:'Open Jobs',sub:'in progress or pending',pk:'var(--blue)',ic:'⊞',deco:'🔧',onclick:"nav('jobs')"},
+      {val:'£'+totalOutstanding.toFixed(0),lbl:'Outstanding',sub:'across these properties',pk:'var(--yellow)',ic:'💷',deco:'📨',onclick:''},
+    ];
+    kpiEl.innerHTML=kpis.map(k=>`
+      <div class="pkpi" style="--pk:${k.pk}"${k.onclick?` onclick="${k.onclick}"`:''}>
+        <div class="pkpi-blob"></div><div class="pkpi-deco">${k.deco}</div>
+        <div class="pkpi-ic">${k.ic}</div>
+        <div class="pkpi-val">${k.val}</div>
+        <div class="pkpi-lbl">${k.lbl}</div>
+        <div class="pkpi-sub">${k.sub}</div>
       </div>`).join('');
+  }
 
-    const popup=`<div class="prop-popup" id="popup-${p.id}" style="display:none;position:fixed;z-index:9999;width:340px;background:var(--s1);border:1px solid var(--border2);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.25);padding:16px;font-family:var(--fb)">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
-        <div>
-          <div style="font-weight:700;font-size:14px;color:var(--txt1);margin-bottom:3px">${p.address||'—'}</div>
-          <div style="font-size:12px;color:var(--txt3)">👤 ${p.landlord||'No landlord'} ${p.postcode?'· '+p.postcode:''}</div>
-          ${p.type?`<div style="font-size:11px;color:var(--txt3)">${p.type}${p.beds?' · '+p.beds+' bed':''}</div>`:''}
-        </div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
-          ${overdueCerts.length?`<span style="background:rgba(224,82,82,.15);color:var(--red);padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700">❌ ${overdueCerts.length} Expired</span>`:''}
-          ${expCerts.length?`<span style="background:rgba(240,192,48,.15);color:var(--yellow);padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700">⚠️ ${expCerts.length} Expiring</span>`:''}
-          ${openJobs.length?`<span style="background:rgba(91,142,240,.15);color:var(--blue);padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700">⊞ ${openJobs.length} Open</span>`:''}
-        </div>
-      </div>
-
-      <div style="display:flex;gap:14px;margin-bottom:12px;padding:10px;background:var(--s2);border-radius:8px">
-        <div style="flex:1">
-          <div style="font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px">Outstanding</div>
-          <div style="font-size:15px;font-weight:700;color:${outstanding>0.01?'var(--red)':'var(--green)'}">£${outstanding.toFixed(2)}</div>
-        </div>
-        <div style="flex:1">
-          <div style="font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px">Photos</div>
-          <div style="font-size:15px;font-weight:700;color:var(--txt1)">📷 ${photoCount}</div>
-        </div>
-        ${reliability?`<div style="flex:1.4">
-          <div style="font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px">Payment Reliability</div>
-          <div style="font-size:13px;font-weight:700;color:${reliability.color}">${reliability.label}</div>
-        </div>`:''}
-      </div>
-      ${reliability&&(reliability.onTime||reliability.late)?`<div style="font-size:11px;color:var(--txt3);margin-top:-6px;margin-bottom:12px">${reliability.onTime} paid on time, ${reliability.late} late${reliability.late?` (avg ${reliability.avgDaysLate}d)`:''} · ${reliability.invoiceCount} invoice${reliability.invoiceCount===1?'':'s'} total</div>`:''}
-      ${p.landlordHistory&&p.landlordHistory.length>1?`<div style="font-size:11px;color:var(--txt3);margin-bottom:12px">🕐 Previous: ${p.landlordHistory.slice(1).join(', ')}</div>`:''}
-
-      ${propCerts.length?`<div style="margin-bottom:12px">
-        <div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">📋 Certificates (${propCerts.length})</div>
-        ${certLines}
-        ${propCerts.length>8?`<div style="font-size:11px;color:var(--txt3);margin-top:4px">…and ${propCerts.length-8} more</div>`:''}
-      </div>`:`<div style="text-align:center;padding:8px;font-size:12px;color:var(--txt3);margin-bottom:12px">No certificates on file</div>`}
-
-      ${openJobs.length?`<div style="margin-bottom:12px">
-        <div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">⊞ Open Jobs (${openJobs.length})</div>
-        ${jobLines}
-      </div>`:''}
-
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:4px">
-        <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="openPropModal('${p.id}');hidePropPopup()">✎ Edit Property</button>
-        <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="nav('jobs');hidePropPopup()">⊞ View All Jobs</button>
-        <button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="nav('certs');hidePropPopup()">📋 View Certs</button>
-        <button class="btn btn-acc btn-sm" style="font-size:11px" onclick="openJobModal();hidePropPopup()">+ Add Job</button>
-      </div>
-    </div>`;
-
-    const statusDot=overdueCerts.length
-      ?`<span style="width:10px;height:10px;border-radius:50%;background:var(--red);display:inline-block;flex-shrink:0"></span>`
+  // ── Property cards — reuses the same .dir-card-v2/.dir-grid premium card
+  // system already built for the Directory, instead of a bespoke component,
+  // so Properties matches the rest of the app instead of inventing its own
+  // look. All the detail that used to live in a hover-only popup (certs,
+  // open jobs, reliability) is now directly on the card — nothing to hover
+  // to see, which is also what was making the page hard to scroll through.
+  grid.className='dir-grid';
+  grid.innerHTML=enriched.map(({p,propJobs,propCerts,expCerts,overdueCerts,openJobs,outstanding,photoCount,reliability})=>{
+    const topCol=overdueCerts.length?'var(--red)':expCerts.length?'var(--yellow)':'var(--green)';
+    const certBadge=overdueCerts.length
+      ?`<span class="pbadge" style="background:rgba(185,28,28,.12);color:var(--red)">❌ ${overdueCerts.length} expired</span>`
       :expCerts.length
-      ?`<span style="width:10px;height:10px;border-radius:50%;background:var(--yellow);display:inline-block;flex-shrink:0"></span>`
-      :`<span style="width:10px;height:10px;border-radius:50%;background:var(--green);display:inline-block;flex-shrink:0"></span>`;
-
-    return`<tr class="prop-row" style="background:${rowBg}" data-id="${p.id}">
-      <td style="padding:12px 14px;border-bottom:1px solid var(--border)">
-        <div style="display:flex;align-items:center;gap:8px">
-          ${statusDot}
-          <div>
-            <div style="font-weight:600;font-size:14px;color:var(--txt1)">${p.address||'—'}</div>
-            ${p.postcode?`<div style="font-size:11px;color:var(--txt3)">${p.postcode}</div>`:''}
+      ?`<span class="pbadge" style="background:rgba(180,83,9,.12);color:var(--yellow)">⚠️ ${expCerts.length} expiring</span>`
+      :propCerts.length
+      ?`<span class="pbadge" style="background:rgba(21,128,61,.12);color:var(--green)">✅ ${propCerts.length} valid</span>`
+      :`<span class="pbadge" style="background:var(--s2);color:var(--txt3)">No certs on file</span>`;
+    return`<div class="dir-card-v2" style="--card-color:${topCol};--card-color2:var(--acc)" onclick="openPropModal('${p.id}')">
+      <div class="card-top"></div>
+      ${outstanding>0.01?`<div class="owed-badge">£${outstanding.toFixed(0)} owed</div>`:''}
+      <div class="card-body">
+        <div class="card-head">
+          <div class="card-avatar" style="background:linear-gradient(135deg,${topCol},var(--acc))">🏠</div>
+          <div class="card-info">
+            <div class="card-name">${escHtml(p.address||'—')}</div>
+            <div class="card-role" style="color:var(--txt2)">${escHtml(p.landlord||'No landlord')}</div>
           </div>
         </div>
-      </td>
-      <td style="padding:12px 14px;border-bottom:1px solid var(--border);font-size:13px;color:var(--txt2)">${p.landlord||'—'}</td>
-      <td style="padding:12px 14px;border-bottom:1px solid var(--border);font-size:12px;color:var(--txt3)">${p.type||'—'}${p.beds?' · '+p.beds+' bed':''}</td>
-      <td style="padding:12px 14px;border-bottom:1px solid var(--border);text-align:center">
-        <div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
-          ${overdueCerts.length?`<span style="background:rgba(224,82,82,.15);color:var(--red);padding:2px 7px;border-radius:10px;font-size:11px">❌${overdueCerts.length}</span>`:''}
-          ${expCerts.length?`<span style="background:rgba(240,192,48,.15);color:var(--yellow);padding:2px 7px;border-radius:10px;font-size:11px">⚠️${expCerts.length}</span>`:''}
-          ${propCerts.length&&!overdueCerts.length&&!expCerts.length?`<span style="color:var(--green);font-size:11px">✅ ${propCerts.length}</span>`:''}
-          ${!propCerts.length?`<span style="color:var(--txt3);font-size:11px">—</span>`:''}
+        <div class="card-meta">
+          ${p.postcode?`<div>📍 ${escHtml(p.postcode)}</div>`:''}
+          ${p.type?`<div>${escHtml(p.type)}${p.beds?' · '+p.beds+' bed':''}</div>`:''}
+          ${reliability?`<div>⭐ <span style="color:${reliability.color};font-weight:700">${reliability.label}</span></div>`:''}
         </div>
-      </td>
-      <td style="padding:12px 14px;border-bottom:1px solid var(--border);text-align:center">
-        <div style="display:flex;gap:6px;justify-content:center">
-          ${openJobs.length?`<span style="background:rgba(91,142,240,.12);color:var(--blue);padding:2px 8px;border-radius:10px;font-size:11px">⊞${openJobs.length} open</span>`:''}
-          <span style="color:var(--txt3);font-size:11px">${propJobs.length} total</span>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
+          ${certBadge}
+          ${openJobs.length?`<span class="pbadge" style="background:rgba(29,111,173,.12);color:var(--blue)">⊞ ${openJobs.length} open job${openJobs.length===1?'':'s'}</span>`:''}
+          ${photoCount?`<span class="pbadge" style="background:var(--s2);color:var(--txt3)">📷 ${photoCount}</span>`:''}
         </div>
-      </td>
-      <td style="padding:12px 14px;border-bottom:1px solid var(--border);text-align:right;font-size:13px;font-weight:600;color:${outstanding>0.01?'var(--red)':'var(--txt3)'}">${outstanding>0.01?'£'+outstanding.toFixed(2):'—'}</td>
-      <td style="padding:12px 14px;border-bottom:1px solid var(--border);font-size:11px;font-weight:700;color:${reliability?reliability.color:'var(--txt3)'};white-space:nowrap">${reliability?reliability.label:'—'}</td>
-      <td style="padding:12px 14px;border-bottom:1px solid var(--border);text-align:right;position:relative">
-        ${popup}
-        <button class="btn btn-ghost btn-xs prop-arrow-btn" title="Show details"
-          onmouseenter="showPropPopup('${p.id}',this)"
-          onclick="openPropModal('${p.id}')"
-          style="font-size:16px;padding:4px 10px">›</button>
-      </td>
-    </tr>`;
+        <div class="card-stats">
+          <div class="card-stat"><div class="card-stat-val">${propCerts.length}</div><div class="card-stat-lbl">Certs</div></div>
+          <div class="card-stat"><div class="card-stat-val">${propJobs.length}</div><div class="card-stat-lbl">Jobs</div></div>
+          <div class="card-stat"><div class="card-stat-val" style="color:${outstanding>0.01?'var(--red)':'var(--green)'}">${outstanding>0.01?'£'+outstanding.toFixed(0):'£0'}</div><div class="card-stat-lbl">Owed</div></div>
+        </div>
+        <div class="card-actions">
+          <button onclick="event.stopPropagation();openPropModal('${p.id}')">✎ Edit</button>
+          <button onclick="event.stopPropagation();nav('certs')">📋 Certs</button>
+          <button onclick="event.stopPropagation();nav('jobs')">⊞ Jobs</button>
+        </div>
+      </div>
+    </div>`;
   }).join('');
-
-  grid.innerHTML=`
-    <table style="width:100%;border-collapse:collapse;background:var(--s1);border:1px solid var(--border);border-radius:10px;overflow:hidden">
-      <thead>
-        <tr style="background:var(--s2)">
-          <th style="padding:10px 14px;text-align:left;font-size:11px;color:var(--txt3);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Address</th>
-          <th style="padding:10px 14px;text-align:left;font-size:11px;color:var(--txt3);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Landlord</th>
-          <th style="padding:10px 14px;text-align:left;font-size:11px;color:var(--txt3);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Type</th>
-          <th style="padding:10px 14px;text-align:center;font-size:11px;color:var(--txt3);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Certificates</th>
-          <th style="padding:10px 14px;text-align:center;font-size:11px;color:var(--txt3);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Jobs</th>
-          <th style="padding:10px 14px;text-align:right;font-size:11px;color:var(--txt3);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Outstanding</th>
-          <th style="padding:10px 14px;text-align:left;font-size:11px;color:var(--txt3);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Payment Reliability</th>
-          <th style="padding:10px 14px;text-align:right;font-size:11px;color:var(--txt3);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Details</th>
-        </tr>
-      </thead>
-      <tbody>${rows}</tbody>
-    </table>`;
-
-  // Hover-to-close: hide popup when mouse leaves
-  grid.querySelectorAll('.prop-arrow-btn').forEach(btn=>{
-    btn.addEventListener('mouseleave',e=>{
-      const popup=btn.parentElement.querySelector('.prop-popup');
-      if(popup) setTimeout(()=>{
-        if(!popup.matches(':hover')) popup.style.display='none';
-      },200);
-    });
-  });
-}
-
-function showPropPopup(id,btn){
-  // Hide any open popups first
-  document.querySelectorAll('.prop-popup').forEach(p=>p.style.display='none');
-  const popup=document.getElementById('popup-'+id);
-  if(!popup)return;
-  // Position popup relative to viewport
-  const r=btn.getBoundingClientRect();
-  popup.style.display='block';
-  popup.style.position='fixed';
-  // Try to show above if near bottom
-  const spaceBelow=window.innerHeight-r.bottom;
-  if(spaceBelow<popup.offsetHeight+20){
-    popup.style.top=(r.top-popup.offsetHeight-8)+'px';
-  } else {
-    popup.style.top=(r.bottom+8)+'px';
-  }
-  // Align right edge with button
-  const rightEdge=r.right;
-  if(rightEdge-340<10){
-    popup.style.left='10px';
-    popup.style.right='auto';
-  } else {
-    popup.style.left=(rightEdge-340)+'px';
-    popup.style.right='auto';
-  }
-  // Allow hovering popup itself
-  popup.onmouseleave=()=>{ setTimeout(()=>{ popup.style.display='none'; },200); };
-  // Close on scroll or click outside
-  const close=(e)=>{
-    if(!popup.contains(e.target)&&e.target!==btn){ popup.style.display='none'; document.removeEventListener('click',close); }
-  };
-  setTimeout(()=>document.addEventListener('click',close),100);
-}
-
-function hidePropPopup(){
-  document.querySelectorAll('.prop-popup').forEach(p=>p.style.display='none');
 }
 
 async function openPropModal(id){
@@ -14319,7 +14215,7 @@ Object.assign(window, {
   exportAuditLog, exportBackup, exportCertCSV, exportCertPDF, exportEngReport, exportEngReportPDF, 
   exportExpensesCSV, exportInvsCSV, exportMasterXLSX, exportPLCSV, exportPropsCSV, exportReportPDF, 
   exportTSCSV, extractCertFromPhoto, fillCreditNote, fillFromMatch, filterCerts, fuzzyAddr, generateBulkReminder,
-  handleAccess, handleLogoUpload, handleNotifClick, handlePriDotClick, hidePropPopup, importBackup, importCertCSV,
+  handleAccess, handleLogoUpload, handleNotifClick, handlePriDotClick, importBackup, importCertCSV,
   invClientSelected, invNavSelect, jCalPickDate, jPickDate, jcalShiftMonth, kanbanDragOver, 
   kanbanDragStart, kanbanDrop, loadEarlierJobs, loadEngPerms, loadEngineerLocations, loadStorageDashboard, 
   loadStorageStats, loadTeam, markInvPaid, markInvSent, markInvUnpaid, matchDir, 
@@ -14344,7 +14240,7 @@ Object.assign(window, {
   sendLandlordComplete, sendLandlordWA, sendOverdueWA, sendTenantWA, sendToWA, setAccent, setCremMode, setFontSize,
   setInvFilter, setInvType, setInvView, setJRange, setJobsView, setPriFilter,
   setReqType, setSidebarWidth, setTheme, shiftDay, showAgeBucket, showAllEngJobs,
-  showColMenu, showJobAudit, showPropertyCerts, showPropPopup, showWaPanel, skipCertExpiry, smartAutofill, stmtClearFilters,
+  showColMenu, showJobAudit, showPropertyCerts, showWaPanel, skipCertExpiry, smartAutofill, stmtClearFilters,
   stmtQuickRange, stmtToggleAll, stmtToggleSel, switchAuditTab, switchCertTab, switchDirSection,
   switchSetTab, teamAdd, teamChangeRole, teamRevoke, testNotifWebhook, toggleAllCerts,
   toggleBillToOverride, toggleBulkSelectMode, toggleCalPane, toggleCertChip, toggleCol, toggleColPicker, toggleInvSync,
