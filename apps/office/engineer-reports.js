@@ -199,9 +199,11 @@ export async function renderEngReport(){
     const jobsToday=allJobs.filter(j=>j.date===today).length;
     const jobsWeek=allJobs.filter(j=>j.date>=weekStart).length;
 
-    const kpi=(val,lbl,col='var(--acc)')=>`<div style="background:var(--s1);border:1px solid var(--border);border-radius:10px;padding:12px 16px">
-      <div style="font-size:20px;font-weight:900;color:${col};line-height:1;margin-bottom:3px">${val}</div>
-      <div style="font-size:10px;color:var(--txt3);font-weight:600;text-transform:uppercase;letter-spacing:.4px">${lbl}</div>
+    const kpi=(val,lbl,pk='var(--acc)',ic='◆',deco='✦')=>`<div class="pkpi" style="--pk:${pk};cursor:default">
+      <div class="pkpi-blob"></div><div class="pkpi-deco">${deco}</div>
+      <div class="pkpi-ic">${ic}</div>
+      <div class="pkpi-val">${val}</div>
+      <div class="pkpi-lbl">${lbl}</div>
     </div>`;
 
     // Avatar colors (deterministic per engineer)
@@ -211,11 +213,11 @@ export async function renderEngReport(){
     body.innerHTML=`
       <!-- Overall KPIs -->
       <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:20px">
-        ${kpi((S.engineers||[]).filter(e=>e.name).length,'Total Engineers','var(--blue)')}
-        ${kpi(jobsToday,'Jobs Today','var(--acc)')}
-        ${kpi(jobsWeek,'Jobs This Week','var(--purple)')}
-        ${kpi(allCompleted.length,'Total Completed','var(--green)')}
-        ${kpi('£'+allRevenue.toLocaleString('en-GB',{maximumFractionDigits:0}),'Total Revenue','var(--acc)')}
+        ${kpi((S.engineers||[]).filter(e=>e.name).length,'Total Engineers','var(--blue)','👷','🛠️')}
+        ${kpi(jobsToday,'Jobs Today','var(--acc)','📅','⚡')}
+        ${kpi(jobsWeek,'Jobs This Week','var(--purple)','🗓️','📈')}
+        ${kpi(allCompleted.length,'Total Completed','var(--green)','✅','🏆')}
+        ${kpi('£'+allRevenue.toLocaleString('en-GB',{maximumFractionDigits:0}),'Total Revenue','var(--acc)','💷','💰')}
       </div>
 
       ${engs.map(eng=>{
@@ -224,10 +226,11 @@ export async function renderEngReport(){
         const engObj=(S.engineers||[]).find(e=>e.name===eng.name)||{};
         const phone=engObj.phone||'';
         const wa=engObj.wa||phone;
-        return`<div style="background:var(--s1);border:1px solid var(--border);border-radius:12px;margin-bottom:16px;overflow:hidden">
+        return`<div style="background:var(--s1);border:1px solid var(--border);border-radius:12px;margin-bottom:16px;overflow:hidden;transition:box-shadow .15s" onmouseenter="this.style.boxShadow='0 10px 26px rgba(0,0,0,.08)'" onmouseleave="this.style.boxShadow=''">
+          <div style="height:3px;background:linear-gradient(90deg,${ac},var(--acc))"></div>
           <!-- Engineer header -->
           <div style="display:flex;align-items:center;gap:14px;padding:14px 18px;border-bottom:1px solid var(--border);background:var(--s2)">
-            <div style="width:42px;height:42px;border-radius:50%;background:${ac}22;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:800;color:${ac};flex-shrink:0;border:2px solid ${ac}44">${(eng.name||'?')[0].toUpperCase()}</div>
+            <div style="width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,${ac},var(--acc));display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:800;color:#fff;flex-shrink:0;box-shadow:0 4px 12px -2px ${ac}88">${(eng.name||'?')[0].toUpperCase()}</div>
             <div style="flex:1;min-width:0">
               <div style="font-size:14px;font-weight:800;color:var(--txt)">${eng.name}</div>
               <div style="font-size:11px;color:var(--txt3)">${eng.trade||'No trade'} · ${eng.jobs.length} jobs · ${eng.compRate}% completion</div>
@@ -319,8 +322,8 @@ export async function _renderEngRankingTable(containerId){
         <div style="font-size:11px;color:var(--txt3)">Sorted by total revenue</div>
       </div>
       <div style="overflow-x:auto">
-        <table style="width:100%;border-collapse:collapse;font-size:12px">
-          <thead><tr style="border-bottom:2px solid var(--border)">
+        <table class="eng-rank-tbl" style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead><tr style="border-bottom:2px solid var(--border);background:var(--s2)">
             <th style="text-align:center;padding:8px 6px;color:var(--txt3);font-size:10px;text-transform:uppercase;width:40px">Rank</th>
             <th style="text-align:left;padding:8px 6px;color:var(--txt3);font-size:10px;text-transform:uppercase">Name</th>
             <th style="text-align:left;padding:8px 6px;color:var(--txt3);font-size:10px;text-transform:uppercase">Trade</th>
