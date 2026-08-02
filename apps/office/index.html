@@ -957,7 +957,43 @@ input[type=color]{border:none;background:none;cursor:pointer;padding:0;height:32
 .cdash-type-track{flex:1;height:8px;background:var(--border);border-radius:4px;overflow:hidden;cursor:pointer}
 .cdash-type-fill{height:100%;border-radius:4px;transition:width .6s ease}
 .cdash-type-count{font-size:11px;color:var(--txt3);width:40px;text-align:right;flex-shrink:0}
-.certs-tabs{display:flex;gap:2px;padding:0 18px;margin-bottom:0;border-bottom:1px solid var(--border);background:var(--s1)}
+
+/* ── Premium KPI card — shared by Dashboard / Missing Details / Statistics.
+   --pk sets the accent (a CSS var like var(--red)) per card; the blob and
+   icon chip both key off it so the palette stays theme-aware instead of
+   baking in light/dark-specific hex values. ── */
+.pkpi{background:var(--s1);border:1px solid var(--border);border-radius:var(--r2);padding:16px 18px;position:relative;overflow:hidden;cursor:pointer;transition:transform .15s,box-shadow .15s}
+.pkpi:hover{transform:translateY(-2px);box-shadow:0 10px 26px rgba(0,0,0,.1);border-color:var(--border2)}
+.pkpi-blob{position:absolute;top:-42px;right:-42px;width:120px;height:120px;border-radius:50%;background:var(--pk,var(--acc));opacity:.13;pointer-events:none}
+.pkpi-deco{position:absolute;top:8px;right:12px;font-size:38px;opacity:.14;transform:rotate(-10deg);pointer-events:none;line-height:1}
+.pkpi-ic{width:32px;height:32px;border-radius:9px;background:var(--pk,var(--acc));display:flex;align-items:center;justify-content:center;font-size:15px;margin-bottom:10px;box-shadow:0 5px 12px -3px var(--pk,var(--acc))}
+.pkpi-val{font-family:var(--fh);font-size:27px;font-weight:800;line-height:1;color:var(--txt1)}
+.pkpi-lbl{font-size:10px;color:var(--txt2);text-transform:uppercase;letter-spacing:.8px;font-weight:700;font-family:var(--fh);margin-top:7px}
+.pkpi-sub{font-size:11px;color:var(--txt3);margin-top:2px}
+.pkpi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+.pkpi-grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+
+/* Premium list row — Missing Details / Expiring tabs */
+.prow{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--s1);border:1px solid var(--border);border-radius:12px;margin-bottom:8px;transition:transform .12s,box-shadow .12s,border-color .12s;cursor:pointer}
+.prow:hover{transform:translateX(3px);box-shadow:0 6px 16px rgba(0,0,0,.07);border-color:var(--border2)}
+.prow-urgent{border-left:4px solid var(--pk,var(--red))}
+.prow-ic{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;background:var(--s2)}
+.prow-main{flex:1;min-width:0}
+.prow-title{font-size:13px;font-weight:700;color:var(--txt1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prow-meta{font-size:11px;color:var(--txt3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prow-right{text-align:right;flex-shrink:0}
+.pbadge{font-size:10px;font-weight:700;padding:3px 9px;border-radius:100px;white-space:nowrap;display:inline-flex;align-items:center;gap:3px}
+
+/* Expiring tab — responsive card grid instead of a spreadsheet */
+.exp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:10px;padding:0 18px 18px}
+.exp-card{background:var(--s1);border:1px solid var(--border);border-left:4px solid var(--pk,var(--acc));border-radius:12px;padding:14px 16px;transition:transform .12s,box-shadow .12s}
+.exp-card:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(0,0,0,.08)}
+.exp-card-hd{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px}
+.exp-card-days{font-family:var(--fh);font-weight:800;font-size:15px;color:var(--pk,var(--acc));white-space:nowrap}
+.exp-card-addr{font-size:13px;font-weight:700;color:var(--txt1);line-height:1.3}
+.exp-card-meta{font-size:11px;color:var(--txt3);margin-top:4px;line-height:1.6}
+.exp-card-actions{display:flex;gap:6px;margin-top:10px}
+.certs-tabs{display:flex;gap:2px;padding:0 18px;margin-bottom:0;border-bottom:1px solid var(--border);background:var(--s1);flex-wrap:wrap}
 .certs-tab{padding:10px 16px;font-size:13px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;color:var(--txt2);transition:all .15s;font-family:var(--fh);border-top:2px solid transparent;margin-bottom:-1px}
 .certs-tab.active{color:var(--acc);border-bottom-color:var(--s1);border-top-color:var(--acc);background:var(--s1)}
 .certs-tab:hover:not(.active){color:var(--txt1)}
@@ -2642,10 +2678,12 @@ body.density-relaxed .jtable td{font-size:15px}
       <!-- TABS -->
       <div class="certs-tabs">
         <div class="certs-tab active" id="ctab-dash" onclick="switchCertTab('dash')">📊 Dashboard</div>
-        <div class="certs-tab" id="ctab-list" onclick="switchCertTab('list')">◈ Certificates</div>
-        <div class="certs-tab" id="ctab-form" onclick="switchCertTab('form')">＋ Add / Edit</div>
-        <div class="certs-tab" id="ctab-rem" onclick="switchCertTab('rem')">📣 Reminders</div>
+        <div class="certs-tab" id="ctab-missing" onclick="switchCertTab('missing')">🧩 Missing Details</div>
+        <div class="certs-tab" id="ctab-expiring" onclick="switchCertTab('expiring')">⏰ Expiring</div>
+        <div class="certs-tab" id="ctab-form" onclick="switchCertTab('form')">＋ Add New</div>
         <div class="certs-tab" id="ctab-stats" onclick="switchCertTab('stats')">📈 Statistics</div>
+        <div class="certs-tab" id="ctab-list" onclick="switchCertTab('list')">◈ All Certificates</div>
+        <div class="certs-tab" id="ctab-rem" onclick="switchCertTab('rem')">📣 Reminders</div>
       </div>
 
       <!-- ═══ DASHBOARD ═══ -->
@@ -2669,7 +2707,7 @@ body.density-relaxed .jtable td{font-size:15px}
             <div class="cdash-pb" id="cd-expiring"></div>
           </div>
           <div class="cdash-panel">
-            <div class="cdash-ph"><div class="cdash-ph-title" style="color:var(--yellow)">📋 Missing Expiry Dates</div><a onclick="filterCerts('no-expiry')">Fill them in →</a></div>
+            <div class="cdash-ph"><div class="cdash-ph-title" style="color:var(--yellow)">📋 Missing Expiry Dates</div><a onclick="switchCertTab('missing')">Fill them in →</a></div>
             <div class="cdash-pb" id="cd-missing"></div>
           </div>
           <div class="cdash-panel">
@@ -2687,6 +2725,42 @@ body.density-relaxed .jtable td{font-size:15px}
             <div id="cd-prop-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px;padding:12px 16px"></div>
           </div>
         </div>
+      </div>
+
+      <!-- ═══ MISSING DETAILS ═══ -->
+      <div id="certs-missing-panel" style="display:none">
+        <div class="pkpi-grid3" id="cm-kpis" style="padding:18px 18px 6px"></div>
+        <div style="padding:6px 18px 10px;display:flex;gap:8px;align-items:center">
+          <button class="crem-mode-btn active" id="cm-filter-all" onclick="setMissingFilter('all')">All</button>
+          <button class="crem-mode-btn" id="cm-filter-pdf" onclick="setMissingFilter('pdf')">📄 Missing PDF</button>
+          <button class="crem-mode-btn" id="cm-filter-date" onclick="setMissingFilter('date')">📅 Missing Dates</button>
+        </div>
+        <div style="padding:0 18px 18px" id="cm-list"></div>
+      </div>
+
+      <!-- ═══ EXPIRING ═══ -->
+      <div id="certs-expiring-panel" style="display:none">
+        <div class="ctbl-filters">
+          <div class="ctbl-fg"><label>Search</label><input type="search" class="fi" id="exp-search" placeholder="Address, cert#, landlord…" oninput="renderExpiringPanel()" style="width:200px;padding:6px 10px"></div>
+          <div class="ctbl-fg"><label>Status</label>
+            <select class="fs" id="exp-status" onchange="renderExpiringPanel()" style="padding:6px 10px;width:160px">
+              <option value="both" selected>Expired + Expiring</option>
+              <option value="expiring">Expiring only</option>
+              <option value="expired">Expired only</option>
+            </select>
+          </div>
+          <div class="ctbl-fg"><label>Type</label><select class="fs" id="exp-type" onchange="renderExpiringPanel()" style="padding:6px 10px;width:150px"><option value="all">All Types</option></select></div>
+          <div class="ctbl-fg"><label>Landlord</label><input type="text" class="fi" id="exp-landlord" list="exp-ll-list" placeholder="Filter…" oninput="renderExpiringPanel()" style="padding:6px 10px;width:130px"><datalist id="exp-ll-list"></datalist></div>
+          <div class="ctbl-fg"><label>Agent / Agency</label><input type="text" class="fi" id="exp-agent" list="exp-ag-list" placeholder="Filter…" oninput="renderExpiringPanel()" style="padding:6px 10px;width:130px"><datalist id="exp-ag-list"></datalist></div>
+          <div class="ctbl-fg"><label>Exp. From</label><input type="date" class="fi" id="exp-from" onchange="renderExpiringPanel()" style="padding:6px 10px"></div>
+          <div class="ctbl-fg"><label>Exp. To</label><input type="date" class="fi" id="exp-to" onchange="renderExpiringPanel()" style="padding:6px 10px"></div>
+          <div class="ctbl-fg"><label>Sort</label><select class="fs" id="exp-sort" onchange="renderExpiringPanel()" style="padding:6px 10px;width:145px"><option value="soonest" selected>Soonest First</option><option value="latest">Latest First</option><option value="addr">Address A–Z</option></select></div>
+          <div style="margin-left:auto;display:flex;gap:10px;align-items:center">
+            <div id="exp-count" style="font-size:12px;color:var(--txt3);white-space:nowrap"></div>
+            <button class="btn btn-ghost btn-sm" onclick="clearExpiringFilters()">Clear</button>
+          </div>
+        </div>
+        <div class="exp-grid" id="exp-grid"></div>
       </div>
 
       <!-- ═══ TABLE / MANAGE ═══ -->

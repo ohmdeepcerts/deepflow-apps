@@ -10,7 +10,7 @@ import {
   certSendIndivEmail, certSendIndivWA, renderCertStats, setCremMode, generateBulkReminder,
   copyCremMsg, importCertCSV, exportCertCSV, exportCertPDF, downloadCertTemplate, renderCertDash,
   addExpiryToExistingCert, previewCertPdf, uploadCertPdf, removeCertPdf, saveCert, createRenewalJob,
-  extractCertFromPhoto,
+  extractCertFromPhoto, renderCertMissing, setMissingFilter, renderExpiringPanel, clearExpiringFilters,
 } from './certs.js';
 import {
   getCurDirSection, switchDirSection, renderDir, renderDirSection, updateDirTabBadges,
@@ -14330,7 +14330,8 @@ Object.assign(window, {
   toggleArchivePerson,
   openPropModal, openStandaloneProformaModal, openWhatsApp, postComment, previewCertPdf,
   previewWaTemplate, printFilteredInvoices, printProforma, quickConfirm, quickEditPrice, quickEditTime, quickStatus,
-  removeCertPdf, removeInvCustomText, renderAuditLog, renderCertStats, renderCertTable, renderClientPicker,
+  removeCertPdf, removeInvCustomText, renderAuditLog, renderCertMissing, renderCertStats, renderCertTable, renderClientPicker,
+  renderExpiringPanel, setMissingFilter, clearExpiringFilters,
   renderDirSection, renderEngReport, renderExpenses, renderInvItems, renderInvList, renderJobs, renderMapPage,
   renderNotifPreview, renderPLDashboard, renderProps, renderReports, renderRequests, renderSettings, renderStmt,
   requestNotifPermission, resetColWidths, resetPortalPin, resolveMergeField, saveAgency, saveAgencyFromJob, 

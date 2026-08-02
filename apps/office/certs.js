@@ -15,6 +15,7 @@
 // doesn't matter which of the two finishes evaluating first.
 
 import { SB_URL, SB_KEY } from '@core';
+import { escHtml } from '@ui';
 import { STATUS, daysDiff, formatDateUK, localDateStr } from '@business';
 import {
   S, dAll, dGet, dPut, dDel, toast, confirm2, uid, TODAY, logActivity,
@@ -50,19 +51,21 @@ async function sbStorage(path,file){
 
 export function switchCertTab(tab,_skipFormInit){
   _certTab=tab;
-  const tabs=['dash','list','form','rem','stats'];
-  const panels={dash:'certs-dash-panel',list:'certs-list-panel',form:'certs-form-panel',rem:'certs-rem-panel',stats:'certs-stats-panel'};
+  const tabs=['dash','missing','expiring','list','form','rem','stats'];
+  const panels={dash:'certs-dash-panel',missing:'certs-missing-panel',expiring:'certs-expiring-panel',list:'certs-list-panel',form:'certs-form-panel',rem:'certs-rem-panel',stats:'certs-stats-panel'};
   tabs.forEach(t=>{
     const el=document.getElementById('ctab-'+t);
     if(el) el.classList.toggle('active',t===tab);
     const pEl=document.getElementById(panels[t]);
     if(pEl) pEl.style.display=t===tab?'':'none';
   });
-  if(tab==='dash')  renderCertDash();
-  if(tab==='list')  renderCertTable();
+  if(tab==='dash')     renderCertDash();
+  if(tab==='missing')  renderCertMissing();
+  if(tab==='expiring') renderExpiringPanel();
+  if(tab==='list')     renderCertTable();
   if(tab==='form'&&!_skipFormInit) openCertForm();
-  if(tab==='rem')   initCertReminders();
-  if(tab==='stats') renderCertStats();
+  if(tab==='rem')      initCertReminders();
+  if(tab==='stats')    renderCertStats();
 }
 
 export function filterCerts(status){
@@ -475,29 +478,37 @@ export async function renderCertStats(){
   const wl30=all.filter(c=>{if(!c.expiryDate)return false;const d=new Date(c.expiryDate);return d>=now&&d<=d30;}).length;
   const wl12m=all.filter(c=>{if(!c.expiryDate)return false;const d=new Date(c.expiryDate);return d>=now&&d<=d12m;}).length;
   kpiEl.innerHTML=`
-    <div class="cst-card" style="cursor:pointer" onclick="filterCerts('')">
-      <div class="cst-title">Total Portfolio</div>
-      <div style="font-family:var(--fh);font-size:28px;font-weight:800">${total}</div>
-      <div style="font-size:11px;color:var(--txt3);margin-top:3px">All certificates</div>
+    <div class="pkpi" style="--pk:var(--acc)" onclick="switchCertTab('list')">
+      <div class="pkpi-blob"></div><div class="pkpi-deco">📁</div>
+      <div class="pkpi-ic">🗂️</div>
+      <div class="pkpi-val">${total}</div>
+      <div class="pkpi-lbl">Total Portfolio</div>
+      <div class="pkpi-sub">All certificates</div>
     </div>
-    <div class="cst-card" style="cursor:pointer" onclick="filterCerts('active')">
-      <div class="cst-title">Compliance Score</div>
-      <div style="font-family:var(--fh);font-size:28px;font-weight:800;color:var(--green)">${compPct}%</div>
-      <div style="font-size:11px;color:var(--txt3);margin-top:3px">${active.length} active certs</div>
+    <div class="pkpi" style="--pk:var(--green)" onclick="filterCerts('active')">
+      <div class="pkpi-blob"></div><div class="pkpi-deco">🛡️</div>
+      <div class="pkpi-ic">📈</div>
+      <div class="pkpi-val" style="color:var(--green)">${compPct}%</div>
+      <div class="pkpi-lbl">Compliance Score</div>
+      <div class="pkpi-sub">${active.length} active certs</div>
     </div>
-    <div class="cst-card" style="cursor:pointer" onclick="filterCerts('expired')">
-      <div class="cst-title">Critical — Expired</div>
-      <div style="font-family:var(--fh);font-size:28px;font-weight:800;color:var(--red)">${expired.length}</div>
-      <div style="font-size:11px;color:var(--txt3);margin-top:3px">Requires action</div>
+    <div class="pkpi" style="--pk:var(--red)" onclick="switchCertTab('expiring')">
+      <div class="pkpi-blob"></div><div class="pkpi-deco">🚨</div>
+      <div class="pkpi-ic">❌</div>
+      <div class="pkpi-val" style="color:var(--red)">${expired.length}</div>
+      <div class="pkpi-lbl">Critical — Expired</div>
+      <div class="pkpi-sub">Requires action</div>
     </div>
-    <div class="cst-card">
-      <div class="cst-title">Workload Forecast</div>
-      <div style="display:flex;align-items:baseline;gap:8px;margin-top:4px">
-        <span style="font-family:var(--fh);font-size:24px;font-weight:800;color:var(--acc)">${wl30}</span>
-        <span style="font-size:11px;color:var(--txt3)">next 30d</span>
-        <span style="font-family:var(--fh);font-size:24px;font-weight:800;color:var(--blue)">${wl12m}</span>
-        <span style="font-size:11px;color:var(--txt3)">next 12m</span>
+    <div class="pkpi" style="--pk:var(--blue)" onclick="switchCertTab('expiring')">
+      <div class="pkpi-blob"></div><div class="pkpi-deco">📆</div>
+      <div class="pkpi-ic">🔮</div>
+      <div style="display:flex;align-items:baseline;gap:6px;margin-top:1px">
+        <span class="pkpi-val" style="font-size:22px;color:var(--acc)">${wl30}</span>
+        <span style="font-size:10px;color:var(--txt3)">30d</span>
+        <span class="pkpi-val" style="font-size:22px;color:var(--blue)">${wl12m}</span>
+        <span style="font-size:10px;color:var(--txt3)">12m</span>
       </div>
+      <div class="pkpi-lbl">Workload Forecast</div>
     </div>`;
 
   // ── Workload Forecast bars (SVG-free, pure CSS) ──
@@ -895,6 +906,175 @@ export function downloadCertTemplate(){
   const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='CertImport_Template.csv';a.click();
 }
 
+// ════════════════════════════════════════════════════════════════
+//  MISSING DETAILS (🧩 Missing Details tab) — certs with no PDF and/or
+//  no expiry date, so the office can chase them down as a dedicated
+//  worklist instead of spotting them buried in the full table.
+// ════════════════════════════════════════════════════════════════
+
+let _missingFilter='all';
+export function setMissingFilter(mode){
+  _missingFilter=mode;
+  ['all','pdf','date'].forEach(m=>document.getElementById('cm-filter-'+m)?.classList.toggle('active',m===mode));
+  renderCertMissing();
+}
+
+export async function renderCertMissing(){
+  const all=await dAll('certs');
+  const missingPdf=all.filter(c=>!c.pdfUrl);
+  const missingDate=all.filter(c=>!c.expiryDate&&!c.noExpiry);
+  const missingBoth=all.filter(c=>!c.pdfUrl&&!c.expiryDate&&!c.noExpiry);
+
+  const kpiEl=document.getElementById('cm-kpis');
+  if(kpiEl){
+    const kpis=[
+      {val:missingPdf.length,lbl:'Missing PDF',sub:'no document attached',pk:'var(--red)',ic:'📄',deco:'📎',mode:'pdf'},
+      {val:missingDate.length,lbl:'Missing Dates',sub:'no expiry recorded',pk:'var(--yellow)',ic:'📅',deco:'🗓️',mode:'date'},
+      {val:missingBoth.length,lbl:'Missing Both',sub:'needs full follow-up',pk:'#8a9bc0',ic:'⚠️',deco:'❗',mode:'all'},
+    ];
+    kpiEl.innerHTML=kpis.map(k=>`
+      <div class="pkpi" style="--pk:${k.pk}" onclick="setMissingFilter('${k.mode}')">
+        <div class="pkpi-blob"></div><div class="pkpi-deco">${k.deco}</div>
+        <div class="pkpi-ic">${k.ic}</div>
+        <div class="pkpi-val">${k.val}</div>
+        <div class="pkpi-lbl">${k.lbl}</div>
+        <div class="pkpi-sub">${k.sub}</div>
+      </div>`).join('');
+  }
+
+  const byId=new Map();
+  (_missingFilter==='pdf'?missingPdf:_missingFilter==='date'?missingDate:[...missingPdf,...missingDate])
+    .forEach(c=>byId.set(c.id,c));
+  const list=[...byId.values()].sort((a,b)=>(a.address||'').localeCompare(b.address||''));
+
+  const listEl=document.getElementById('cm-list');
+  if(!listEl)return;
+  if(!list.length){
+    listEl.innerHTML='<div style="text-align:center;padding:48px 16px"><div style="font-size:32px">✅</div><div style="font-size:13px;color:var(--txt3);margin-top:8px">Nothing missing — every certificate is fully documented</div></div>';
+    return;
+  }
+  listEl.innerHTML=list.map(c=>{
+    const noPdf=!c.pdfUrl, noDate=!c.expiryDate&&!c.noExpiry;
+    const ct=(S.certTypes||[]).find(t=>t.name===c.type)||{color:'var(--acc)'};
+    return`<div class="prow" onclick="editCertRecord('${c.id}')">
+      <div class="prow-ic" style="color:${ct.color||'var(--acc)'}">📄</div>
+      <div class="prow-main">
+        <div class="prow-title">${escHtml(c.address||'—')}</div>
+        <div class="prow-meta">${escHtml(c.type||'Certificate')} · 👤 ${escHtml(c.landlord||'—')}${c.jobNum?' · Job: '+escHtml(c.jobNum):''}</div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+        ${noPdf?`<span class="pbadge" style="background:rgba(185,28,28,.12);color:var(--red)">No PDF</span>`:''}
+        ${noDate?`<span class="pbadge" style="background:rgba(180,83,9,.12);color:var(--yellow)">No Date</span>`:''}
+      </div>
+      ${!noPdf?`<button class="btn btn-ghost btn-xs" onclick="previewCertPdf('${c.pdfUrl}');event.stopPropagation()">👁 Preview</button>`:''}
+      <button class="btn btn-acc btn-xs" onclick="editCertRecord('${c.id}');event.stopPropagation()">${noPdf?'📤 Upload':'📅 Fill In'}</button>
+    </div>`;
+  }).join('');
+}
+
+// ════════════════════════════════════════════════════════════════
+//  EXPIRING (⏰ Expiring tab) — a filterable, sortable, card-based view
+//  of certs that are due or overdue, with a custom date range for
+//  looking further ahead than the default 60-day window.
+// ════════════════════════════════════════════════════════════════
+
+export async function renderExpiringPanel(){
+  const all=await dAll('certs');
+
+  const typeEl=document.getElementById('exp-type');
+  if(typeEl&&typeEl.options.length<=1){
+    const types=[...new Set(all.map(c=>c.type).filter(Boolean))].sort();
+    typeEl.innerHTML='<option value="all">All Types</option>'+types.map(t=>`<option value="${t}">${t}</option>`).join('');
+  }
+  const llList=document.getElementById('exp-ll-list');
+  if(llList&&!llList.children.length){
+    const lls=[...new Set(all.map(c=>c.landlord).filter(Boolean))].sort();
+    llList.innerHTML=lls.map(l=>`<option value="${l}">`).join('');
+  }
+  const agList=document.getElementById('exp-ag-list');
+  if(agList&&!agList.children.length){
+    const ags=[...new Set(all.map(c=>c.agent).filter(Boolean))].sort();
+    agList.innerHTML=ags.map(a=>`<option value="${a}">`).join('');
+  }
+
+  const q=(document.getElementById('exp-search')?.value||'').toLowerCase();
+  const status=document.getElementById('exp-status')?.value||'both';
+  const type=document.getElementById('exp-type')?.value||'all';
+  const ll=(document.getElementById('exp-landlord')?.value||'').toLowerCase();
+  const ag=(document.getElementById('exp-agent')?.value||'').toLowerCase();
+  const from=document.getElementById('exp-from')?.value||'';
+  const to=document.getElementById('exp-to')?.value||'';
+  const sort=document.getElementById('exp-sort')?.value||'soonest';
+
+  let list=all.filter(c=>{
+    if(!c.expiryDate)return false; // this tab is about certs with a due/overdue date, not undated ones
+    const d=daysDiff(c.expiryDate);
+    if(status==='expiring'&&d<0)return false;
+    if(status==='expired'&&d>=0)return false;
+    if(status==='both'&&!to&&d>60)return false; // sane default window — an explicit "Exp. To" overrides it
+    if(q){
+      const blob=`${c.certNum||''} ${c.address||''} ${c.landlord||''} ${c.agent||''}`.toLowerCase();
+      if(!blob.includes(q))return false;
+    }
+    if(type!=='all'&&c.type!==type)return false;
+    if(ll&&!(c.landlord||'').toLowerCase().includes(ll))return false;
+    if(ag&&!(c.agent||'').toLowerCase().includes(ag))return false;
+    if(from&&c.expiryDate<from)return false;
+    if(to&&c.expiryDate>to)return false;
+    return true;
+  });
+
+  list.sort((a,b)=>{
+    if(sort==='latest')return (a.expiryDate||'0000')<(b.expiryDate||'0000')?1:-1;
+    if(sort==='addr')  return (a.address||'').localeCompare(b.address||'');
+    return (a.expiryDate||'9999')>(b.expiryDate||'9999')?1:-1; // soonest first (default)
+  });
+
+  const countEl=document.getElementById('exp-count');
+  if(countEl)countEl.textContent=`${list.length} cert${list.length===1?'':'s'}`;
+
+  const grid=document.getElementById('exp-grid');
+  if(!grid)return;
+  if(!list.length){
+    grid.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:48px 16px"><div style="font-size:32px">✅</div><div style="font-size:13px;color:var(--txt3);margin-top:8px">Nothing matches these filters</div></div>';
+    return;
+  }
+  grid.innerHTML=list.map(c=>{
+    const d=daysDiff(c.expiryDate);
+    const isExp=d<0;
+    const pk=isExp?'var(--red)':d<=14?'var(--red)':d<=30?'var(--yellow)':'var(--blue)';
+    const daysLbl=isExp?`${Math.abs(d)}d overdue`:`${d}d left`;
+    return`<div class="exp-card" style="--pk:${pk}">
+      <div class="exp-card-hd">
+        <div class="exp-card-addr">${escHtml(c.address||'—')}</div>
+        <div class="exp-card-days">${daysLbl}</div>
+      </div>
+      <div class="exp-card-meta">
+        ${escHtml(c.type||'Certificate')}${c.certNum?' · #'+escHtml(c.certNum):''}<br>
+        👤 ${escHtml(c.landlord||'—')}${c.agent?' · 🏢 '+escHtml(c.agent):''}<br>
+        📅 ${formatDateUK(c.expiryDate)}
+      </div>
+      <div class="exp-card-actions">
+        <button class="btn btn-acc btn-xs" onclick="createRenewalJob('${c.id}')">🔁 Renew</button>
+        ${c.pdfUrl?`<button class="btn btn-ghost btn-xs" onclick="previewCertPdf('${c.pdfUrl}')">👁 View PDF</button>`:''}
+        <button class="btn btn-ghost btn-xs" onclick="editCertRecord('${c.id}')">✎ Edit</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+export function clearExpiringFilters(){
+  document.getElementById('exp-search').value='';
+  document.getElementById('exp-status').value='both';
+  document.getElementById('exp-type').value='all';
+  document.getElementById('exp-landlord').value='';
+  document.getElementById('exp-agent').value='';
+  document.getElementById('exp-from').value='';
+  document.getElementById('exp-to').value='';
+  document.getElementById('exp-sort').value='soonest';
+  renderExpiringPanel();
+}
+
 // waCertReminder — merged: full implementation is below at waCertReminder(id) line ~9828
 
 export async function renderCertDash(){
@@ -906,23 +1086,29 @@ export async function renderCertDash(){
   const _cw1=S.certWarnDays||30;const _cw2=(S.certWarnDays2||14)+_cw1;
   const expiring30=allCerts.filter(c=>c.expiryDate&&daysDiff(c.expiryDate)>=0&&daysDiff(c.expiryDate)<=_cw1);
   const expiring60=allCerts.filter(c=>c.expiryDate&&daysDiff(c.expiryDate)>_cw1&&daysDiff(c.expiryDate)<=_cw2);
-  const noExpiry=allCerts.filter(c=>!c.expiryDate);
+  // Excludes certs explicitly flagged noExpiry (permanent by design, e.g. some
+  // EPC/Part-P records) — those aren't "missing" anything, they're done. Same
+  // definition the Missing Details tab uses, so the two stay in sync instead
+  // of disagreeing on the count when this KPI links straight there.
+  const noExpiry=allCerts.filter(c=>!c.expiryDate&&!c.noExpiry);
   const valid=allCerts.filter(c=>c.expiryDate&&daysDiff(c.expiryDate)>60);
 
   // ── KPI cards ──
   const kpiData=[
-    {val:allCerts.length,lbl:'Total Certs',sub:'across all properties',color:'var(--acc)',bar:'var(--acc)',filter:''},
-    {val:valid.length,lbl:'Valid',sub:'expiry > 60 days',color:'var(--green)',bar:'var(--green)',filter:'ok'},
-    {val:expiring30.length+expiring60.length,lbl:'Expiring Soon',sub:'within 60 days',color:'var(--yellow)',bar:'var(--yellow)',filter:'expiring'},
-    {val:expired.length,lbl:'Expired',sub:'action required',color:'var(--red)',bar:'var(--red)',filter:'expired'},
-    {val:noExpiry.length,lbl:'Missing Dates',sub:'to fill in',color:'#8a9bc0',bar:'#8a9bc0',filter:'no-expiry'},
+    {val:allCerts.length,lbl:'Total Certs',sub:'across all properties',pk:'var(--acc)',ic:'🗂️',deco:'📁',go:()=>switchCertTab('list')},
+    {val:valid.length,lbl:'Valid',sub:'expiry > 60 days',pk:'var(--green)',ic:'✅',deco:'🛡️',go:()=>filterCerts('ok')},
+    {val:expiring30.length+expiring60.length,lbl:'Expiring Soon',sub:'within 60 days',pk:'var(--yellow)',ic:'⏰',deco:'⏳',go:()=>switchCertTab('expiring')},
+    {val:expired.length,lbl:'Expired',sub:'action required',pk:'var(--red)',ic:'❌',deco:'🚨',go:()=>switchCertTab('expiring')},
+    {val:noExpiry.length,lbl:'Missing Dates',sub:'to fill in',pk:'#8a9bc0',ic:'📋',deco:'🗓️',go:()=>switchCertTab('missing')},
   ];
-  document.getElementById('cd-kpis').innerHTML=kpiData.map(k=>`
-    <div class="cdash-kpi" onclick="filterCerts('${k.filter}')">
-      <div class="cdash-kpi-val" style="color:${k.color}">${k.val}</div>
-      <div class="cdash-kpi-lbl">${k.lbl}</div>
-      <div class="cdash-kpi-sub">${k.sub}</div>
-      <div class="cdash-kpi-bar" style="background:${k.bar}"></div>
+  window._certKpiGo=kpiData.map(k=>k.go); // onclick can't hold closures directly — indexed lookup instead
+  document.getElementById('cd-kpis').innerHTML=kpiData.map((k,i)=>`
+    <div class="pkpi" style="--pk:${k.pk}" onclick="_certKpiGo[${i}]()">
+      <div class="pkpi-blob"></div><div class="pkpi-deco">${k.deco}</div>
+      <div class="pkpi-ic">${k.ic}</div>
+      <div class="pkpi-val">${k.val}</div>
+      <div class="pkpi-lbl">${k.lbl}</div>
+      <div class="pkpi-sub">${k.sub}</div>
     </div>`).join('');
 
   // ── Timeline: next 12 months ──
@@ -1018,7 +1204,7 @@ export async function renderCertDash(){
         </div>
         <button class="btn btn-ghost btn-xs" onclick="addExpiryToExistingCert('${c.id}');event.stopPropagation()" style="color:var(--yellow);border-color:var(--yellow);font-size:10px;white-space:nowrap">+ Add Date</button>
       </div>`;
-    }).join('')+(noExpiry.length>8?`<div style="padding:10px 16px;font-size:12px;color:var(--acc);cursor:pointer" onclick="filterCerts('no-expiry')">+${noExpiry.length-8} more →</div>`:'');
+    }).join('')+(noExpiry.length>8?`<div style="padding:10px 16px;font-size:12px;color:var(--acc);cursor:pointer" onclick="switchCertTab('missing')">+${noExpiry.length-8} more →</div>`:'');
   } else {
     misEl.innerHTML='<div style="text-align:center;padding:28px 16px"><div style="font-size:28px">✅</div><div style="font-size:12px;color:var(--txt3);margin-top:6px">All certs have expiry dates</div></div>';
   }
