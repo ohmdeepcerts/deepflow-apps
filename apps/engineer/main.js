@@ -227,6 +227,19 @@ export async function sb(path,opts={}){
   return Array.isArray(d)?d.map(row=>fromDb(table,row)):d;
 }
 
+// Calls a Supabase Edge Function with whichever auth this session actually
+// holds — mirrors sb()'s tokenAuth branching, since edge functions don't go
+// through restFetch(). Phone+PIN ("token") sessions carry no real Supabase
+// JWT (see _isTokenAuth), so they need the x-engineer-token header instead;
+// password-mode sessions and Office App staff use a normal Bearer JWT.
+async function _fnFetch(name,body){
+  const tokenAuth=_isTokenAuth();
+  const jwt=tokenAuth?SB_KEY:await _getJWT();
+  const headers={'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+jwt};
+  if(tokenAuth) headers['x-engineer-token']=_engToken;
+  return fetch(SB_URL+'/functions/v1/'+name,{method:'POST',headers,body:JSON.stringify(body)});
+}
+
 // Same audit_log table the Office App's Admin-only Audit Log page reads —
 // lets an admin see every status change regardless of who made it or from
 // which app, without blocking any transition.
@@ -1114,6 +1127,7 @@ function renderJobDetail(j,atts){
       <div class="d-section-hd">📝 Job Notes</div>
       <div class="notes-toolbar">
         <button class="notes-tool-btn" onclick="openQN()" style="background:rgba(79,143,255,.1);border-color:rgba(79,143,255,.25);color:var(--acc)">⚡ Quick Issues</button>
+        <button class="notes-tool-btn" onclick="rewriteJobNotes(this)">✨ Rewrite</button>
         <button class="notes-tool-btn" onclick="_waShareNotes()">💬 Share Notes</button>
       </div>
       <textarea class="notes-box" id="job-notes" placeholder="Issues found, materials used, observations…">${j.notes||''}</textarea>
@@ -1210,6 +1224,34 @@ function setQuality(hd,btn){
   const sub=document.querySelector('.upload-zone-sub');
   if(sub)sub.textContent=hd?'HD quality — full resolution':'Compressed — faster upload, smaller size';
 }
+
+// AI rewrite-assist — cleans up rushed on-site notes via Gemini (see
+// supabase/functions/rewrite-notes). Always shown, same "degrade
+// gracefully if no key is configured" pattern as the Office App's
+// cert-photo extraction — the server returns a clear error instead of the
+// button just silently not being there.
+async function _rewriteTextarea(elId,btnEl){
+  const el=document.getElementById(elId);
+  const text=el?.value.trim();
+  if(!text){toast('Write something first','info');return;}
+  const origLabel=btnEl?.textContent;
+  if(btnEl){btnEl.textContent='✨ Rewriting…';btnEl.disabled=true;}
+  try{
+    const res=await _fnFetch('rewrite-notes',{text});
+    const data=await res.json();
+    if(!res.ok){toast(data.error||'Rewrite unavailable','warn',4000);return;}
+    el.value=data.rewritten;
+    el.oninput?.(); // re-trigger whichever draft-autosave is hooked on this field
+    if(navigator.vibrate)navigator.vibrate([20]);
+    toast('✨ Rewritten — check it over before saving','success');
+  }catch(e){
+    toast('❌ Rewrite failed: '+(e.message||'').slice(0,80),'error');
+  }finally{
+    if(btnEl){btnEl.textContent=origLabel;btnEl.disabled=false;}
+  }
+}
+function rewriteJobNotes(btn){ _rewriteTextarea('job-notes',btn); }
+function rewriteAddJobDesc(btn){ _rewriteTextarea('aj-desc',btn); }
 
 function _waShareNotes(){
   const notes=document.getElementById('job-notes')?.value||'';
@@ -1796,7 +1838,7 @@ Object.assign(window, {
   checkOfficeConnection, clearConduit, closeModal, closeQN, closeUserMenu, dismissAlert,
   doLogout, doPinLogin, doPinSetup, handleUpload, openAddJobModal, openJob,
   openLeaveForm, openOvertimeForm, openQN, openUserMenu, quickStatusUpdate,
-  refreshAll, saveHours, saveNotes, sendOmwClient, sendOmwOffice, setMapView,
+  refreshAll, rewriteAddJobDesc, rewriteJobNotes, saveHours, saveNotes, sendOmwClient, sendOmwOffice, setMapView,
   setQuality, showTool, submitAddJob, submitLeaveRequest,
   submitOvertimeRequest, switchTab, toggleGuide, toggleSort, toggleTheme,
   updateConduit, updateStatus,

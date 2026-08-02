@@ -842,7 +842,7 @@ input:checked + .mcb-slider:before{transform:translateX(23px);background:#f5a623
         <option>Plumbing</option>
         <option>General</option>
       </select>
-      <label class="form-label">Description / Issue Found</label>
+      <label class="form-label" style="display:flex;align-items:center;justify-content:space-between">Description / Issue Found<button type="button" class="notes-tool-btn" style="margin:0" onclick="rewriteAddJobDesc(this)">✨ Rewrite</button></label>
       <textarea class="fi-sm" id="aj-desc" rows="4" placeholder="Describe the job or issue…" style="resize:none"></textarea>
       <label class="form-label">Priority</label>
       <select class="fi-sm" id="aj-priority">
