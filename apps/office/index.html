@@ -4209,10 +4209,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS last_accuracy integer;</div>
       <div class="fg"><label class="fl">Time Slot</label><input type="text" id="jf-time" class="fi" placeholder="e.g. 9:00–11:00 AM"></div>
       <div class="fg"><label class="fl">Access Type</label><select id="jf-access" class="fs" onchange="handleAccess(this)"></select></div>
       <div class="fg" id="jf-contact-grp"><label class="fl" id="jf-contact-lbl">Contact / Code</label><input type="text" id="jf-contact" class="fi"></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        <div class="fg"><label class="fl">Hours</label><input type="number" id="jf-hours" class="fi" placeholder="0" step="0.5" min="0"></div>
-        <div class="fg"><label class="fl">Price (£)</label><input type="number" id="jf-price" class="fi" placeholder="0.00" step="0.01" min="0"></div>
-      </div>
+      <div class="fg"><label class="fl">Price (£)</label><input type="number" id="jf-price" class="fi" placeholder="0.00" step="0.01" min="0"></div>
       <div class="fg"><label class="fl">Priority</label><select id="jf-priority" class="fs"><option value="Normal">Normal</option><option value="Emergency">🚨 Emergency</option><option value="Urgent">🔥 Urgent</option><option value="Certificate">📋 Certificate</option><option value="Repair">🔧 Repair</option><option value="Low">Low</option></select></div>
       <div class="fg"><label class="fl">Status</label>
         <select id="jf-status" class="fs">

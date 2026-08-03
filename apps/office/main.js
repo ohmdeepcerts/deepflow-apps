@@ -167,7 +167,7 @@ setInterval(()=>{
   const mo=document.getElementById('mo-job');
   if(mo&&mo.classList.contains('open')){
     const d={};
-    const ids=['jf-addr','jf-ref','jf-desc','jf-time','jf-eng','jf-date','jf-access','jf-contact','jf-hours','jf-price','jf-priority','jf-status','jf-notes','jf-ll-name','jf-ll-phone','jf-ll-email','jf-ll-addr','jf-ll-wa','jf-agency','jf-agent'];
+    const ids=['jf-addr','jf-ref','jf-desc','jf-time','jf-eng','jf-date','jf-access','jf-contact','jf-price','jf-priority','jf-status','jf-notes','jf-ll-name','jf-ll-phone','jf-ll-email','jf-ll-addr','jf-ll-wa','jf-agency','jf-agent'];
     ids.forEach(id=>{const el=document.getElementById(id);if(el)d[id]=el.value;});
     localStorage.setItem('df_job_draft',JSON.stringify(d));
   }
@@ -3587,7 +3587,6 @@ async function openJobModal(id){
       if(d['jf-date'])f('jf-date').value=d['jf-date'];
       if(d['jf-access'])f('jf-access').value=d['jf-access'];
       if(d['jf-contact'])f('jf-contact').value=d['jf-contact'];
-      if(d['jf-hours'])f('jf-hours').value=d['jf-hours'];
       if(d['jf-price'])f('jf-price').value=d['jf-price'];
       if(d['jf-priority'])f('jf-priority').value=d['jf-priority'];
       if(d['jf-status'])f('jf-status').value=d['jf-status'];
@@ -3634,7 +3633,7 @@ async function openJobModal(id){
       f('jf-date').value=j.date||jDate;
       f('jf-desc').value=j.description||'';setTimeout(()=>autoGrowById('jf-desc'),10);f('jf-time').value=j.timeSlot||'';
       f('jf-access').value=j.access||'';f('jf-contact').value=j.contact||'';
-      f('jf-hours').value=j.hours||'';f('jf-price').value=getUserPerm('seePrice')?(j.price||''):'';
+      f('jf-price').value=getUserPerm('seePrice')?(j.price||''):'';
       f('jf-notes').value=j.notes||'';f('jf-status').value=j.status||'Pending';
       f('jf-priority').value=j.priority||'Normal';
       // If linked to a multi-item invoice, that invoice is the single source
@@ -3710,7 +3709,7 @@ async function openJobModal(id){
     });
   } else {
     document.getElementById('mo-job-title').textContent='📋 New Job';
-    ['jf-addr','jf-ref','jf-desc','jf-time','jf-contact','jf-hours','jf-price','jf-notes',
+    ['jf-addr','jf-ref','jf-desc','jf-time','jf-contact','jf-price','jf-notes',
      'jf-ll-name','jf-ll-phone','jf-ll-email','jf-ll-addr','jf-ll-wa','jf-ll-notes',
      'jf-agency','jf-agency-phone','jf-agency-email','jf-agent','jf-agent-phone','jf-agent-email','jf-agency-notes'
     ].forEach(x=>f(x).value='');
@@ -3873,7 +3872,7 @@ function confirmKS(){
 
 function clearJobForm(){
   // Clear ALL form fields
-  const fields=['jf-addr','jf-ref','jf-desc','jf-time','jf-eng','jf-access','jf-contact','jf-hours','jf-price','jf-priority','jf-status','jf-notes','jf-ll-name','jf-ll-phone','jf-ll-email','jf-ll-addr','jf-ll-wa','jf-ll-notes','jf-agency','jf-agency-phone','jf-agency-email','jf-agent','jf-agent-phone','jf-agent-email','jf-agency-notes'];
+  const fields=['jf-addr','jf-ref','jf-desc','jf-time','jf-eng','jf-access','jf-contact','jf-price','jf-priority','jf-status','jf-notes','jf-ll-name','jf-ll-phone','jf-ll-email','jf-ll-addr','jf-ll-wa','jf-ll-notes','jf-agency','jf-agency-phone','jf-agency-email','jf-agent','jf-agent-phone','jf-agent-email','jf-agency-notes'];
   fields.forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   // Reset job date to today, engineer to default
   document.getElementById('jf-date').value=TODAY();
@@ -3980,7 +3979,10 @@ async function saveJob(){
     timeSlot:document.getElementById('jf-time').value.trim(),
     access:document.getElementById('jf-access').value,
     contact:document.getElementById('jf-contact').value.trim(),
-    hours:parseFloat(document.getElementById('jf-hours').value)||0,
+    // No hours input in this form — jobs are priced per-job, not hourly.
+    // Preserve whatever's already stored (engineers can still log hours of
+    // their own via the Employee App) instead of wiping it on every save.
+    hours:existingJob?.hours||0,
     // seePrice/seeLandlord/seeLandlordPhone gate what the form DISPLAYS
     // (see openJobModal: hidden fields show '' / '[Hidden]' placeholders).
     // A user without that permission must never have those placeholders
