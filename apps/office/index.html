@@ -4327,6 +4327,14 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS last_accuracy integer;</div>
 
   </div><!-- /jm-3col -->
 
+  <!-- INVOICE — the third piece of "whole process" alongside the job itself
+       and the engineer's field notes/photos above/below. Hidden for new jobs
+       (nothing to link yet); populated in openJobModal(). -->
+  <div id="jm-invoice-panel" style="display:none;margin-top:18px;border-top:1px solid var(--border);padding-top:16px">
+    <div style="font-family:var(--fh);font-weight:700;font-size:13px;color:var(--txt1);margin-bottom:10px">🧾 Invoice</div>
+    <div id="jm-invoice-body"></div>
+  </div>
+
   <!-- PHOTOS & FILES — loaded from Supabase when editing existing job -->
   <div id="jm-photos-panel" style="display:none;margin-top:18px;border-top:1px solid var(--border);padding-top:16px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">

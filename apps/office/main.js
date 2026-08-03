@@ -3655,6 +3655,33 @@ async function openJobModal(id){
           <button type="button" class="btn btn-ghost btn-sm" onclick="closeModal('mo-job');openInvoiceForJob('${j.id}')">Open Invoice →</button>`;
         descEl.insertAdjacentElement('afterend', note);
       }
+      // Invoice panel — the third piece of the "whole story" for this job,
+      // alongside the job details above and the engineer's field notes/
+      // photos below. Reuses the same lookup already done for the
+      // multi-item lock check above rather than fetching invoices twice.
+      const invPanel=document.getElementById('jm-invoice-panel');
+      const invBody=document.getElementById('jm-invoice-body');
+      if(invPanel && invBody){
+        invPanel.style.display='';
+        if(_linkedInvForLock){
+          const inv=_linkedInvForLock;
+          const t=calcInvTotal(inv);
+          const statusColors={'Draft':'#94a3b8','Awaiting Payment':'#f59e0b','Paid':'#25d58e','Cancelled':'#e05252','Credit Note':'#7c3aed'};
+          const sc=statusColors[inv.status]||'#94a3b8';
+          invBody.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--s2);border-radius:10px;padding:12px 16px;flex-wrap:wrap">
+            <div>
+              <div style="font-size:13px;font-weight:700;color:var(--txt1)">${inv.number||'Invoice'} <span style="font-size:10px;font-weight:700;color:${sc};background:${sc}18;padding:2px 8px;border-radius:20px;margin-left:6px">${inv.status||'Draft'}</span></div>
+              <div style="font-size:11px;color:var(--txt3);margin-top:3px">£${t.grand.toFixed(2)}${inv.dueDate?' · due '+formatDateUK(inv.dueDate):''}</div>
+            </div>
+            <button type="button" class="btn btn-acc btn-sm" onclick="closeModal('mo-job');openInvoiceForJob('${j.id}')">View Invoice →</button>
+          </div>`;
+        } else {
+          invBody.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--s2);border-radius:10px;padding:12px 16px;flex-wrap:wrap">
+            <div style="font-size:12px;color:var(--txt3)">No invoice created for this job yet.</div>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="closeModal('mo-job');createInvFromJob('${j.id}')">+ Create Invoice</button>
+          </div>`;
+        }
+      }
       // Restore cert chip selections
       renderCertChips(j.certTypes||[]);
       // Tab 2 — Landlord
@@ -3693,6 +3720,7 @@ async function openJobModal(id){
     renderCertChips([]);
     document.getElementById('btn-delete-job').style.display='none';
     document.getElementById('jm-photos-panel').style.display='none';
+    document.getElementById('jm-invoice-panel').style.display='none';
     document.getElementById('btn-wa-this-job').style.display='none';
     document.getElementById('btn-wa-ll').style.display='none';
     document.getElementById('jm-ll-info').classList.remove('visible');
@@ -6266,7 +6294,15 @@ async function openInvoiceForJob(jobId){
   if(!jobId)return;
   const invs=await dAll('invoices');
   const inv=invs.find(i=>i.jobId===jobId||i.linkedJobId===jobId);
-  if(inv){viewInv(inv.id);nav('inv');}
+  if(inv){
+    nav('inv');
+    // The Invoices page defaults to its own Dashboard sub-view — viewInv()
+    // only fills the detail box that lives under the "All Invoices"
+    // sub-tab, so without switching there first this silently populated a
+    // hidden element (confirmed live: box had content but display:none).
+    invNavSelect('all');
+    setTimeout(()=>viewInv(inv.id),300);
+  }
   else{toast('No invoice for this job yet','warn');}
 }
 
@@ -14221,7 +14257,7 @@ Object.assign(window, {
   loadStorageStats, loadTeam, markInvPaid, markInvSent, markInvUnpaid, matchDir, 
   mergeJobsInvoice, nav, onMapViewChange, oneClickBackup, openAgencyModal, openAgentModal, 
   openBroadcast, openCertForm, openCmd, openCreditNoteModal, openDisposableModal, openEngDeepReport, 
-  openEngDir, openExpenseModal, openImportModal, openInvSendModal, openJobForInvoice, openJobModal, openJobModalByNum, openMergeModal,
+  openEngDir, openExpenseModal, openImportModal, openInvoiceForJob, openInvSendModal, openJobForInvoice, openJobModal, openJobModalByNum, openMergeModal,
   openOvertimeModal, openPLDashboard, openPaymentModal, openPersonModal, openPersonModalFor, openPersonWA,
   toggleArchivePerson,
   openPropModal, openStandaloneProformaModal, openWhatsApp, postComment, previewCertPdf,
@@ -14361,14 +14397,14 @@ async function showClientCreditCheck(clientName){
     const lastPmtAmt=lastPmt?calcInvTotal(lastPmt).grand.toFixed(2):'0.00';
     const daysSinceLast=lastPmt?Math.floor((now-new Date(lastPmt.date))/(1000*60*60*24)):9999;
     
-        document.getElementById('credit-stats').innerHTML=`<div><span style=\"color:var(--txt3);font-size:10px;text-transform:uppercase;font-weight:700\">Unpaid Amount</span><span style=\"font-weight:800;font-size:14px;color:\${riskColor}\">&pound;\${unpaidAmount.toLocaleString('en-GB',{style:'currency',currency:'GBP'})}</span></div>
-      <div style=\"display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);\"><span>Overdue Invoices</span><span style=\"font-weight:700;color:var(--red)\">\${overdue.length}</span></div>
-      <div style=\"display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);\"><span>Last Payment</span><span style=\"font-weight:700\">\${lastPmtDate}</span></div>
-      <div style=\"display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);\"><span>Last Amount</span><span style=\"font-weight:700;color:var(--green)\">&pound;\${lastPmtAmt}</span></div>
-      <div style=\"display:flex;justify-content:space-between;padding:4px 0;\"><span>Days Since Last Payment</span><span style=\"font-weight:700;color:\${daysSinceLast>30?'var(--red)':'var(--green)'}\">\${daysSinceLast}</span></div>
-      <div style=\"display:flex;justify-content:space-between;padding:4px 0;border-top:1px solid var(--border);margin-top:4px;\"><span>Total Invoices</span><span style=\"font-weight:700\">\${clientInvs.length}</span></div>
-      <div style=\"display:flex;justify-content:space-between;padding:4px 0;\"><span>Paid</span><span style=\"font-weight:700;color:var(--green)\">\${paid.length}</span></div>
-      <div style=\"display:flex;justify-content:space-between;padding:4px 0;\"><span>Unpaid</span><span style=\"font-weight:700;color:\${unpaid.length>0?'var(--red)':'var(--green)'}\">\${unpaid.length}</span></div>`;
+        document.getElementById('credit-stats').innerHTML=`<div><span style="color:var(--txt3);font-size:10px;text-transform:uppercase;font-weight:700">Unpaid Amount</span><span style="font-weight:800;font-size:14px;color:${riskColor}">&pound;${unpaidAmount.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);"><span>Overdue Invoices</span><span style="font-weight:700;color:var(--red)">${overdue.length}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);"><span>Last Payment</span><span style="font-weight:700">${lastPmtDate}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);"><span>Last Amount</span><span style="font-weight:700;color:var(--green)">&pound;${lastPmtAmt}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:4px 0;"><span>Days Since Last Payment</span><span style="font-weight:700;color:${daysSinceLast>30?'var(--red)':'var(--green)'}">${daysSinceLast}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:4px 0;border-top:1px solid var(--border);margin-top:4px;"><span>Total Invoices</span><span style="font-weight:700">${clientInvs.length}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:4px 0;"><span>Paid</span><span style="font-weight:700;color:var(--green)">${paid.length}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:4px 0;"><span>Unpaid</span><span style="font-weight:700;color:${unpaid.length>0?'var(--red)':'var(--green)'}">${unpaid.length}</span></div>`;
 
     // Show payment history list
     const historyContainer = document.getElementById('credit-payment-history');

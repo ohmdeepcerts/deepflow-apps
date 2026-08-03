@@ -264,7 +264,7 @@ export async function renderEngReport(){
                 <div style="flex:1;color:var(--txt);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">${escHtml(j.address)||'—'}</div>
                 <div style="color:var(--txt2);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0">${escHtml(j.description)||'—'}</div>
                 <div style="font-size:9px;font-weight:700;color:${sc};background:${sc}18;padding:2px 6px;border-radius:6px;white-space:nowrap;flex-shrink:0">${j.status}</div>
-                ${invoiced?`<div style="font-weight:700;color:var(--acc);min-width:50px;text-align:right;flex-shrink:0">£${invoiced.toFixed(0)}</div>`:'<div style="min-width:50px;flex-shrink:0"></div>'}
+                ${invoiced?`<div style="font-weight:700;color:var(--acc);min-width:50px;text-align:right;flex-shrink:0;cursor:pointer;text-decoration:underline;text-decoration-style:dotted" onclick="event.stopPropagation();nav('inv');invNavSelect('all');setTimeout(()=>viewInv('${inv.id}'),300)" title="View invoice">£${invoiced.toFixed(0)}</div>`:'<div style="min-width:50px;flex-shrink:0"></div>'}
                 ${profit>0?`<div style="font-size:9px;font-weight:700;color:var(--green);min-width:52px;text-align:right;flex-shrink:0">+£${profit.toFixed(0)}</div>`:profit<0?`<div style="font-size:9px;color:var(--red);min-width:52px;text-align:right;flex-shrink:0">-£${Math.abs(profit).toFixed(0)}</div>`:'<div style="min-width:52px;flex-shrink:0"></div>'}
               </div>`;
             }).join(''):'<div style="font-size:11px;color:var(--txt3);padding:8px 0">No jobs in selected period.</div>'}
@@ -533,7 +533,7 @@ export async function _renderEngDeepJobsList(engName){
           <span style="font-size:9px;font-weight:700;color:${sc};background:${sc}18;padding:2px 8px;border-radius:6px;text-align:center;white-space:nowrap">${j.status}</span>
           <span style="font-size:10px;color:var(--txt2)">${escHtml(j.trade)||'—'}</span>
           <span style="text-align:right;font-weight:600">${price?"£"+price.toFixed(0):"—"}</span>
-          <span style="text-align:right;font-weight:700;color:${invTotal?"var(--acc)":"var(--txt3)"}">${invTotal?"£"+invTotal.toFixed(0):"—"}</span>
+          <span style="text-align:right;font-weight:700;color:${invTotal?"var(--acc)":"var(--txt3)"}${invTotal?";cursor:pointer;text-decoration:underline;text-decoration-style:dotted":""}" ${invTotal?`onclick="event.stopPropagation();nav('inv');invNavSelect('all');setTimeout(()=>viewInv('${inv.id}'),300)" title="View invoice"`:''}>${invTotal?"£"+invTotal.toFixed(0):"—"}</span>
           <div style="text-align:right;display:flex;align-items:center;justify-content:flex-end;gap:4px">
             ${profit>0?`<span style="color:var(--green);font-weight:700">+£${profit.toFixed(0)}</span>`:profit<0?`<span style="color:var(--red)">-£${Math.abs(profit).toFixed(0)}</span>`:'<span style="color:var(--txt3)">—</span>'}
             ${noInv?`<button class="btn btn-sm" style="font-size:9px;padding:2px 6px;background:var(--green);color:#fff" onclick="event.stopPropagation();createInvFromJob('${j.id}')" title="Create Invoice">£</button>`:''}
