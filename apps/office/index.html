@@ -2400,27 +2400,6 @@ body.density-relaxed .jtable td{font-size:15px}
     </div>
   </div>
 
-  <!-- TIMESHEETS -->
-  <div class="page" id="pg-ts">
-    <div class="ts-wrap">
-      <div style="font-family:var(--fh);font-size:18px;font-weight:700;margin-bottom:16px;display:flex;align-items:center;gap:12px">
-        Timesheets
-        <button class="btn btn-ghost btn-sm" onclick="exportTSCSV()" style="margin-left:auto">⬇ Export CSV</button>
-      </div>
-      <div class="ts-layout">
-        <div>
-          <div style="font-size:9px;color:var(--txt3);letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;font-family:var(--fh);font-weight:600">Engineers</div>
-          <div class="ts-eng-list" id="ts-eng-list"></div>
-          <div style="margin-top:12px">
-            <div style="font-size:9px;color:var(--txt3);letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;font-family:var(--fh);font-weight:600">Week Summary</div>
-            <div class="panel" id="ts-week-summary"></div>
-          </div>
-        </div>
-        <div id="ts-detail-panel"><div class="empty"><div class="ei">◷</div><p>Select an engineer</p></div></div>
-      </div>
-    </div>
-  </div>
-
   <!-- REPORTS -->
   <!-- ENGINEER REQUESTS PAGE -->
   <div class="page" id="pg-req" style="flex-direction:column!important;overflow:hidden">
@@ -3801,7 +3780,7 @@ body.density-relaxed .jtable td{font-size:15px}
           <div class="set-title">💾 Data & Reports</div>
           <div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap">
             <button class="btn btn-ghost btn-sm" onclick="nav('exp')">🧾 Expenses</button>
-            <button class="btn btn-ghost btn-sm" onclick="nav('ts')">◷ Timesheets</button>
+            <button class="btn btn-ghost btn-sm" onclick="openOvertimeModal()">⏱ Log OT/Absence</button>
             <button class="btn btn-ghost btn-sm" onclick="nav('rep')">▦ Reports</button>
           </div>
           <div class="set-card" style="margin-bottom:12px">

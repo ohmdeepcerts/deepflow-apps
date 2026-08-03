@@ -35,9 +35,6 @@ import {
   openExpenseModal, saveExpense, deleteCurrentExpense, renderExpenses, exportExpensesCSV,
 } from './expenses.js';
 import { openCreditNoteModal, addCreditItem, fillCreditNote, saveCreditNote, creditNote } from './credit-notes.js';
-import {
-  getWeekDates, renderTS, selEngineer, renderTSDetail, waTimesheetSummary, getTsOff,
-} from './timesheets.js';
 import { renderInvCustomTexts, addInvCustomText, removeInvCustomText } from './invoice-custom-text.js';
 import { renderSqlSnippets, copySql } from './sql-guide.js';
 import { exportMasterXLSX } from './master-xlsx-export.js';
@@ -565,7 +562,6 @@ export function nav(pg){
   if(pg==='inv') { renderInvSubnavKPIs(); invNavSelect('dashboard'); updateInvSmartBanner(); }
   if(pg==='stmt') renderStmt();
   if(pg==='exp') renderExpenses();
-  if(pg==='ts') renderTS();
   if(pg==='rep') renderReports();
   if(pg==='engrep'){initEngReport();renderEngReport();}
   if(pg==='audit') initAuditLog();
@@ -3181,30 +3177,9 @@ async function _autoInvoiceInner(j){
     return;
   }
 
-  // TASK 24: Build line items intelligently:
-  // 1. Labour line from engineer hours × hourly rate (if hours were logged)
-  // 2. Fallback to job price field if no hours, or as a separate materials line
-  const engObj=(S.engineers||[]).find(e=>e.name===j.engineer);
-  const hourlyRate=engObj?.rate||0;
-  const hours=parseFloat(j.hours)||0;
+  // Jobs are priced per-job, not per-hour — one line item at the job's price.
   const jobPrice=Number(j.price)||0;
-
-  const items=[];
-  if(hours>0&&hourlyRate>0){
-    // Hours logged + rate known → Labour line
-    items.push({desc:`Labour — ${j.description||j.trade||'Works'} (${hours}h @ £${hourlyRate}/h)`,qty:hours,unit:hourlyRate,vat:true});
-    // If job also has a separate price (materials), add it as a second line
-    if(jobPrice>0&&Math.abs(jobPrice-(hours*hourlyRate))>0.01){
-      items.push({desc:`Materials / Additional — ${j.description||j.address}`,qty:1,unit:jobPrice,vat:true});
-    }
-  } else if(hours>0){
-    // Hours logged but no rate → show hours, zero price so office can fill in
-    items.push({desc:`Labour — ${j.description||j.trade||'Works'} (${hours}h)`,qty:hours,unit:0,vat:true});
-    if(jobPrice>0) items.push({desc:`Works at ${j.address}`,qty:1,unit:jobPrice,vat:true});
-  } else {
-    // No hours — use job price as a single line
-    items.push({desc:j.description||'Labour',qty:1,unit:jobPrice,vat:true});
-  }
+  const items=[{desc:j.description||'Labour',qty:1,unit:jobPrice,vat:true}];
   // description field = combined line item descs (single source of truth)
   const invDescription = items.map(i=>i.desc).filter(Boolean).join('; ');
 
@@ -3255,7 +3230,7 @@ async function _autoInvoiceInner(j){
   // the job's status to Invoiced or recorded the link back to the invoice.
   await _sb(`jobs?id=eq.${encodeURIComponent(j.id)}`,{method:'PATCH',body:{status:STATUS.INVOICED,linkedinvid:inv.id,modified:Date.now()},prefer:'return=minimal'})
     .catch(e=>console.warn('[DeepFlow] Failed to flip job to Invoiced after auto-creating',inv.number,'— invoice exists but job status/link may be stale:',e));
-  await logActivity(`Draft invoice ${inv.number} auto-created for ${client.name} (${hours?hours+'h':('£'+jobPrice)})`, 'invoice');
+  await logActivity(`Draft invoice ${inv.number} auto-created for ${client.name} (£${jobPrice})`, 'invoice');
   toast(`📄 Draft invoice ${inv.number} created — review in Invoices`,'info',5000);
   updateBadges();
   generateAndStoreInvoicePDF(inv.id).catch(e=>console.warn('[DeepFlow] PDF generation for auto-created invoice failed',e));
@@ -3979,10 +3954,6 @@ async function saveJob(){
     timeSlot:document.getElementById('jf-time').value.trim(),
     access:document.getElementById('jf-access').value,
     contact:document.getElementById('jf-contact').value.trim(),
-    // No hours input in this form — jobs are priced per-job, not hourly.
-    // Preserve whatever's already stored (engineers can still log hours of
-    // their own via the Employee App) instead of wiping it on every save.
-    hours:existingJob?.hours||0,
     // seePrice/seeLandlord/seeLandlordPhone gate what the form DISPLAYS
     // (see openJobModal: hidden fields show '' / '[Hidden]' placeholders).
     // A user without that permission must never have those placeholders
@@ -5274,22 +5245,9 @@ async function createInvFromJob(jobId){
     const j=await dGet('jobs',jobId);
     if(!j){toast('Job not found — try refreshing','error');return;}
 
-    // Build line items from job data
-    const engObj=(S.engineers||[]).find(e=>e.name===j.engineer);
-    const hourlyRate=engObj?.rate||0;
-    const hours=parseFloat(j.hours)||0;
+    // Build line items from job data — jobs are priced per-job, not per-hour.
     const jobPrice=Number(j.price)||0;
-
-    if(hours>0&&hourlyRate>0){
-      invItems=[{desc:`Labour — ${j.description||j.trade||'Works'} (${hours}h @ £${hourlyRate}/h)`,qty:hours,unit:hourlyRate,vat:true}];
-      if(jobPrice>0&&Math.abs(jobPrice-(hours*hourlyRate))>0.01)
-        invItems.push({desc:`Materials — ${j.address}`,qty:1,unit:jobPrice,vat:true});
-    } else if(hours>0){
-      invItems=[{desc:`Labour — ${j.description||j.trade||'Works'} (${hours}h)`,qty:hours,unit:0,vat:true}];
-      if(jobPrice>0) invItems.push({desc:`Works at ${j.address}`,qty:1,unit:jobPrice,vat:true});
-    } else {
-      invItems=[{desc:j.description||j.address||'Works',qty:1,unit:jobPrice,vat:true}];
-    }
+    invItems=[{desc:j.description||j.address||'Works',qty:1,unit:jobPrice,vat:true}];
 
     editInvId=null;
     window._pendingJobLink=jobId;
@@ -7754,12 +7712,11 @@ async function renderReports(){
   const completedJobs=period.filter(j=>j.status===STATUS.COMPLETED||j.status===STATUS.INVOICED).length;
   const revenue=paidInvs.reduce((s,i)=>s+calcInvTotal(i).grand,0);
   const outstanding=awaitInvs.reduce((s,i)=>s+calcInvTotal(i).grand,0);
-  const totalHrs=period.reduce((s,j)=>s+(j.hours||0),0);
 
   // By trade
   const byTrade={};period.forEach(j=>{if(j.trade){if(!byTrade[j.trade])byTrade[j.trade]=0;byTrade[j.trade]++}});
   // By engineer
-  const byEng={};period.forEach(j=>{if(j.engineer){if(!byEng[j.engineer])byEng[j.engineer]={jobs:0,hrs:0};byEng[j.engineer].jobs++;byEng[j.engineer].hrs+=j.hours||0}});
+  const byEng={};period.forEach(j=>{if(j.engineer){if(!byEng[j.engineer])byEng[j.engineer]={jobs:0};byEng[j.engineer].jobs++}});
   // By status
   const bySt={};period.forEach(j=>{if(!bySt[j.status])bySt[j.status]=0;bySt[j.status]++});
 
@@ -7770,8 +7727,6 @@ async function renderReports(){
       <div class="rep-stat"><span>Total Jobs</span><span class="rep-stat-val" style="color:var(--acc)">${totalJobs}</span></div>
       <div class="rep-stat"><span>Completed</span><span class="rep-stat-val" style="color:var(--green)">${completedJobs}</span></div>
       <div class="rep-stat"><span>Completion Rate</span><span class="rep-stat-val">${totalJobs?Math.round(completedJobs/totalJobs*100):0}%</span></div>
-      <div class="rep-stat"><span>Total Hours Logged</span><span class="rep-stat-val">${totalHrs}h</span></div>
-      <div class="rep-stat"><span>Avg Hours/Job</span><span class="rep-stat-val">${totalJobs?(totalHrs/totalJobs).toFixed(1):'0'}h</span></div>
     </div>
     <div class="rep-card">
       <div class="rep-title">💰 Financial Summary</div>
@@ -7786,7 +7741,7 @@ async function renderReports(){
     </div>
     <div class="rep-card">
       <div class="rep-title">👷 Engineer Performance</div>
-      ${Object.entries(byEng).sort((a,b)=>b[1].jobs-a[1].jobs).map(([e,v])=>`<div class="rep-stat"><span>${e}</span><span class="rep-stat-val">${v.jobs} jobs · ${v.hrs}h</span></div>`).join('')||'<div style="color:var(--txt3);font-size:12px">No data</div>'}
+      ${Object.entries(byEng).sort((a,b)=>b[1].jobs-a[1].jobs).map(([e,v])=>`<div class="rep-stat"><span>${e}</span><span class="rep-stat-val">${v.jobs} jobs</span></div>`).join('')||'<div style="color:var(--txt3);font-size:12px">No data</div>'}
     </div>
     <div class="rep-card">
       <div class="rep-title">📋 Jobs by Status</div>
@@ -9629,19 +9584,11 @@ async function renderEngView(){
     if(eng!=='Unassigned'&&jobs.length===0) return; // skip empty engineers unless unassigned
     const col=document.createElement('div');
     col.className='eng-col'+(eng==='Unassigned'?' unassigned-col':'');
-    const engObj=(S.engineers||[]).find(e=>e.name===eng)||{};
-    const totalHrs=jobs.reduce((s,j)=>s+(j.hours||0),0);
-    const cap=engObj.capacity||8;
-    const pct=Math.min(100,totalHrs/cap*100);
-    const capColor=pct>90?'var(--red)':pct>70?'var(--yellow)':'var(--green)';
-
     col.innerHTML=`
       <div class="eng-col-hd">
         <div>
           <div class="eng-col-name">${eng==='Unassigned'?'⚠️ Unassigned':eng}</div>
-          <div class="eng-col-count">${jobs.length} job${jobs.length!==1?'s':''} · ${totalHrs}h</div>
-          ${eng!=='Unassigned'?`<div style="margin-top:6px;height:3px;background:var(--border);border-radius:2px;width:120px"><div style="height:100%;width:${pct}%;background:${capColor};border-radius:2px;transition:width .3s"></div></div>
-          <div style="font-size:10px;color:var(--txt3);margin-top:2px">${totalHrs}/${cap}h capacity</div>`:''}
+          <div class="eng-col-count">${jobs.length} job${jobs.length!==1?'s':''}</div>
         </div>
         ${eng!=='Unassigned'?`<div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">
           <button class="btn btn-wa btn-xs" onclick="waEngineerAllJobs('${eng}')">📱 All Jobs</button>
@@ -11118,8 +11065,8 @@ function addChecklistTrade(){
 }
 async function exportAllCSV(){
   const jobs=await dAll('jobs');
-  const rows=[['Date','Address','Referrer','Trade','Engineer','Description','Time','Hours','Price','Status','Priority']];
-  jobs.forEach(j=>rows.push([j.date,j.address,j.referrer,j.trade,j.engineer,j.description,j.timeSlot,j.hours||0,j.price||0,j.status,j.priority||'Normal']));
+  const rows=[['Date','Address','Referrer','Trade','Engineer','Description','Time','Price','Status','Priority']];
+  jobs.forEach(j=>rows.push([j.date,j.address,j.referrer,j.trade,j.engineer,j.description,j.timeSlot,j.price||0,j.status,j.priority||'Normal']));
   const csv=rows.map(r=>r.map(c=>`"${String(c||'').replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob=new Blob([csv],{type:'text/csv'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);
@@ -12031,7 +11978,6 @@ async function saveOvertimeLog(){
   await logActivity(`${label} logged for ${eng} on ${date}`,'timesheet');
   toast(`${label} recorded for ${eng}`,'success');
   closeModal('mo-overtime');
-  if(curPg==='ts') renderTSDetail();
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -12203,36 +12149,6 @@ function showAgeBucket(key){
       </table>
     </div>
   `;
-}
-
-// ════════════════════════════════════════════════════════════════
-//  TIMESHEET CSV EXPORT
-// ════════════════════════════════════════════════════════════════
-async function exportTSCSV(){
-  const dates=getWeekDates(getTsOff());
-  const allJobs=await dAll('jobs');
-  const allOT=await dAll('overtime');
-  const wkLabel=`${dates[0]}_${dates[6]}`;
-  
-  let rows=[['Engineer','Date','Address','Description','Trade','Hours','Status','Pay (£)']];
-  
-  (S.engineers||[]).forEach(eng=>{
-    const ejobs=allJobs.filter(j=>j.engineer===eng.name&&dates.includes(j.date));
-    ejobs.forEach(j=>{
-      rows.push([eng.name,j.date,j.address,j.description,j.trade,j.hours||0,j.status,((j.hours||0)*(eng.rate||0)).toFixed(2)]);
-    });
-    // OT entries
-    const eot=allOT.filter(o=>o.engineer===eng.name&&dates.includes(o.date));
-    eot.forEach(o=>{
-      rows.push([eng.name,o.date,'—',o.label,'—',o.hours>0?o.hours:0,o.type,(o.hours>0?(o.hours*(eng.otRate||eng.rate||0)):0).toFixed(2)]);
-    });
-  });
-  
-  const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
-  const blob=new Blob([csv],{type:'text/csv'});
-  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
-  a.download=`DeepFlow-Timesheet-${wkLabel}.csv`;a.click();
-  toast('Timesheet CSV exported','success');
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -14252,7 +14168,7 @@ Object.assign(window, {
   dupUpdateName, dupUseExisting, duplicateInv, duplicateJob, editCertRecord, executeMerge, exportAllCSV,
   exportAuditLog, exportBackup, exportCertCSV, exportCertPDF, exportEngReport, exportEngReportPDF, 
   exportExpensesCSV, exportInvsCSV, exportMasterXLSX, exportPLCSV, exportPropsCSV, exportReportPDF, 
-  exportTSCSV, extractCertFromPhoto, fillCreditNote, fillFromMatch, filterCerts, fuzzyAddr, generateBulkReminder,
+  extractCertFromPhoto, fillCreditNote, fillFromMatch, filterCerts, fuzzyAddr, generateBulkReminder,
   handleAccess, handleLogoUpload, handleNotifClick, handlePriDotClick, importBackup, importCertCSV,
   invClientSelected, invNavSelect, jCalPickDate, jPickDate, jcalShiftMonth, kanbanDragOver, 
   kanbanDragStart, kanbanDrop, loadEarlierJobs, loadEngPerms, loadEngineerLocations, loadStorageDashboard, 
@@ -14272,7 +14188,7 @@ Object.assign(window, {
   saveAgent, saveAgentFromJob, saveAndSendInv, saveCert, saveCertExpiry, saveCertForm, 
   saveCreditNote, saveDashNotes, saveDisposableInvoice, saveEngDefaults, saveExpense, saveInv, 
   saveJob, saveLandlordFromJob, saveNotifSettings, saveOvertimeLog, savePayment, savePerson, 
-  saveProp, saveSettings, saveStandaloneProforma, searchJobForInvoice, selEngineer,
+  saveProp, saveSettings, saveStandaloneProforma, searchJobForInvoice,
   selectAddr, selectAllVisibleJobs, sendAllOverdueEmail, sendAllOverdueWA, sendBroadcast, sendInvEmail, sendInvWA,
   showPortalInviteModal,
   sendLandlordComplete, sendLandlordWA, sendOverdueWA, sendTenantWA, sendToWA, setAccent, setCremMode, setFontSize,
@@ -14285,7 +14201,7 @@ Object.assign(window, {
   toggleNotifPanel, toggleOTHours, toggleOnlinePanel, togglePersonSelect, togglePwVis, toggleSelRow, toggleSidebar, toggleTheme,
   toggleUnassignedView, toggleUserMenu, updateCertAddrSugg, updateEngPerm, updateLogo, updatePortalContact, updInvTotals,
   uploadCertPdf, viewInv, viewPropJobs, waEngineerAllJobs, waJobsSelected, waShowEng, 
-  waSingleEngJob, waSingleJob, waSingleJobById, waTimesheetSummary, 
+  waSingleEngJob, waSingleJob, waSingleJobById, 
 });
 (function(){
   if('serviceWorker' in navigator){

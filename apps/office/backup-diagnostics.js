@@ -37,8 +37,8 @@ export async function oneClickBackup(format){
   let out = '';
 
   out += '=== JOBS ===\n';
-  const jRows = [['Job#','Date','Address','Referrer','Trade','Engineer','Description','Time Slot','Hours','Price (£)','Status','Priority','Notes']];
-  jobs.forEach(j=>jRows.push([j.date,j.date,j.address,j.referrer||'',j.trade||'',j.engineer||'',j.description||'',j.timeSlot||'',j.hours||0,j.price||0,j.status,j.priority||'Normal',j.notes||'']));
+  const jRows = [['Job#','Date','Address','Referrer','Trade','Engineer','Description','Time Slot','Price (£)','Status','Priority','Notes']];
+  jobs.forEach(j=>jRows.push([j.date,j.date,j.address,j.referrer||'',j.trade||'',j.engineer||'',j.description||'',j.timeSlot||'',j.price||0,j.status,j.priority||'Normal',j.notes||'']));
   out += jRows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n') + '\n\n';
 
   out += '=== INVOICES ===\n';

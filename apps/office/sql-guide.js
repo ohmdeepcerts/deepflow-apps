@@ -15,12 +15,12 @@ export function renderSqlSnippets() {
   const SNIPPETS = [
     { title:'View all jobs (latest first)', sql:'SELECT * FROM jobs ORDER BY created DESC LIMIT 100;' },
     { title:'View all engineers', sql:'SELECT name, phone, role, pin FROM users WHERE role = \'engineer\';' },
-    { title:'Jobs completed this month', sql:`SELECT j.jobnum, j.address, j.date, j.engineer, j.hours
+    { title:'Jobs completed this month', sql:`SELECT j.jobnum, j.address, j.date, j.engineer, j.price
 FROM jobs j
 WHERE j.status = 'Completed'
   AND j.date >= date_trunc('month', current_date)::text
 ORDER BY j.date DESC;` },
-    { title:'Jobs by engineer this month', sql:`SELECT engineer, COUNT(*) as total_jobs, SUM(hours::numeric) as total_hours
+    { title:'Jobs by engineer this month', sql:`SELECT engineer, COUNT(*) as total_jobs, SUM(price::numeric) as total_price
 FROM jobs
 WHERE status = 'Completed'
   AND date >= date_trunc('month', current_date)::text

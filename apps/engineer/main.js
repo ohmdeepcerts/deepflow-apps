@@ -977,7 +977,6 @@ function _buildCard(j){
     <div class="job-meta">
       ${j.timeSlot?`<span class="job-chip chip-time">🕐 ${escHtml(j.timeSlot)}</span>`:''}
       ${j.trade?`<span class="job-chip chip-trade">🔧 ${escHtml(j.trade)}</span>`:''}
-      ${j.hours?`<span class="job-chip chip-hours">⏱ ${j.hours}h</span>`:''}
       ${certs}
     </div>
     <div class="job-quick-row" onclick="event.stopPropagation()">
@@ -1089,7 +1088,6 @@ function renderJobDetail(j,atts){
         ${_dr('Certs',(j.certTypes||[]).map(_certLabel).map(escHtml).join(', '))}
         ${_dr('Ref',escHtml(j.jobNum))}
         ${_engVisPerms.seeNotes?_dr('Details',escHtml(j.description)):''}
-        ${_dr('Hours',j.hours?j.hours+' hrs':'')}
         ${j.priority&&j.priority!=='Normal'?_dr('Priority',`<span style="color:var(--red);font-weight:800">🚨 ${escHtml(j.priority)}</span>`):''}
       </div>
     </div>
@@ -1132,15 +1130,6 @@ function renderJobDetail(j,atts){
       </div>
       <textarea class="notes-box" id="job-notes" placeholder="Issues found, materials used, observations…">${j.notes||''}</textarea>
       <button class="save-btn" onclick="saveNotes()" style="margin-top:8px">💾 Save Notes</button>
-    </div>
-
-    <!-- LOG HOURS -->
-    <div class="d-section">
-      <div class="d-section-hd">⏱ Log Hours</div>
-      <div style="display:flex;gap:8px;align-items:stretch">
-        <input class="fi-sm" type="number" id="job-hours" value="${j.hours||''}" placeholder="Hours worked" min="0" step="0.5" style="flex:1;margin-bottom:0">
-        <button class="save-btn" onclick="saveHours()" style="width:auto;padding:10px 18px;font-size:13px;margin:0">Save</button>
-      </div>
     </div>
 
     <!-- PHOTOS -->
@@ -1429,18 +1418,6 @@ async function saveNotes(){
   finally{if(btn){btn.innerHTML='💾 Save Notes';btn.disabled=false;}}
 }
 
-async function saveHours(){
-  if(!currentJob)return;
-  const hours=parseFloat(document.getElementById('job-hours')?.value);
-  if(isNaN(hours)||hours<0){toast('Enter valid hours','error');return;}
-  try{
-    const {queued}=await queueableSave(`Hours — ${currentJob.address}`, `jobs?id=eq.${currentJob.id}`, {method:'PATCH',body:{hours,modified:Date.now()}});
-    currentJob.hours=hours;
-    toast(queued?`📶 Offline — ${hours}h saved on this device, will sync automatically`:`✅ Logged ${hours}h`, queued?'warn':'success');
-    if(navigator.vibrate)navigator.vibrate(queued?[20]:[40,20,60]);
-    if(!queued) loadJobs();
-  }catch(e){toast('⚠️ Failed to save hours','error');if(navigator.vibrate)navigator.vibrate([80]);}
-}
 
 // ══════════════════════════════════════════════════════════════
 //  ADD JOB (FAB) — engineer reports new job, notifies office
@@ -1506,7 +1483,6 @@ async function loadDash(){
     const monthDone=dashJobs.filter(j=>j.status==='Completed'&&(j.date||'')>=monStart).length;
     const yearDone=dashJobs.filter(j=>j.status==='Completed'&&(j.date||'')>=yrStart).length;
     const totalDone=dashJobs.filter(j=>j.status==='Completed').length;
-    const totalHrs=dashJobs.filter(j=>j.status==='Completed').reduce((s,j)=>s+(parseFloat(j.hours)||0),0);
     const openJobs=dashJobs.filter(j=>j.status==='Pending'||j.status==='In Progress').length;
     const areas={};
     dashJobs.forEach(j=>{const p=(j.address||'').split(',');const a=(p.length>1?p[p.length-2]:p[0]||'Unknown').trim();areas[a]=(areas[a]||0)+1;});
@@ -1555,14 +1531,13 @@ async function loadDash(){
         <div class="kpi-card" style="--kc:var(--acc)"><div class="kpi-val">${todayDone}/${todayJ.length}</div><div class="kpi-lbl">Today</div></div>
         <div class="kpi-card" style="--kc:var(--green)"><div class="kpi-val">${monthDone}</div><div class="kpi-lbl">This Month</div></div>
         <div class="kpi-card" style="--kc:var(--yellow)"><div class="kpi-val">${yearDone}</div><div class="kpi-lbl">This Year</div></div>
-        <div class="kpi-card" style="--kc:var(--teal)"><div class="kpi-val">${totalHrs.toFixed(0)}h</div><div class="kpi-lbl">Total Hours</div></div>
         <div class="kpi-card" style="--kc:var(--purple)"><div class="kpi-val">${totalDone}</div><div class="kpi-lbl">All-Time Done</div></div>
         <div class="kpi-card" style="--kc:var(--orange)"><div class="kpi-val">${openJobs}</div><div class="kpi-lbl">Open Jobs</div></div>
       </div>
       ${mL.length?`<div class="dash-section"><div class="dash-sec-hd"><span class="dash-sec-title">📅 Monthly Jobs — Last 6 Months</span></div><div class="dash-sec-body">${mL.map((m,i)=>`<div class="bar-row"><div class="bar-label">${new Date(m+'-15').toLocaleDateString('en-GB',{month:'short',year:'2-digit'})}</div><div class="bar-track"><div class="bar-fill" style="width:${Math.round(mV[i]/mMx*100)}%;background:linear-gradient(90deg,var(--acc),var(--teal))"></div></div><div class="bar-count">${mV[i]}</div></div>`).join('')}</div></div>`:''}
       ${topAreas.length?`<div class="dash-section"><div class="dash-sec-hd"><span class="dash-sec-title">📍 Top Work Areas</span></div><div class="dash-sec-body">${topAreas.map(([a,n])=>`<div class="bar-row"><div class="bar-label">${a}</div><div class="bar-track"><div class="bar-fill" style="width:${Math.round(n/topAreas[0][1]*100)}%;background:linear-gradient(90deg,var(--purple),#ec4899)"></div></div><div class="bar-count">${n}</div></div>`).join('')}</div></div>`:''}
       ${topCerts.length?`<div class="dash-section"><div class="dash-sec-hd"><span class="dash-sec-title">📋 Certificates Done</span></div><div class="dash-sec-body"><div style="display:flex;flex-wrap:wrap">${topCerts.map(([ct,n])=>`<div class="cert-pill"><span class="cert-pill-n">${n}</span> ${ct}</div>`).join('')}</div></div></div>`:''}
-      ${recent.length?`<div class="dash-section"><div class="dash-sec-hd"><span class="dash-sec-title">✅ Recently Completed</span></div><div class="dash-sec-body">${recent.map(j=>`<div class="recent-row"><div class="recent-dot"></div><div style="flex:1;min-width:0"><div class="recent-addr">${j.address||'—'}</div><div class="recent-meta">${j.date||''}</div></div><div class="recent-hrs">${j.hours?j.hours+'h':''}</div></div>`).join('')}</div></div>`:''}
+      ${recent.length?`<div class="dash-section"><div class="dash-sec-hd"><span class="dash-sec-title">✅ Recently Completed</span></div><div class="dash-sec-body">${recent.map(j=>`<div class="recent-row"><div class="recent-dot"></div><div style="flex:1;min-width:0"><div class="recent-addr">${j.address||'—'}</div><div class="recent-meta">${j.date||''}</div></div></div>`).join('')}</div></div>`:''}
       <div style="height:20px"></div>`;
   }catch(e){el.innerHTML=`<div style="padding:30px;text-align:center;color:var(--red)">⚠️ ${e.message||'Failed to load'}</div>`;}
 }
@@ -1838,7 +1813,7 @@ Object.assign(window, {
   checkOfficeConnection, clearConduit, closeModal, closeQN, closeUserMenu, dismissAlert,
   doLogout, doPinLogin, doPinSetup, handleUpload, openAddJobModal, openJob,
   openLeaveForm, openOvertimeForm, openQN, openUserMenu, quickStatusUpdate,
-  refreshAll, rewriteAddJobDesc, rewriteJobNotes, saveHours, saveNotes, sendOmwClient, sendOmwOffice, setMapView,
+  refreshAll, rewriteAddJobDesc, rewriteJobNotes, saveNotes, sendOmwClient, sendOmwOffice, setMapView,
   setQuality, showTool, submitAddJob, submitLeaveRequest,
   submitOvertimeRequest, switchTab, toggleGuide, toggleSort, toggleTheme,
   updateConduit, updateStatus,

@@ -257,12 +257,12 @@ export async function _mapEngineerRoute(info, status) {
   html += geocoded.map((j, i) => {
     const done = j.status === 'Completed';
     const estStr = estTime.toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit'});
-    estTime = new Date(estTime.getTime() + (j.hours||1)*3600000 + 1800000); // job hours + 30min travel
+    estTime = new Date(estTime.getTime() + 3600000 + 1800000); // 1h job slot + 30min travel
     return `<div style="padding:8px 16px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center">
       <div style="width:22px;height:22px;border-radius:50%;background:${done?'#22c55e':'#4f8fff'};color:#fff;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i+1}</div>
       <div style="flex:1;min-width:0">
         <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(j.address)}</div>
-        <div style="font-size:10px;color:var(--txt3)">${j.timeSlot?'🕐 '+escHtml(j.timeSlot):('~'+estStr)} ${j.hours?'· '+j.hours+'h':''}</div>
+        <div style="font-size:10px;color:var(--txt3)">${j.timeSlot?'🕐 '+escHtml(j.timeSlot):('~'+estStr)}</div>
       </div>
       <span style="font-size:10px;padding:2px 7px;border-radius:8px;background:${done?'rgba(34,197,94,.12)':'rgba(79,143,255,.12)'};color:${done?'#22c55e':'#4f8fff'}">${j.status||'Pending'}</span>
     </div>`;

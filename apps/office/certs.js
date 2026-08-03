@@ -1618,7 +1618,7 @@ export async function createRenewalJob(certId){
   const c=await dGet('certs',certId);
   if(!c)return;
   const j={id:uid(),date:TODAY(),address:c.address,referrer:c.landlord||'',trade:'Gas',engineer:'',
-    description:c.type+' Renewal',timeSlot:'',access:'',contact:'',hours:0,price:0,
+    description:c.type+' Renewal',timeSlot:'',access:'',contact:'',price:0,
     notes:'Auto-created from certificate renewal. Expiry was: '+c.expiryDate,
     priority:'Normal',status:STATUS.PENDING,created:Date.now(),modified:Date.now()};
   await dPut('jobs',j);
