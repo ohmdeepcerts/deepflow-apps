@@ -10,7 +10,28 @@
 // resolution) preserved from Phase 1 — this stays agnostic to that.
 import { toDb, fromDb } from './mapping.js';
 
+// dAll() read cache — every non-jobs table (persons, agencies, invoices,
+// certs, etc.) had zero caching: each call re-fetched the entire table,
+// and the same page routinely calls dAll() for the same table several
+// times in quick succession (e.g. opening a job modal looks up the client
+// in dAll('persons'), then the invoice preview looks it up again). jobs
+// itself has its own dedicated windowed-loading path already (see the
+// Jobs page's bounded rolling-window fetch) and is unaffected by this.
+//
+// Deliberately short TTL, not an indefinite cache: this is a multi-user
+// app with no Realtime subscription on most tables, so an unbounded cache
+// would mean one office session not seeing another's change until a full
+// reload — a real staleness bug, not just a performance tradeoff. 30s caps
+// that window to something short enough to be a non-issue in practice
+// while still collapsing the common "several dAll() calls for the same
+// table within one page render" pattern into a single fetch. Any write
+// through this same repository instance (dPut/dDel) busts the cache for
+// that table immediately, so a user never sees their own change go stale.
+const CACHE_TTL_MS = 30000;
+
 export function createRepository(sbFetch, { localTables = new Set(), uid } = {}) {
+  const _cache = new Map(); // store -> { rows, ts }
+
   async function dGet(store, id) {
     if (localTables.has(store)) {
       const v = localStorage.getItem('df_' + store + '_' + id);
@@ -26,6 +47,10 @@ export function createRepository(sbFetch, { localTables = new Set(), uid } = {})
       const v = localStorage.getItem('df_all_' + store);
       return v ? JSON.parse(v) : [];
     }
+    const cached = _cache.get(store);
+    if (cached && Date.now() - cached.ts < CACHE_TTL_MS) {
+      return cached.rows.slice(); // copy — callers must not mutate the cached array
+    }
     let allRows = [];
     let offset = 0;
     const limit = 1000;
@@ -40,7 +65,9 @@ export function createRepository(sbFetch, { localTables = new Set(), uid } = {})
         break;
       }
     }
-    return allRows.map((r) => fromDb(store, r));
+    const mapped = allRows.map((r) => fromDb(store, r));
+    _cache.set(store, { rows: mapped, ts: Date.now() });
+    return mapped.slice();
   }
 
   async function dPut(store, obj) {
@@ -55,6 +82,7 @@ export function createRepository(sbFetch, { localTables = new Set(), uid } = {})
       localStorage.setItem('df_all_' + store, JSON.stringify(all));
       return;
     }
+    _cache.delete(store);
     await sbFetch(store, {
       method: 'POST',
       body: toDb(store, obj),
@@ -72,6 +100,7 @@ export function createRepository(sbFetch, { localTables = new Set(), uid } = {})
       localStorage.setItem('df_all_' + store, JSON.stringify(all.filter((x) => x.id !== id)));
       return;
     }
+    _cache.delete(store);
     await sbFetch(store + '?id=eq.' + encodeURIComponent(id), { method: 'DELETE', prefer: 'return=minimal' });
   }
 
