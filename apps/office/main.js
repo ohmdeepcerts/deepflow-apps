@@ -13,6 +13,7 @@ import {
   extractCertFromPhoto, renderCertMissing, setMissingFilter, renderExpiringPanel, clearExpiringFilters,
   toggleApplianceSection, addApplianceRow, updateApplianceField, removeApplianceRow,
   openBulkApplianceModal, submitBulkAppliances, generateCertPdf, extractAppliancesFromPhoto,
+  openRenewCertModal, submitRenewCert,
 } from './certs.js';
 import {
   getCurDirSection, switchDirSection, renderDir, renderDirSection, updateDirTabBadges,
@@ -14262,7 +14263,7 @@ Object.assign(window, {
   openEngDir, openExpenseModal, openImportModal, openInvoiceForJob, openInvSendModal, openJobForInvoice, openJobModal, openJobModalByNum, openMergeModal,
   openOvertimeModal, openPLDashboard, openPaymentModal, openPersonModal, openPersonModalFor, openPersonWA,
   toggleArchivePerson,
-  openPropModal, openStandaloneProformaModal, openWhatsApp, postComment, previewCertPdf,
+  openPropModal, openRenewCertModal, openStandaloneProformaModal, openWhatsApp, postComment, previewCertPdf,
   previewWaTemplate, printFilteredInvoices, printProforma, quickConfirm, quickEditPrice, quickEditTime, quickStatus,
   removeApplianceRow, removeCertPdf, removeInvCustomText, renderAuditLog, renderCertMissing, renderCertStats, renderCertTable, renderClientPicker,
   renderExpiringPanel, setMissingFilter, clearExpiringFilters,
@@ -14279,7 +14280,7 @@ Object.assign(window, {
   setInvFilter, setInvType, setInvView, setJRange, setJobsView, setPriFilter,
   setReqType, setSidebarWidth, setTheme, shiftDay, showAgeBucket, showAllEngJobs,
   showColMenu, showJobAudit, showPropertyCerts, showWaPanel, skipCertExpiry, smartAutofill, stmtClearFilters,
-  stmtQuickRange, stmtToggleAll, stmtToggleSel, submitBulkAppliances, switchAuditTab, switchCertTab, switchDirSection,
+  stmtQuickRange, stmtToggleAll, stmtToggleSel, submitBulkAppliances, submitRenewCert, switchAuditTab, switchCertTab, switchDirSection,
   switchSetTab, teamAdd, teamChangeRole, teamRevoke, testNotifWebhook, toggleAllCerts,
   toggleBillToOverride, toggleBulkSelectMode, toggleCalPane, toggleCertChip, toggleCol, toggleColPicker, toggleInvSync,
   toggleNotifPanel, toggleOTHours, toggleOnlinePanel, togglePersonSelect, togglePwVis, toggleSelRow, toggleSidebar, toggleTheme,

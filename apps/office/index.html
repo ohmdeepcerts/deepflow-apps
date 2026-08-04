@@ -4643,6 +4643,19 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS last_accuracy integer;</div>
 </div>
 </div>
 
+<!-- Renew PAT Test Cycle -->
+<div class="overlay" id="mo-renew-cert">
+<div class="modal" style="max-width:420px">
+  <div class="modal-title">🔄 Start New Test Cycle</div>
+  <p style="font-size:.86rem;color:var(--txt2);margin-bottom:14px">Opens a new certificate for the same property, with every appliance's asset ID and description carried forward — dates and results reset for the actual retest.</p>
+  <div class="fg"><label class="fl">New starting Asset # (optional — leave blank to keep the same IDs)</label><input type="text" id="rc-start-id" class="fi" placeholder="A001"></div>
+  <div class="modal-actions">
+    <button class="btn btn-ghost" onclick="closeModal('mo-renew-cert')">Cancel</button>
+    <button class="btn btn-acc" onclick="submitRenewCert()">Start Renewal</button>
+  </div>
+</div>
+</div>
+
 
 <!-- Confirm Modal -->
 <div class="overlay" id="mo-confirm">

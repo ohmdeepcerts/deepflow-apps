@@ -241,6 +241,7 @@ export async function renderCertTable(){
       <td style="white-space:nowrap">
         ${c.email?`<span class="ctbl-action-ico" title="Email ${c.landlord||''}" onclick="certSendIndivEmail('${c.id}')">✉</span>`:''}
         ${c.phone?`<span class="ctbl-action-ico" title="WhatsApp ${c.phone}" onclick="certSendIndivWA('${c.id}')">📱</span>`:''}
+        ${(ct.hasAppliances&&(c.appliances||[]).length)?`<span class="ctbl-action-ico" title="Start a new test cycle" onclick="openRenewCertModal('${c.id}')">🔄</span>`:''}
         <span class="ctbl-action-ico" title="Edit" onclick="editCertRecord('${c.id}')">✎</span>
       </td>
     </tr>`;
@@ -1854,6 +1855,54 @@ export async function createRenewalJob(certId){
   await logActivity(`Renewal job created for ${c.address}`,'job');
   toast('Renewal job created on today\'s grid!','success');
   setJDate(TODAY());nav('jobs');
+}
+
+// ── PAT RENEWAL — start a new test cycle ────────────────────────
+// Unlike createRenewalJob() above (which just books a follow-up job),
+// this starts a fresh certificate for a PAT-style cert: opens the Add
+// Certificate form pre-filled with the same property/client details and
+// appliance list as the source cert, ready for the engineer to actually
+// retest. Descriptions/instrument/retest-period carry forward verbatim;
+// date resets to today, result resets to Pass (nothing has been retested
+// yet — office/engineer corrects any that fail after the real test), and
+// next-test is recalculated. Never auto-saves — the office reviews and
+// hits Save themselves, same as any other cert.
+export function openRenewCertModal(certId){
+  window._renewSourceCertId=certId;
+  const el=document.getElementById('rc-start-id'); if(el) el.value='';
+  openModal('mo-renew-cert');
+}
+
+export async function submitRenewCert(){
+  const certId=window._renewSourceCertId;
+  const newStartAssetId=(document.getElementById('rc-start-id')?.value||'').trim();
+  closeModal('mo-renew-cert');
+  await renewCert(certId,newStartAssetId||null);
+}
+
+export async function renewCert(certId,newStartAssetId){
+  const c=await dGet('certs',certId);
+  if(!c)return;
+  const today=TODAY();
+  const appliances=(c.appliances||[]).map((a,i)=>{
+    let assetId=a.assetId||'';
+    if(newStartAssetId){
+      const m=newStartAssetId.match(/^(.*?)(\d+)$/);
+      assetId=m?m[1]+String(parseInt(m[2],10)+i).padStart(m[2].length,'0'):newStartAssetId+(i?'-'+(i+1):'');
+    }
+    const retestPeriod=a.retestPeriod||12;
+    return{id:uid(),assetId,description:a.description||'',testInstrument:a.testInstrument||'',
+      date:today,retestPeriod,nextTest:calcNextTest(today,retestPeriod),result:'Pass'};
+  });
+  const ctDef=(S.certTypes||[]).find(t=>t.name===c.type);
+  const expDate=new Date();expDate.setMonth(expDate.getMonth()+(ctDef?.validity||12));
+  openCertForm({
+    type:c.type, address:c.address, landlord:c.landlord, email:c.email, phone:c.phone,
+    agent:c.agent, notes:c.notes,
+    issueDate:today, expiryDate:localDateStr(expDate),
+    appliances,
+  });
+  toast(`New test cycle started — review the ${appliances.length} carried-forward appliance${appliances.length===1?'':'s'} before saving`,'info');
 }
 
 // ════════════════════════════════════════════════════════════════
