@@ -3326,6 +3326,11 @@ body.density-relaxed .jtable td{font-size:15px}
           <div class="set-title">📜 Certificate Types</div>
           <table class="set-table" id="st-cert-types"><thead><tr><th>Name</th><th>Validity (mo)</th><th>Reminder (days)</th><th>Color</th><th>Keywords</th><th>Issued As</th><th>Appliance Log</th><th></th></tr></thead><tbody></tbody></table>
           <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="addCertTypeRow()">+ Add Cert Type</button>
+          <div class="fg" style="margin-top:14px;max-width:340px">
+            <label class="fl">Auto Reference Starting Serial (optional)</label>
+            <input type="text" id="s-cert-ref-serial" class="fi" placeholder="e.g. GBE1000">
+            <div style="font-size:11px;color:var(--txt3);margin-top:4px">When a certificate's Reference Number is left blank, one is generated automatically from here — e.g. GBE1000 → GBE1001 → GBE1002… Leave blank to keep entering reference numbers manually.</div>
+          </div>
           <button class="btn btn-acc btn-sm" style="margin-top:8px" onclick="saveSettings()">Save</button>
         </div>
         <div class="set-section">

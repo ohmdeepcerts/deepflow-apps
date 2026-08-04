@@ -219,6 +219,12 @@ export let S = {
   // default: every existing cert type keeps using the main profile exactly
   // as before until one is explicitly assigned.
   companyProfiles:[],
+  // Starting serial for auto-generated certificate reference numbers (e.g.
+  // "GBE1000") — see generateCertRef() in certs.js. Advances by 1 every
+  // time a new certificate is saved with a blank Reference Number; empty
+  // by default, meaning auto-numbering is off and certNum stays fully
+  // manual until an admin opts in via Settings.
+  certRefSerial:'',
   engineers:[], // Loaded from Supabase users table on startup — never hardcoded
   access:['Key Safe','Landlord Present','Tenant Home','Vacant – Call Before'],
   properties:[],
@@ -348,7 +354,7 @@ export async function saveSetting(k,v){
   localStorage.setItem('df_setting_'+k,JSON.stringify(v));
 }
 
-async function saveAllSettings(){
+export async function saveAllSettings(){
   // 1. Save everything to localStorage
   for(const[k,v]of Object.entries(S)) localStorage.setItem('df_setting_'+k,JSON.stringify(v));
   // 2. Save everything to Supabase as ONE row (key='__all__')
@@ -7918,6 +7924,7 @@ function renderSettings(){
   if(el('s-co-web')) el('s-co-web').value=S.coWeb||'';
   if(el('s-co-reg')) el('s-co-reg').value=S.coReg||'';
   if(el('s-owner')) el('s-owner').value=S.owner||'';
+  if(el('s-cert-ref-serial')) el('s-cert-ref-serial').value=S.certRefSerial||'';
   if(el('s-vat')) el('s-vat').value=S.vatRate||20;
   if(el('s-vat-main')) el('s-vat-main').value=S.vatRate||20;
   if(el('s-pay-terms')) el('s-pay-terms').value=S.payTerms||'Payment due within 14 days';
@@ -9037,6 +9044,7 @@ async function saveSettings(){
   if(get('s-co-web')!==null) S.coWeb=get('s-co-web');
   if(get('s-co-reg')!==null) S.coReg=get('s-co-reg');
   if(get('s-owner')!==null) S.owner=get('s-owner');
+  if(get('s-cert-ref-serial')!==null) S.certRefSerial=get('s-cert-ref-serial').trim();
   if(getF('s-vat')!==null) S.vatRate=getF('s-vat')||20;
   if(get('s-pay-terms')!==null) S.payTerms=get('s-pay-terms');
   if(get('s-inv-prefix')!==null) S.invPrefix=get('s-inv-prefix');

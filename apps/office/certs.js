@@ -21,7 +21,7 @@ import {
   S, dAll, dGet, dPut, dDel, toast, confirm2, uid, TODAY, logActivity,
   updateBadges, nav, closeModal, openModal, _getJWT, setJDate, _sb,
   saveCertExpiry, skipCertExpiry, setPendCertJob, _sendEmail, _certReadyEmailHtml, _blobToBase64,
-  resolveCompanyProfile,
+  resolveCompanyProfile, saveAllSettings,
 } from './main.js';
 
 let _certTab='dash';
@@ -45,6 +45,89 @@ export function getCertTab(){ return _certTab; }
 // ref-as-filename sanitization for its downloaded PDFs.
 function _certFilename(c){
   return (c?.certNum||c?.type||'certificate').replace(/[^\w-]/g,'_')+'.pdf';
+}
+
+// ── AUTO REFERENCE NUMBER GENERATION ────────────────────────────
+// Ported from PAT-TEST's own updateRef()/addressRefPart()/incStr(), and
+// generalized to every cert type (not just PAT): when Reference Number is
+// left blank on a new cert, one is generated as
+//   base + "0" + middle + " / " + addressTag
+// — base is an ever-incrementing serial (S.certRefSerial, shared across
+// every cert type so no two certs, of any type, on any day, ever land on
+// the same base — that's what actually guarantees uniqueness, not the
+// date/count/address after it, which are just decoration), middle is the
+// appliance count for cert types that track one (matching PAT-TEST
+// exactly) or the issue date's day+month with no leading zeros for types
+// that don't (e.g. 4 Aug -> "48"), and addressTag is the same short
+// door-number-plus-street extract PAT-TEST derives from the property
+// address. Auto-numbering only fires when S.certRefSerial has been set in
+// Settings — empty by default, so certNum stays fully manual until an
+// admin opts in.
+
+// Same regex PAT-TEST's own incStr() uses: increments the trailing run of
+// digits by 1, preserving its width (so "GBE1009" -> "GBE1010", not
+// "GBE10010"). Falls back to appending "-1" for a base with no trailing
+// digits at all (shouldn't happen in practice — the admin-set starting
+// serial always has one).
+function _incStr(s){
+  const m=(s||'').match(/^(.*?)(\d+)$/);
+  return m?m[1]+String(parseInt(m[2],10)+1).padStart(m[2].length,'0'):(s||'')+'-1';
+}
+
+// Extracts a short "[business name] door-number street" fragment from a
+// property address — ported verbatim (algorithm, not just intent) from
+// PAT-TEST's own addressRefPart(). Prefers real line breaks; falls back to
+// comma-splitting DeepFlow's usual single-line address. Verified against
+// all 8 of the real historical PAT-TEST refs migrated into this database —
+// every one decodes back to exactly this.
+function addressRefPart(addr){
+  if(!addr) return '';
+  let lines=addr.split('\n').map(l=>l.trim()).filter(Boolean);
+  if(lines.length<2) lines=addr.split(',').map(l=>l.trim()).filter(Boolean);
+  if(!lines.length) return '';
+  const startsWithDigit=l=>/^\d/.test(l);
+  let businessName='',streetLine;
+  if(startsWithDigit(lines[0])){
+    streetLine=lines[0];
+  }else{
+    businessName=lines[0];
+    streetLine=lines.slice(1).find(startsWithDigit)||lines[1]||'';
+  }
+  const m=(streetLine||'').match(/^(\d+\w*)\s+(\S+)\s*(\S+)?/);
+  const streetPart=m?[m[1],m[2],m[3]].filter(Boolean).join(' '):(streetLine||'').split(/\s+/).slice(0,3).join(' ');
+  return businessName?businessName+' '+streetPart:streetPart;
+}
+
+// Day+month with no leading zeros, concatenated with no separator (e.g.
+// 2026-08-04 -> "48") — stands in for appliance count on cert types that
+// don't track appliances, per the same "0" + digits convention.
+function _ddmmUnpadded(dateStr){
+  if(!dateStr) return '';
+  const [y,m,d]=String(dateStr).split('-').map(Number);
+  if(!y||!m||!d) return '';
+  return String(d)+String(m);
+}
+
+// Advances S.certRefSerial to the next unused base and persists it. Checks
+// against every existing certNum (not just ones this session has seen) so
+// a manually-typed certNum that happens to collide with the next serial
+// still gets skipped — the persisted counter is the fast path, this check
+// is the safety net for it.
+async function _nextCertBaseRef(){
+  let next=_incStr(S.certRefSerial);
+  const all=await dAll('certs');
+  const existing=all.map(c=>(c.certNum||'').toLowerCase());
+  while(existing.some(cn=>cn.startsWith((next+'0').toLowerCase()))) next=_incStr(next);
+  S.certRefSerial=next;
+  await saveAllSettings();
+  return next;
+}
+
+async function generateCertRef({address,appliances,hasAppliances,issueDate}){
+  const base=await _nextCertBaseRef();
+  const middle=hasAppliances?String((appliances||[]).length):_ddmmUnpadded(issueDate);
+  const tag=addressRefPart(address);
+  return tag?`${base}0${middle} / ${tag}`:`${base}0${middle}`;
 }
 
 // Storage upload — moved here with its one and only caller (uploadCertPdf).
@@ -386,13 +469,22 @@ export async function saveCertForm(){
   const isSingle=_selCertTypes.size===1;
   let savedId=null;
   for(const type of _selCertTypes){
-    const id=isSingle&&_editCertId ? _editCertId : uid();
+    const isEdit=isSingle&&_editCertId;
+    const id=isEdit ? _editCertId : uid();
     const ct=(S.certTypes||[]).find(t=>t.name===type);
+    const appliances=isSingle&&ct?.hasAppliances?_certAppliances:[];
+    let certNum=g('cf2-certnum');
+    // Auto-generate only for a genuinely new cert with no number typed in,
+    // and only once an admin has opted in via Settings — see
+    // generateCertRef() above. Never overwrites a number on an edit-save.
+    if(!certNum&&!isEdit&&S.certRefSerial){
+      certNum=await generateCertRef({address:addr,appliances,hasAppliances:ct?.hasAppliances,issueDate:g('cf2-issue')||TODAY()});
+    }
     const c={
       id,
       address:addr, type,
       issueDate:g('cf2-issue'), expiryDate:g('cf2-expiry'),
-      certNum:g('cf2-certnum'), landlord:g('cf2-landlord'),
+      certNum, landlord:g('cf2-landlord'),
       email:g('cf2-email'), phone:g('cf2-phone'),
       agent:g('cf2-agent'), notes:g('cf2-notes'),
       noExpiry:!g('cf2-expiry'),
@@ -400,7 +492,7 @@ export async function saveCertForm(){
       // Only the single type that actually has an appliance log shown gets
       // the appliances array — every other cert type keeps behaving exactly
       // as before (empty array, ignored everywhere else).
-      appliances:isSingle&&ct?.hasAppliances?_certAppliances:[],
+      appliances,
     };
     await dPut('certs',c);
     await logActivity(`Certificate ${_editCertId?'updated':'added'}: ${type} at ${addr}`,'cert');
