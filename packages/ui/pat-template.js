@@ -141,7 +141,15 @@ export function buildPatCertificatePages(cert, profile, engineerName) {
         + `</div></div>`
         + `<div style="margin-top:4px;font-size:.62rem;color:#64748b;line-height:1.4">${esc(DEFAULTS.regText)} · ${esc(DEFAULTS.cop)}</div>`;
     }
-    const empty = pg.cap - pg.items.reduce((s, a) => s + a._c, 0);
+    // Page 1 pads all the way to its cap so a lightly-populated cert still
+    // reads as a proper full-size form. A continuation page exists purely
+    // to hold whatever overflowed page 1, though — padding IT to a full
+    // 24-row cap as well produces a page that's almost entirely empty
+    // filler once there are only a few leftover rows (e.g. 6 real rows on
+    // a 24-row page). Capping the filler at a handful of rows there keeps
+    // a little visual headroom without wasting most of a sheet.
+    const realRows = pg.items.reduce((s, a) => s + a._c, 0);
+    const empty = pi === 0 ? (pg.cap - realRows) : Math.min(pg.cap - realRows, 3);
     let rows = pg.items.map((app, i) => `<tr style="background:${i % 2 === 0 ? rowBg : ''}"><td style="height:${app._c * 28}px;vertical-align:middle">${esc(app.assetId)}</td><td style="height:${app._c * 28}px;vertical-align:middle;white-space:pre-wrap;word-break:break-word">${esc(app._d)}</td><td>${esc(app.testInstrument)}</td><td>${fmtUK(app.date)}</td><td>${app.retestPeriod}</td><td>${fmtUK(app.nextTest)}</td><td><span class="cbadge ${app.result === 'Pass' ? 'pass' : 'fail'}">${app.result}</span></td></tr>`).join('');
     for (let i = 0; i < empty; i++) rows += `<tr style="background:${(pg.items.length + i) % 2 === 0 ? rowBg : ''}"><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>`;
     return `<div class="a4">${hdr}`
@@ -188,7 +196,13 @@ export async function renderPatCertificatePDF(jsPDF, html2canvas, { cert, profil
   try {
     const pageEls = [...holder.querySelectorAll('.a4')];
     for (let i = 0; i < pageEls.length; i++) {
-      const canvas = await html2canvas(pageEls[i], { scale: 4, useCORS: true, backgroundColor: '#ffffff', logging: false, allowTaint: false });
+      // scale:4 (PAT-TEST's own setting) makes each page a huge raster
+      // image — fine for a single certificate, but a real multi-appliance
+      // multi-page one balloons past a megabyte for no visible gain over
+      // 2.5x, which is still sharp at print resolution. Matches the same
+      // tradeoff packages/ui/pdf-vector.js already made for the invoice
+      // masthead (scale:2 there, for a much smaller decorative band).
+      const canvas = await html2canvas(pageEls[i], { scale: 2.5, useCORS: true, backgroundColor: '#ffffff', logging: false, allowTaint: false });
       const imgData = canvas.toDataURL('image/png');
       if (i > 0) doc.addPage('a4', 'portrait');
       doc.addImage(imgData, 'PNG', 0, 0, 210, 297, undefined, 'FAST');
