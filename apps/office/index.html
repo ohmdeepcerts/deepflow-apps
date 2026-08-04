@@ -2866,6 +2866,20 @@ body.density-relaxed .jtable td{font-size:15px}
             </div>
           </div>
         </div>
+        <!-- APPLIANCE LOG — shown only when exactly one selected cert type
+             has hasAppliances set (see toggleApplianceSection() in certs.js). -->
+        <div id="cf2-appliances-section" style="display:none;padding:0 18px 18px">
+          <div class="cform-section">
+            <div class="cform-section-title">🔌 Appliance Test Log</div>
+            <div style="overflow-x:auto;border:1px solid var(--border);border-radius:8px">
+              <table class="set-table" id="cf2-appliances-tbl" style="min-width:680px"><thead><tr><th>Asset #</th><th>Description</th><th>Instrument</th><th>Date</th><th>Retest (mo)</th><th>Next Test</th><th>Result</th><th></th></tr></thead><tbody></tbody></table>
+            </div>
+            <div style="margin-top:8px;display:flex;gap:6px">
+              <button type="button" class="btn btn-ghost btn-sm" onclick="addApplianceRow()">+ Add Appliance</button>
+              <button type="button" class="btn btn-ghost btn-sm" onclick="openBulkApplianceModal()">+ Bulk Add</button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- ═══ REMINDERS ═══ -->
@@ -3104,6 +3118,19 @@ body.density-relaxed .jtable td{font-size:15px}
             </div>
           </div>
           <div style="margin-top:10px"><button class="btn btn-acc btn-sm" onclick="saveSettings()">Save Company Profile</button></div>
+
+          <!-- ADDITIONAL COMPANY PROFILES — for certificate types issued under a
+               different company identity than the main profile above (e.g. a
+               PAT testing company operating under its own name/logo). Assigned
+               per certificate type in Trades & Services → Certificate Types. -->
+          <div class="set-card" style="margin-top:16px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+              <div class="set-title" style="border:none;padding:0;margin:0;font-size:14px">🏢 Additional Company Profiles</div>
+              <button class="btn btn-ghost btn-xs" onclick="addCompanyProfileRow()">+ Add Profile</button>
+            </div>
+            <div style="font-size:11px;color:var(--txt3);margin-bottom:10px">For certificate types issued under a different company name/logo than the profile above. Assign one to a certificate type in Trades &amp; Services.</div>
+            <table class="set-table" id="st-company-profiles"><thead><tr><th>Name</th><th>Address</th><th>Email</th><th>Phone</th><th>VAT No.</th><th>Reg No.</th><th>Website</th><th>Logo</th><th></th></tr></thead><tbody></tbody></table>
+          </div>
         </div>
       </div>
 
@@ -3291,6 +3318,12 @@ body.density-relaxed .jtable td{font-size:15px}
           <div class="set-title">🔧 Trades</div>
           <table class="set-table" id="st-trades"><thead><tr><th>Trade</th><th>Color</th><th>Default Price (£)</th><th>Default Duration (hrs)</th><th></th></tr></thead><tbody></tbody></table>
           <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="addTradeRow()">+ Add Trade</button>
+          <button class="btn btn-acc btn-sm" style="margin-top:8px" onclick="saveSettings()">Save</button>
+        </div>
+        <div class="set-section">
+          <div class="set-title">📜 Certificate Types</div>
+          <table class="set-table" id="st-cert-types"><thead><tr><th>Name</th><th>Validity (mo)</th><th>Reminder (days)</th><th>Color</th><th>Keywords</th><th>Issued As</th><th>Appliance Log</th><th></th></tr></thead><tbody></tbody></table>
+          <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="addCertTypeRow()">+ Add Cert Type</button>
           <button class="btn btn-acc btn-sm" style="margin-top:8px" onclick="saveSettings()">Save</button>
         </div>
         <div class="set-section">
@@ -4515,7 +4548,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS last_accuracy integer;</div>
   </div>
   <div class="frow">
     <div class="fg"><label class="fl">Property Address</label><input type="text" id="cf-addr" class="fi"></div>
-    <div class="fg"><label class="fl">Type</label><select id="cf-type" class="fs"><option>Gas Safety</option><option>Electrical</option><option>EPC</option><option>Other</option></select></div>
+    <div class="fg"><label class="fl">Type</label><select id="cf-type" class="fs" onchange="toggleApplianceSection()"><option>Gas Safety</option><option>Electrical</option><option>EPC</option><option>Other</option></select></div>
   </div>
   <div class="frow">
     <div class="fg"><label class="fl">Issue Date</label><input type="date" id="cf-issue" class="fi"></div>
@@ -4526,6 +4559,19 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS last_accuracy integer;</div>
     <div class="fg"><label class="fl">Certificate Number (optional)</label><input type="text" id="cf-num" class="fi"></div>
   </div>
   <div class="fg"><label class="fl">Notes</label><input type="text" id="cf-notes" class="fi" placeholder="Any notes…"></div>
+  <!-- APPLIANCE LOG — shown only when the selected cert type has hasAppliances
+       set (see Settings → Trades & Services → Certificate Types → Appliance
+       Log). Toggled by cf-type's onchange, see toggleApplianceSection(). -->
+  <div id="cf-appliances-section" style="display:none;margin-bottom:12px">
+    <label class="fl">Appliance Test Log</label>
+    <div style="overflow-x:auto;border:1px solid var(--border);border-radius:8px;margin-top:4px">
+      <table class="set-table" id="cf-appliances-tbl" style="min-width:640px"><thead><tr><th>Asset #</th><th>Description</th><th>Instrument</th><th>Date</th><th>Retest (mo)</th><th>Next Test</th><th>Result</th><th></th></tr></thead><tbody></tbody></table>
+    </div>
+    <div style="margin-top:6px;display:flex;gap:6px">
+      <button type="button" class="btn btn-ghost btn-xs" onclick="addApplianceRow()">+ Add Appliance</button>
+      <button type="button" class="btn btn-ghost btn-xs" onclick="openBulkApplianceModal()">+ Bulk Add</button>
+    </div>
+  </div>
   <div class="fg"><label class="fl">Certificate Document (PDF)</label><div id="cf-pdf-wrap"><span style="color:var(--txt3);font-size:12px">Save the certificate first, then reopen it to attach a PDF.</span></div></div>
   <!-- FIX 10: Hidden fields store the originating job link when cert is created from a job.
        These are populated by openCertModalFromJob(jobId, jobNum) and cleared on close. -->
@@ -4577,6 +4623,20 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS last_accuracy integer;</div>
   <div class="modal-actions">
     <button class="btn btn-ghost" onclick="skipCertExpiry()">Skip — Fill Later</button>
     <button class="btn btn-acc" onclick="saveCertExpiry()">✓ Save Certificate</button>
+  </div>
+</div>
+</div>
+
+<!-- Bulk Add Appliances -->
+<div class="overlay" id="mo-bulk-appliance">
+<div class="modal" style="max-width:420px">
+  <div class="modal-title">Bulk Add Appliances</div>
+  <p style="font-size:.86rem;color:var(--txt2);margin-bottom:14px">Enter one appliance description per line. Rows will be added with default settings.</p>
+  <div class="fg"><label class="fl">Start Asset # (optional)</label><input type="text" id="ba-start-id" class="fi" placeholder="A001"></div>
+  <div class="fg"><label class="fl">Descriptions (one per line)</label><textarea id="ba-descriptions" class="fi" rows="6" placeholder="Kettle&#10;Microwave&#10;Toaster"></textarea></div>
+  <div class="modal-actions">
+    <button class="btn btn-ghost" onclick="closeModal('mo-bulk-appliance')">Cancel</button>
+    <button class="btn btn-acc" onclick="submitBulkAppliances()">Add</button>
   </div>
 </div>
 </div>

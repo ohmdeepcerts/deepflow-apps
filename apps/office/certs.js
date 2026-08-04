@@ -15,7 +15,7 @@
 // doesn't matter which of the two finishes evaluating first.
 
 import { SB_URL, SB_KEY } from '@core';
-import { escHtml } from '@ui';
+import { escHtml, escAttr } from '@ui';
 import { STATUS, daysDiff, formatDateUK, localDateStr } from '@business';
 import {
   S, dAll, dGet, dPut, dDel, toast, confirm2, uid, TODAY, logActivity,
@@ -27,6 +27,12 @@ let _certTab='dash';
 let _ctPage=1,_ctblHidden=[];
 let _editCertId=null,_selCertTypes=new Set();
 let _cremMode='email',_cremEmailLink='';
+// Working copy of the currently-open cert's appliance test log (asset ID,
+// description, instrument, date, retest period, calculated next-test date,
+// Pass/Fail). Only ever shown/saved for cert types with hasAppliances set
+// (see toggleApplianceSection()) — reset in openCertModal(), populated from
+// the record in openEditCert(), written back in saveCert().
+let _certAppliances=[];
 
 export function getCertTab(){ return _certTab; }
 
@@ -298,11 +304,13 @@ export async function editCertRecord(id){
 export function openCertForm(existing){
   _editCertId=existing?.id||null;
   _selCertTypes=new Set(existing?.type?[existing.type]:[]);
+  _certAppliances=(existing?.appliances||[]).map(a=>({...a}));
   // Update title
   const titleEl=document.getElementById('cform-title');
   if(titleEl)titleEl.textContent=existing?`Edit Certificate — ${existing.certNum||existing.address||''}` :'Add Certificate';
   // Populate type chips
   renderCertTypeChips();
+  toggleApplianceSection();
   // Fill fields
   const s=id=>document.getElementById(id);
   if(s('cf2-addr'))   s('cf2-addr').value=existing?.address||'';
@@ -342,6 +350,7 @@ export function ctypeToggle(name){
   if(_editCertId){ _selCertTypes.clear(); _selCertTypes.add(name); }
   else { _selCertTypes.has(name)?_selCertTypes.delete(name):_selCertTypes.add(name); }
   renderCertTypeChips();
+  toggleApplianceSection();
 }
 
 export async function renderCertFormRecent(){
@@ -366,6 +375,7 @@ export async function saveCertForm(){
   let savedId=null;
   for(const type of _selCertTypes){
     const id=isSingle&&_editCertId ? _editCertId : uid();
+    const ct=(S.certTypes||[]).find(t=>t.name===type);
     const c={
       id,
       address:addr, type,
@@ -374,7 +384,11 @@ export async function saveCertForm(){
       email:g('cf2-email'), phone:g('cf2-phone'),
       agent:g('cf2-agent'), notes:g('cf2-notes'),
       noExpiry:!g('cf2-expiry'),
-      notResponding:document.getElementById('cf2-nr')?.checked||false
+      notResponding:document.getElementById('cf2-nr')?.checked||false,
+      // Only the single type that actually has an appliance log shown gets
+      // the appliances array — every other cert type keeps behaving exactly
+      // as before (empty array, ignored everywhere else).
+      appliances:isSingle&&ct?.hasAppliances?_certAppliances:[],
     };
     await dPut('certs',c);
     await logActivity(`Certificate ${_editCertId?'updated':'added'}: ${type} at ${addr}`,'cert');
@@ -1353,6 +1367,8 @@ export async function openEditCert(id){
   if(ts) ts.value=c.type||ts.options[0]?.value||'';
   window._editCertModalId=id;
   renderCertPdfSection(id,c.pdfUrl||null);
+  _certAppliances=(c.appliances||[]).map(a=>({...a}));
+  toggleApplianceSection();
   openModal('mo-cert');
 }
 
@@ -1535,6 +1551,106 @@ export async function waCertReminder(id){
   openModal('mo-wa');
 }
 
+// ── APPLIANCE TEST LOG ──────────────────────────────────────────
+// Ported from the standalone PAT-TEST app (same field shape: assetId,
+// description, testInstrument, date, retestPeriod, nextTest, result) so
+// existing PAT knowledge/muscle-memory carries over directly. Generalized
+// to any cert type via S.certTypes[].hasAppliances rather than hardcoded
+// to "PAT Testing" by name, so a future cert type can opt in the same way
+// company profiles do.
+function calcNextTest(dateStr,months){
+  if(!dateStr) return '';
+  const [y,m,d]=dateStr.split('-').map(Number);
+  if(!y||!m||!d) return '';
+  const dt=new Date(y,m-1,d);
+  dt.setMonth(dt.getMonth()+(Number(months)||12));
+  return localDateStr(dt);
+}
+
+// Shown only when exactly one cert type is selected and that type has
+// hasAppliances set — multi-type saves (new cert, several chips at once)
+// each become a separate cert record, so there's no single record an
+// appliance log could unambiguously belong to in that case.
+export function toggleApplianceSection(){
+  const section=document.getElementById('cf2-appliances-section');
+  if(!section) return;
+  const only = _selCertTypes.size===1 ? [..._selCertTypes][0] : null;
+  const ct = only ? (S.certTypes||[]).find(c=>c.name===only) : null;
+  section.style.display=ct?.hasAppliances?'':'none';
+  if(ct?.hasAppliances) renderApplianceTable();
+}
+
+function renderApplianceTable(){
+  const tbody=document.querySelector('#cf2-appliances-tbl tbody');
+  if(!tbody) return;
+  tbody.innerHTML=_certAppliances.map((a,i)=>`<tr>
+    <td><input class="fi" value="${escAttr(a.assetId||'')}" style="padding:4px;width:70px" onchange="updateApplianceField(${i},'assetId',this.value)"></td>
+    <td><input class="fi" value="${escAttr(a.description||'')}" style="padding:4px;min-width:150px" onchange="updateApplianceField(${i},'description',this.value)"></td>
+    <td><input class="fi" value="${escAttr(a.testInstrument||'')}" style="padding:4px;width:100px" onchange="updateApplianceField(${i},'testInstrument',this.value)"></td>
+    <td><input class="fi" type="date" value="${a.date||''}" style="padding:4px;width:130px" onchange="updateApplianceField(${i},'date',this.value)"></td>
+    <td><input class="fi" type="number" value="${a.retestPeriod||12}" style="padding:4px;width:65px" onchange="updateApplianceField(${i},'retestPeriod',this.value)"></td>
+    <td style="font-size:12px;color:var(--txt3);white-space:nowrap">${a.nextTest?formatDateUK(a.nextTest):'—'}</td>
+    <td><select class="fs" style="padding:4px;width:80px" onchange="updateApplianceField(${i},'result',this.value)">
+      <option ${a.result==='Pass'?'selected':''}>Pass</option>
+      <option ${a.result==='Fail'?'selected':''}>Fail</option>
+    </select></td>
+    <td><button type="button" class="btn btn-red btn-xs" onclick="removeApplianceRow(${i})">✕</button></td>
+  </tr>`).join('')||'<tr><td colspan="8" style="color:var(--txt3);font-size:12px;padding:8px">No appliances yet — add one below.</td></tr>';
+}
+
+export function addApplianceRow(){
+  const today=TODAY();
+  const period=12;
+  // Auto-increment the asset ID from the last row, same convention as the
+  // ported app: a trailing number gets incremented, e.g. A001 → A002.
+  let nextId='';
+  if(_certAppliances.length){
+    const last=_certAppliances[_certAppliances.length-1];
+    const m=(last.assetId||'').match(/^(.*?)(\d+)$/);
+    nextId=m?m[1]+String(parseInt(m[2],10)+1).padStart(m[2].length,'0'):'';
+  }
+  _certAppliances.push({id:uid(),assetId:nextId,description:'',testInstrument:'',date:today,retestPeriod:period,nextTest:calcNextTest(today,period),result:'Pass'});
+  renderApplianceTable();
+}
+
+export function updateApplianceField(i,field,value){
+  const a=_certAppliances[i];
+  if(!a) return;
+  a[field]=field==='retestPeriod'?(+value||12):value;
+  if(field==='date'||field==='retestPeriod') a.nextTest=calcNextTest(a.date,a.retestPeriod);
+  renderApplianceTable();
+}
+
+export function removeApplianceRow(i){
+  _certAppliances.splice(i,1);
+  renderApplianceTable();
+}
+
+export function openBulkApplianceModal(){
+  document.getElementById('ba-start-id').value='';
+  document.getElementById('ba-descriptions').value='';
+  openModal('mo-bulk-appliance');
+}
+
+export function submitBulkAppliances(){
+  const startId=document.getElementById('ba-start-id').value.trim();
+  const lines=document.getElementById('ba-descriptions').value.split('\n').map(l=>l.trim()).filter(Boolean);
+  if(!lines.length){ toast('Enter at least one description','warn'); return; }
+  const today=TODAY();
+  const period=12;
+  lines.forEach((desc,idx)=>{
+    let assetId='';
+    if(startId){
+      const m=startId.match(/^(.*?)(\d+)$/);
+      assetId=m?m[1]+String(parseInt(m[2],10)+idx).padStart(m[2].length,'0'):startId+(idx?'-'+(idx+1):'');
+    }
+    _certAppliances.push({id:uid(),assetId,description:desc,testInstrument:'',date:today,retestPeriod:period,nextTest:calcNextTest(today,period),result:'Pass'});
+  });
+  renderApplianceTable();
+  closeModal('mo-bulk-appliance');
+  toast(`${lines.length} appliance${lines.length>1?'s':''} added`,'success');
+}
+
 export function openCertModal(){
   window._editCertModalId=null;
   window._certLinkedJob=null;
@@ -1549,6 +1665,8 @@ export function openCertModal(){
   const ts=document.getElementById('cf-type');
   if(ts) ts.innerHTML=(S.certTypes||[]).map(ct=>`<option value="${ct.name}">${ct.name}</option>`).join('')||'<option>Other</option>';
   renderCertPdfSection(null,null);
+  _certAppliances=[];
+  toggleApplianceSection();
   openModal('mo-cert');
 }
 
@@ -1597,6 +1715,10 @@ export async function saveCert(){
     // Job link fields — null when cert created standalone, populated when from a job
     jobId:linkedJob?.id||document.getElementById('cf-job-id')?.value||null,
     jobNum:linkedJob?.jobnum||document.getElementById('cf-job-num')?.value||null,
+    // Appliance test log — only ever populated for cert types with
+    // hasAppliances set (see toggleApplianceSection()); empty array for
+    // every other cert type, same as before this field existed.
+    appliances:_certAppliances,
   };
   if(!c.address){toast('Address required','error');return}
   await dPut('certs',c);

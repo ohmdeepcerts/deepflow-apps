@@ -1,5 +1,5 @@
 import { SB_URL, SB_KEY, restFetch, createSupaAuthClient, makeJwtResolver } from '@core';
-import { escHtml, initNetworkCanvas, renderInvoicePDF } from '@ui';
+import { escHtml, escAttr, initNetworkCanvas, renderInvoicePDF } from '@ui';
 import { toDb as _toDb, fromDb as _fromDb, createRepository, TO_DB as _TO_DB } from '@data';
 import { STATUS, calcLineItemsTotal, officeVatRate, daysDiff, formatDateUK, localDateStr } from '@business';
 import { createOfflineQueue } from '@offline';
@@ -11,6 +11,8 @@ import {
   copyCremMsg, importCertCSV, exportCertCSV, exportCertPDF, downloadCertTemplate, renderCertDash,
   addExpiryToExistingCert, previewCertPdf, uploadCertPdf, removeCertPdf, saveCert, createRenewalJob,
   extractCertFromPhoto, renderCertMissing, setMissingFilter, renderExpiringPanel, clearExpiringFilters,
+  toggleApplianceSection, addApplianceRow, updateApplianceField, removeApplianceRow,
+  openBulkApplianceModal, submitBulkAppliances,
 } from './certs.js';
 import {
   getCurDirSection, switchDirSection, renderDir, renderDirSection, updateDirTabBadges,
@@ -206,10 +208,16 @@ export let S = {
     {id:'ct2',name:'Electrical (EICR)',validity:60,reminder:60,keywords:['electrical','electric','eicr','rewire','fuse','consumer unit'],color:'#f0c030',prefix:'EICR-'},
     {id:'ct3',name:'Fire Alarm',validity:12,reminder:30,keywords:['fire alarm','smoke detector','fire','alarm'],color:'#e05252',prefix:'FIRE-'},
     {id:'ct4',name:'Emergency Lighting',validity:12,reminder:30,keywords:['emergency light','emergency lighting','emerg light'],color:'#f07030',prefix:'EML-'},
-    {id:'ct5',name:'PAT Testing',validity:12,reminder:30,keywords:['pat','pat test','appliance test','portable appliance'],color:'#25d58e',prefix:'PAT-'},
+    {id:'ct5',name:'PAT Testing',validity:12,reminder:30,keywords:['pat','pat test','appliance test','portable appliance'],color:'#25d58e',prefix:'PAT-',hasAppliances:true},
     {id:'ct6',name:'EPC',validity:120,reminder:90,keywords:['epc','energy performance','energy certificate'],color:'#b06ef0',prefix:'EPC-'},
     {id:'ct7',name:'Legionella',validity:24,reminder:60,keywords:['legionella','water risk','water assessment'],color:'#25d5a8',prefix:'LEG-'},
   ],
+  // Named company identities a certificate type can be issued under instead
+  // of the main Company Profile above (e.g. a PAT testing company operating
+  // under its own name/logo) — see resolveCompanyProfile(). Empty by
+  // default: every existing cert type keeps using the main profile exactly
+  // as before until one is explicitly assigned.
+  companyProfiles:[],
   engineers:[], // Loaded from Supabase users table on startup — never hardcoded
   access:['Key Safe','Landlord Present','Tenant Home','Vacant – Call Before'],
   properties:[],
@@ -248,6 +256,16 @@ export let S = {
   invNotifyAdminOnEdit:true,
   invShowAuditTrail:true,
 };
+// Every Settings table row (Users, Trades, Access, Cert Types, Engineers,
+// Company Profiles) is generated with inline onchange="S.xxx[i].yyy=..."
+// handlers. Inline HTML event-handler attributes always execute in global
+// scope, never a module's lexical scope — since S became a module-scoped
+// export (the ES-module migration), every one of those handlers has been
+// throwing "S is not defined" and silently failing to save, with no visible
+// error to the user. S is only ever mutated in place after this point
+// (S[k]=v, Object.assign(S,...)), never reassigned wholesale, so aliasing
+// it once here stays correct for the lifetime of the app.
+window.S = S;
 
 async function initDB(){ /* no-op — Supabase REST needs no initialisation */ }
 
@@ -8090,7 +8108,31 @@ function renderSettings(){
     <td><input class="fi" type="number" value="${ct.reminder||30}" style="padding:5px;width:70px" onchange="S.certTypes[${i}].reminder=+this.value"></td>
     <td><input type="color" value="${ct.color||'#f5a623'}" style="width:36px;height:30px;border:none;border-radius:6px;cursor:pointer;padding:1px" onchange="S.certTypes[${i}].color=this.value;renderSettings()"></td>
     <td><input class="fi" value="${(ct.keywords||[]).join(', ')}" style="padding:5px;min-width:200px" placeholder="e.g. gas, boiler, heating" onchange="S.certTypes[${i}].keywords=this.value.split(',').map(k=>k.trim()).filter(Boolean)"></td>
+    <td><select class="fs" style="padding:5px;min-width:130px" onchange="S.certTypes[${i}].companyProfileId=this.value||null">
+      <option value="">— Default —</option>
+      ${(S.companyProfiles||[]).map(p=>`<option value="${p.id}" ${ct.companyProfileId===p.id?'selected':''}>${escHtml(p.name||'Untitled')}</option>`).join('')}
+    </select></td>
+    <td style="text-align:center"><input type="checkbox" ${ct.hasAppliances?'checked':''} title="Show an appliance test log (asset ID, description, instrument, pass/fail) on this certificate's form instead of the plain notes field" onchange="S.certTypes[${i}].hasAppliances=this.checked"></td>
     <td><button class="btn btn-red btn-xs" onclick="S.certTypes.splice(${i},1);renderSettings()">✕</button></td>
+  </tr>`).join('');
+
+  // Company profiles table — alternate issuing identities certificate types
+  // can point at instead of the main Company Profile (see resolveCompanyProfile()).
+  const cpb=document.querySelector('#st-company-profiles tbody');
+  if(cpb) cpb.innerHTML=(S.companyProfiles||[]).map((p,i)=>`<tr>
+    <td><input class="fi" value="${escAttr(p.name||'')}" style="padding:5px;min-width:120px" onchange="S.companyProfiles[${i}].name=this.value;renderSettings()"></td>
+    <td><input class="fi" value="${escAttr(p.address||'')}" style="padding:5px;min-width:160px" onchange="S.companyProfiles[${i}].address=this.value"></td>
+    <td><input class="fi" type="email" value="${escAttr(p.email||'')}" style="padding:5px;min-width:140px" onchange="S.companyProfiles[${i}].email=this.value"></td>
+    <td><input class="fi" value="${escAttr(p.phone||'')}" style="padding:5px;width:110px" onchange="S.companyProfiles[${i}].phone=this.value"></td>
+    <td><input class="fi" value="${escAttr(p.vatNum||'')}" style="padding:5px;width:100px" onchange="S.companyProfiles[${i}].vatNum=this.value"></td>
+    <td><input class="fi" value="${escAttr(p.regNum||'')}" style="padding:5px;width:100px" onchange="S.companyProfiles[${i}].regNum=this.value"></td>
+    <td><input class="fi" value="${escAttr(p.website||'')}" style="padding:5px;width:120px" onchange="S.companyProfiles[${i}].website=this.value"></td>
+    <td>
+      ${p.logoUrl?`<img src="${p.logoUrl}" style="max-height:28px;max-width:60px;object-fit:contain;vertical-align:middle;margin-right:4px">`:''}
+      <label class="btn btn-ghost btn-xs" style="cursor:pointer">${p.logoUrl?'Change':'Upload'}<input type="file" accept="image/*" style="display:none" onchange="uploadProfileLogo(this,${i})"></label>
+      ${p.logoUrl?`<button class="btn btn-ghost btn-xs" onclick="S.companyProfiles[${i}].logoUrl='';renderSettings()">✕</button>`:''}
+    </td>
+    <td><button class="btn btn-red btn-xs" onclick="S.companyProfiles.splice(${i},1);renderSettings()">✕</button></td>
   </tr>`).join('');
 
   // Checklists
@@ -11055,6 +11097,48 @@ function addCertTypeRow(){
   const col=colors[types.length%colors.length];
   types.push({id:uid(),name:'New Cert Type',validity:12,reminder:30,keywords:[],color:col,prefix:'CERT-'});
   S.certTypes=types;saveSetting('certTypes',S.certTypes);renderSettings();
+}
+
+function addCompanyProfileRow(){
+  const profiles=S.companyProfiles||[];
+  profiles.push({id:uid(),name:'New Company',address:'',email:'',phone:'',vatNum:'',regNum:'',website:'',logoUrl:''});
+  S.companyProfiles=profiles;saveSetting('companyProfiles',S.companyProfiles);renderSettings();
+}
+
+function uploadProfileLogo(inputEl,i){
+  const file=inputEl.files[0];
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=async e=>{
+    if(!S.companyProfiles[i])return;
+    S.companyProfiles[i].logoUrl=e.target.result;
+    await saveSetting('companyProfiles',S.companyProfiles);
+    renderSettings();
+    toast('Logo uploaded','success');
+  };
+  reader.readAsDataURL(file);
+}
+
+// Resolves which company identity a certificate should be issued under —
+// the cert type's assigned companyProfileId if set and still present in
+// S.companyProfiles, otherwise the main Company Profile fields (unchanged
+// behaviour for every cert type that's never had a profile assigned).
+// certType may be a certTypes entry, a type id/name, or null/undefined.
+export function resolveCompanyProfile(certType){
+  const ct = typeof certType==='string'
+    ? (S.certTypes||[]).find(c=>c.id===certType||c.name===certType)
+    : certType;
+  const profile = ct?.companyProfileId ? (S.companyProfiles||[]).find(p=>p.id===ct.companyProfileId) : null;
+  if(profile) return {
+    name:profile.name||'', address:profile.address||'', email:profile.email||'',
+    phone:profile.phone||'', vatNum:profile.vatNum||'', regNum:profile.regNum||'',
+    website:profile.website||'', logoUrl:profile.logoUrl||'',
+  };
+  return {
+    name:S.coName||'', address:S.coAddr||'', email:S.coEmail||'',
+    phone:S.coPhone||'', vatNum:S.coVatNum||'', regNum:S.coReg||'',
+    website:S.coWeb||'', logoUrl:S.logoData||'',
+  };
 }
 function addChecklistTrade(){
   const cl=S.checklists||{};
@@ -14151,7 +14235,7 @@ Object.assign(window, {
   _addLiveItem, _copyJobDesc, _copyPortalLink, _editEngFromDeep, _emailPortalShare, _removeLiveItem, _renderEngDeepJobsList,
   _reqAcknowledge, _reqApproveEng, _reqCreateJob, _reqReject, _reqReopen, _reqSendReply, 
   _saveInvField, _saveLiveItem, _sendPLReminder, _showReqDetail, _switchEngDeepTab, _switchPLTab, _updateLiveTotal,
-  _waPortalShare, addAccessRow, addCertTypeInline, addCreditItem, addEngRow, addExpiryToExistingCert, 
+  _waPortalShare, addAccessRow, addApplianceRow, addCertTypeInline, addCertTypeRow, addCompanyProfileRow, addCreditItem, addEngRow, addExpiryToExistingCert,
   addInvCustomText, addInvItem, addPortalContactRow, addTradeRow, applySavedView, applyThemeMode, 
   approvePortalReq, autoDetectCertTypes, autoGrow, bulkAssignEngineer, bulkCopyToDate, bulkDeleteCerts, bulkDeleteJobs,
   bulkDownloadPDFs, bulkMarkPaid, bulkNRToggle, bulkReschedule, bulkSetStatus, cancelCertForm, 
@@ -14174,13 +14258,13 @@ Object.assign(window, {
   kanbanDragStart, kanbanDrop, loadEarlierJobs, loadEngPerms, loadEngineerLocations, loadStorageDashboard, 
   loadStorageStats, loadTeam, markInvPaid, markInvSent, markInvUnpaid, matchDir, 
   mergeJobsInvoice, nav, onMapViewChange, oneClickBackup, openAgencyModal, openAgentModal, 
-  openBroadcast, openCertForm, openCmd, openCreditNoteModal, openDisposableModal, openEngDeepReport, 
+  openBroadcast, openBulkApplianceModal, openCertForm, openCmd, openCreditNoteModal, openDisposableModal, openEngDeepReport, 
   openEngDir, openExpenseModal, openImportModal, openInvoiceForJob, openInvSendModal, openJobForInvoice, openJobModal, openJobModalByNum, openMergeModal,
   openOvertimeModal, openPLDashboard, openPaymentModal, openPersonModal, openPersonModalFor, openPersonWA,
   toggleArchivePerson,
   openPropModal, openStandaloneProformaModal, openWhatsApp, postComment, previewCertPdf,
   previewWaTemplate, printFilteredInvoices, printProforma, quickConfirm, quickEditPrice, quickEditTime, quickStatus,
-  removeCertPdf, removeInvCustomText, renderAuditLog, renderCertMissing, renderCertStats, renderCertTable, renderClientPicker,
+  removeApplianceRow, removeCertPdf, removeInvCustomText, renderAuditLog, renderCertMissing, renderCertStats, renderCertTable, renderClientPicker,
   renderExpiringPanel, setMissingFilter, clearExpiringFilters,
   renderDirSection, renderEngReport, renderExpenses, renderInvItems, renderInvList, renderJobs, renderMapPage,
   renderNotifPreview, renderPLDashboard, renderProps, renderReports, renderRequests, renderSettings, renderStmt,
@@ -14195,12 +14279,12 @@ Object.assign(window, {
   setInvFilter, setInvType, setInvView, setJRange, setJobsView, setPriFilter,
   setReqType, setSidebarWidth, setTheme, shiftDay, showAgeBucket, showAllEngJobs,
   showColMenu, showJobAudit, showPropertyCerts, showWaPanel, skipCertExpiry, smartAutofill, stmtClearFilters,
-  stmtQuickRange, stmtToggleAll, stmtToggleSel, switchAuditTab, switchCertTab, switchDirSection,
+  stmtQuickRange, stmtToggleAll, stmtToggleSel, submitBulkAppliances, switchAuditTab, switchCertTab, switchDirSection,
   switchSetTab, teamAdd, teamChangeRole, teamRevoke, testNotifWebhook, toggleAllCerts,
   toggleBillToOverride, toggleBulkSelectMode, toggleCalPane, toggleCertChip, toggleCol, toggleColPicker, toggleInvSync,
   toggleNotifPanel, toggleOTHours, toggleOnlinePanel, togglePersonSelect, togglePwVis, toggleSelRow, toggleSidebar, toggleTheme,
-  toggleUnassignedView, toggleUserMenu, updateCertAddrSugg, updateEngPerm, updateLogo, updatePortalContact, updInvTotals,
-  uploadCertPdf, viewInv, viewPropJobs, waEngineerAllJobs, waJobsSelected, waShowEng, 
+  toggleUnassignedView, toggleUserMenu, updateApplianceField, updateCertAddrSugg, updateEngPerm, updateLogo, updatePortalContact, updInvTotals,
+  uploadCertPdf, uploadProfileLogo, viewInv, viewPropJobs, waEngineerAllJobs, waJobsSelected, waShowEng,
   waSingleEngJob, waSingleJob, waSingleJobById, 
 });
 (function(){
