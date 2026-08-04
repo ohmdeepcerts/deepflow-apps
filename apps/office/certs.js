@@ -15,12 +15,13 @@
 // doesn't matter which of the two finishes evaluating first.
 
 import { SB_URL, SB_KEY } from '@core';
-import { escHtml, escAttr } from '@ui';
+import { escHtml, escAttr, renderPatCertificatePDF } from '@ui';
 import { STATUS, daysDiff, formatDateUK, localDateStr } from '@business';
 import {
   S, dAll, dGet, dPut, dDel, toast, confirm2, uid, TODAY, logActivity,
   updateBadges, nav, closeModal, openModal, _getJWT, setJDate, _sb,
   saveCertExpiry, skipCertExpiry, setPendCertJob, _sendEmail, _certReadyEmailHtml, _blobToBase64,
+  resolveCompanyProfile,
 } from './main.js';
 
 let _certTab='dash';
@@ -1378,6 +1379,16 @@ export async function openEditCert(id){
 // writes need something stable to attach to), so this is only available when
 // editing an existing certificate — a brand-new one shows a short message
 // instead until it's been saved once.
+// Whether the certificate currently open in the form is a type with an
+// appliance log (PAT-style) — the only kind generateCertPdf() can build a
+// PDF for. Reads the same module state toggleApplianceSection() uses, so
+// it stays in sync automatically as the user changes the type chip.
+function _currentCertHasAppliances(){
+  const only = _selCertTypes.size===1 ? [..._selCertTypes][0] : null;
+  const ct = only ? (S.certTypes||[]).find(c=>c.name===only) : null;
+  return !!ct?.hasAppliances;
+}
+
 export function renderCertPdfSection(certId,url){
   const wraps=['cf-pdf-wrap','cf2-pdf-wrap'].map(id=>document.getElementById(id)).filter(Boolean);
   if(!wraps.length) return;
@@ -1385,13 +1396,51 @@ export function renderCertPdfSection(certId,url){
     wraps.forEach(wrap=>wrap.innerHTML=`<span style="color:var(--txt3);font-size:12px">Save the certificate first, then reopen it to attach a PDF.</span>`);
     return;
   }
+  // Generating is an alternative to uploading, never a replacement for it —
+  // the manual Upload/Replace button stays visible either way, so a cert
+  // that can't be auto-generated for some reason always still has a path.
+  const genBtn=_currentCertHasAppliances()?`<button type="button" class="btn btn-acc btn-xs" style="margin-left:6px" onclick="generateCertPdf()">⚡ ${url?'Regenerate':'Generate'} PDF</button>`:'';
   if(url){
     wraps.forEach(wrap=>wrap.innerHTML=`<button type="button" class="btn btn-ghost btn-sm" onclick="previewCertPdf('${url}')">📄 View Current PDF</button>
       <button class="btn btn-red btn-xs" onclick="removeCertPdf()" style="margin-left:6px">Remove</button>
-      <label class="btn btn-ghost btn-xs" style="margin-left:6px;cursor:pointer">Replace<input type="file" accept="application/pdf" style="display:none" onchange="uploadCertPdf(this)"></label>`);
+      <label class="btn btn-ghost btn-xs" style="margin-left:6px;cursor:pointer">Replace<input type="file" accept="application/pdf" style="display:none" onchange="uploadCertPdf(this)"></label>${genBtn}`);
   }else{
     wraps.forEach(wrap=>wrap.innerHTML=`<span style="color:var(--txt3);font-size:12px;margin-right:8px">No document uploaded yet</span>
-      <label class="btn btn-acc btn-sm" style="cursor:pointer">⬆ Upload PDF<input type="file" accept="application/pdf" style="display:none" onchange="uploadCertPdf(this)"></label>`);
+      <label class="btn btn-acc btn-sm" style="cursor:pointer">⬆ Upload PDF<input type="file" accept="application/pdf" style="display:none" onchange="uploadCertPdf(this)"></label>${genBtn}`);
+  }
+}
+
+// Generates a PAT-style certificate PDF from the cert's own appliance log
+// (see packages/ui/pat-template.js — ported from the standalone PAT-TEST
+// app) and stores it through the exact same upload path/PATCH a manual
+// "Upload PDF" does, so the cert list, Client Portal, and expiry reminders
+// can't tell the two apart afterwards.
+export async function generateCertPdf(){
+  const certId=window._editCertModalId;
+  if(!certId){ toast('Save the certificate first, then generate the PDF','warn'); return; }
+  if(!window.jspdf||!window.html2canvas){ toast('PDF library not loaded — check your internet and try again','error'); return; }
+  const cert=await dGet('certs',certId);
+  if(!cert){ toast('Certificate not found','error'); return; }
+  if(!(cert.appliances||[]).length){ toast('Add at least one appliance first','warn'); return; }
+  const wraps=['cf-pdf-wrap','cf2-pdf-wrap'].map(id=>document.getElementById(id)).filter(Boolean);
+  wraps.forEach(wrap=>wrap.innerHTML=`<span style="color:var(--txt3);font-size:12px">Generating PDF…</span>`);
+  try{
+    const profile=resolveCompanyProfile(cert.type);
+    let engineerName='';
+    if(cert.jobId){ const job=await dGet('jobs',cert.jobId); engineerName=job?.engineer||''; }
+    const doc=await renderPatCertificatePDF(window.jspdf.jsPDF,window.html2canvas,{cert,profile,engineerName});
+    const blob=doc.output('blob');
+    const path=`certs/${certId}/${Date.now()}-${Math.random().toString(36).slice(2,6)}.pdf`;
+    const url=await sbStorage(path,blob);
+    await _sb(`certs?id=eq.${encodeURIComponent(certId)}`,{method:'PATCH',body:{pdf_url:url,pdf_path:path},prefer:'return=minimal'});
+    renderCertPdfSection(certId,url);
+    toast('✅ Certificate PDF generated','success');
+    logActivity(`Certificate PDF generated for ${cert.address||'certificate'}`,'cert');
+    _maybeEmailCertReady(certId,url).catch(e=>console.warn('[DeepFlow] Cert-ready email failed',e));
+  }catch(e){
+    console.error('[DeepFlow] PDF generation failed',e);
+    toast('❌ PDF generation failed: '+(e.message||'').slice(0,80),'error');
+    renderCertPdfSection(certId,cert.pdfUrl||null);
   }
 }
 

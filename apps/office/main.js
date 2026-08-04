@@ -12,7 +12,7 @@ import {
   addExpiryToExistingCert, previewCertPdf, uploadCertPdf, removeCertPdf, saveCert, createRenewalJob,
   extractCertFromPhoto, renderCertMissing, setMissingFilter, renderExpiringPanel, clearExpiringFilters,
   toggleApplianceSection, addApplianceRow, updateApplianceField, removeApplianceRow,
-  openBulkApplianceModal, submitBulkAppliances,
+  openBulkApplianceModal, submitBulkAppliances, generateCertPdf,
 } from './certs.js';
 import {
   getCurDirSection, switchDirSection, renderDir, renderDirSection, updateDirTabBadges,
@@ -14252,7 +14252,7 @@ Object.assign(window, {
   dupUpdateName, dupUseExisting, duplicateInv, duplicateJob, editCertRecord, executeMerge, exportAllCSV,
   exportAuditLog, exportBackup, exportCertCSV, exportCertPDF, exportEngReport, exportEngReportPDF, 
   exportExpensesCSV, exportInvsCSV, exportMasterXLSX, exportPLCSV, exportPropsCSV, exportReportPDF, 
-  extractCertFromPhoto, fillCreditNote, fillFromMatch, filterCerts, fuzzyAddr, generateBulkReminder,
+  extractCertFromPhoto, fillCreditNote, fillFromMatch, filterCerts, fuzzyAddr, generateBulkReminder, generateCertPdf,
   handleAccess, handleLogoUpload, handleNotifClick, handlePriDotClick, importBackup, importCertCSV,
   invClientSelected, invNavSelect, jCalPickDate, jPickDate, jcalShiftMonth, kanbanDragOver, 
   kanbanDragStart, kanbanDrop, loadEarlierJobs, loadEngPerms, loadEngineerLocations, loadStorageDashboard, 
