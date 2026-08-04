@@ -37,6 +37,16 @@ let _certAppliances=[];
 
 export function getCertTab(){ return _certTab; }
 
+// Sanitized filename for a cert's PDF — the reference number (certNum) if
+// there is one, so however someone ends up with this file (a direct link,
+// a portal download, an emailed attachment) the filename they see matches
+// the reference on the certificate itself, not a meaningless id/timestamp.
+// Ported from PAT-TEST's own downloadPDF(), which does the exact same
+// ref-as-filename sanitization for its downloaded PDFs.
+function _certFilename(c){
+  return (c?.certNum||c?.type||'certificate').replace(/[^\w-]/g,'_')+'.pdf';
+}
+
 // Storage upload — moved here with its one and only caller (uploadCertPdf).
 async function sbStorage(path,file){
   const jwt=await _getJWT();
@@ -1431,7 +1441,7 @@ export async function generateCertPdf(){
     if(cert.jobId){ const job=await dGet('jobs',cert.jobId); engineerName=job?.engineer||''; }
     const doc=await renderPatCertificatePDF(window.jspdf.jsPDF,window.html2canvas,{cert,profile,engineerName});
     const blob=doc.output('blob');
-    const path=`certs/${certId}/${Date.now()}-${Math.random().toString(36).slice(2,6)}.pdf`;
+    const path=`certs/${certId}/${_certFilename(cert)}`;
     const url=await sbStorage(path,blob);
     await _sb(`certs?id=eq.${encodeURIComponent(certId)}`,{method:'PATCH',body:{pdf_url:url,pdf_path:path},prefer:'return=minimal'});
     renderCertPdfSection(certId,url);
@@ -1524,7 +1534,8 @@ export async function uploadCertPdf(inputEl){
   const wraps=['cf-pdf-wrap','cf2-pdf-wrap'].map(id=>document.getElementById(id)).filter(Boolean);
   wraps.forEach(wrap=>wrap.innerHTML=`<span style="color:var(--txt3);font-size:12px">Uploading…</span>`);
   try{
-    const path=`certs/${certId}/${Date.now()}-${Math.random().toString(36).slice(2,6)}.pdf`;
+    const c=await dGet('certs',certId);
+    const path=`certs/${certId}/${_certFilename(c)}`;
     const url=await sbStorage(path,file);
     await _sb(`certs?id=eq.${encodeURIComponent(certId)}`,{method:'PATCH',body:{pdf_url:url,pdf_path:path},prefer:'return=minimal'});
     renderCertPdfSection(certId,url);
@@ -1562,7 +1573,7 @@ async function _maybeEmailCertReady(certId, pdfUrl){
     if(blob.size>15*1024*1024){
       console.warn('[DeepFlow] Cert PDF too large to attach ('+(blob.size/1024/1024).toFixed(1)+'MB) — sending link only');
     } else {
-      attachments=[{filename:(c.certNum||c.type||'certificate').replace(/[^a-z0-9-]/gi,'_')+'.pdf', content:await _blobToBase64(blob)}];
+      attachments=[{filename:_certFilename(c), content:await _blobToBase64(blob)}];
     }
   }catch(e){ console.warn('[DeepFlow] Could not fetch cert PDF to attach, sending link only',e); }
   await _sendEmail({
