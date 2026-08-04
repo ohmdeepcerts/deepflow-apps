@@ -1700,6 +1700,64 @@ export function submitBulkAppliances(){
   toast(`${lines.length} appliance${lines.length>1?'s':''} added`,'success');
 }
 
+// Reads a photo of a (often handwritten) PAT appliance test log and
+// appends one row per appliance found — same extract-cert-data Edge
+// Function as extractCertFromPhoto() above, just with mode:'appliances'
+// so it asks Gemini for a table of rows instead of one cert's header
+// fields. Only assetId/description/result come back structured; instrument/
+// date/retest period are filled with the same defaults addApplianceRow()
+// uses, since a paper log essentially never varies those per row.
+export async function extractAppliancesFromPhoto(inputEl){
+  const file=inputEl.files[0];
+  inputEl.value='';
+  if(!file) return;
+  if(!file.type.startsWith('image/')){ toast('Please choose a photo (JPG/PNG)','error'); return; }
+  if(file.size>10*1024*1024){ toast(`File too large (${(file.size/1024/1024).toFixed(1)}MB) — 10MB max`,'error'); return; }
+  const status=document.getElementById('cf2-appliance-scan-status');
+  if(status) status.textContent='Reading appliance log…';
+  try{
+    const imageBase64=await new Promise((resolve,reject)=>{
+      const reader=new FileReader();
+      reader.onload=()=>resolve(String(reader.result).split(',')[1]||'');
+      reader.onerror=reject;
+      reader.readAsDataURL(file);
+    });
+    const jwt=await _getJWT();
+    const res=await fetch(`${SB_URL}/functions/v1/extract-cert-data`,{
+      method:'POST',
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+jwt,'Content-Type':'application/json'},
+      body:JSON.stringify({imageBase64, mimeType:file.type, preferGemini:S.aiExtractEnabled!==false, mode:'appliances'})
+    });
+    const data=await res.json();
+    if(!res.ok){ if(status) status.textContent=''; toast(data.error||'Could not read the appliance log','error'); return; }
+
+    if(data.source==='gemini'){
+      const rows=(data.appliances||[]).filter(a=>a.assetId||a.description);
+      if(!rows.length){ if(status) status.textContent=''; toast('No appliances found in that photo','warn'); return; }
+      const today=TODAY(), period=12;
+      rows.forEach(a=>{
+        _certAppliances.push({
+          id:uid(), assetId:a.assetId||'', description:a.description||'',
+          testInstrument:'', date:today, retestPeriod:period,
+          nextTest:calcNextTest(today,period),
+          result:a.result==='Pass'||a.result==='Fail'?a.result:'Pass',
+        });
+      });
+      renderApplianceTable();
+      if(status) status.textContent=`✅ ${rows.length} appliance${rows.length>1?'s':''} added — please double-check before saving`;
+      toast(`📷 ${rows.length} appliance${rows.length>1?'s':''} read from photo`,'success');
+    } else {
+      // OCR fallback — text only, no structured rows. Show it so the user
+      // can read the log off it and add rows manually.
+      if(status) status.innerHTML=`⚠️ AI extraction unavailable — raw text below, please add rows manually:<div style="margin-top:6px;padding:8px;background:var(--s2);border-radius:6px;font-size:11px;white-space:pre-wrap;max-height:120px;overflow:auto">${(data.rawText||'').replace(/</g,'&lt;')}</div>`;
+      toast('Could not auto-fill — showing raw text from the photo instead','warn');
+    }
+  }catch(e){
+    if(status) status.textContent='';
+    toast('❌ Extraction failed: '+(e.message||'').slice(0,80),'error');
+  }
+}
+
 export function openCertModal(){
   window._editCertModalId=null;
   window._certLinkedJob=null;

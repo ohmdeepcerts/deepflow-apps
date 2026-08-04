@@ -2874,9 +2874,11 @@ body.density-relaxed .jtable td{font-size:15px}
             <div style="overflow-x:auto;border:1px solid var(--border);border-radius:8px">
               <table class="set-table" id="cf2-appliances-tbl" style="min-width:680px"><thead><tr><th>Asset #</th><th>Description</th><th>Instrument</th><th>Date</th><th>Retest (mo)</th><th>Next Test</th><th>Result</th><th></th></tr></thead><tbody></tbody></table>
             </div>
-            <div style="margin-top:8px;display:flex;gap:6px">
+            <div style="margin-top:8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
               <button type="button" class="btn btn-ghost btn-sm" onclick="addApplianceRow()">+ Add Appliance</button>
               <button type="button" class="btn btn-ghost btn-sm" onclick="openBulkApplianceModal()">+ Bulk Add</button>
+              <label class="btn btn-ghost btn-sm" style="cursor:pointer">📷 Scan From Photo<input type="file" accept="image/*" style="display:none" onchange="extractAppliancesFromPhoto(this)"></label>
+              <span id="cf2-appliance-scan-status" style="font-size:12px;color:var(--txt3)"></span>
             </div>
           </div>
         </div>

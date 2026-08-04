@@ -31,14 +31,23 @@ function json(body: unknown, status = 200) {
 
 const EXTRACT_PROMPT = `This image is a UK electrical/gas compliance certificate (EICR, Gas Safety Record, PAT test, etc). Read it and return ONLY a JSON object with these exact keys (use null for anything you can't find, don't guess): {"certNum": string|null, "certType": string|null, "issueDate": "YYYY-MM-DD"|null, "expiryDate": "YYYY-MM-DD"|null, "propertyAddress": string|null}. certType should be one of: "EICR", "Gas Safety", "PAT Testing", "EPC", or the closest short label if none match.`;
 
-async function tryGemini(imageBase64: string, mimeType: string) {
+// Reads a photographed (often handwritten) PAT appliance test log — a
+// table of asset numbers and item descriptions — rather than a single
+// certificate's header fields. Instrument/date/retest-period/result are
+// deliberately NOT asked for here: on a real paper log those are almost
+// always constant across the whole sheet rather than written per row, so
+// the caller fills them in once via the bulk-add defaults instead of
+// guessing them per appliance.
+const EXTRACT_APPLIANCES_PROMPT = `This image is a handwritten or printed PAT (Portable Appliance Test) log — a table or list of electrical appliances, each with an asset number and a description. Read every row and return ONLY a JSON object with this exact shape: {"appliances": [{"assetId": string|null, "description": string|null, "result": "Pass"|"Fail"|null}]}. Include one entry per row in the order they appear. Only set "result" if a pass/fail mark is actually visible for that row (a tick, cross, "P"/"F", circle, etc) — otherwise use null. Skip a row only if it's entirely blank. Don't guess illegible text — use null for that field instead.`;
+
+async function tryGemini(imageBase64: string, mimeType: string, prompt: string) {
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        contents: [{ parts: [{ inline_data: { mime_type: mimeType, data: imageBase64 } }, { text: EXTRACT_PROMPT }] }],
+        contents: [{ parts: [{ inline_data: { mime_type: mimeType, data: imageBase64 } }, { text: prompt }] }],
         generationConfig: { response_mime_type: 'application/json' },
       }),
     }
@@ -74,16 +83,17 @@ Deno.serve(async (req) => {
   const { data: userData } = await supabase.auth.getUser(authHeader.slice(7));
   if (!userData?.user) return json({ error: 'Not authorized' }, 401);
 
-  let body: { imageBase64?: string; mimeType?: string; preferGemini?: boolean };
+  let body: { imageBase64?: string; mimeType?: string; preferGemini?: boolean; mode?: 'cert' | 'appliances' };
   try { body = await req.json(); } catch { return json({ error: 'Invalid request body' }, 400); }
-  const { imageBase64, mimeType, preferGemini } = body;
+  const { imageBase64, mimeType, preferGemini, mode } = body;
   if (!imageBase64 || !mimeType) return json({ error: 'imageBase64 and mimeType are required' }, 400);
 
   const wantGemini = preferGemini !== false && !!GEMINI_API_KEY;
+  const prompt = mode === 'appliances' ? EXTRACT_APPLIANCES_PROMPT : EXTRACT_PROMPT;
 
   if (wantGemini) {
     try {
-      return json(await tryGemini(imageBase64, mimeType));
+      return json(await tryGemini(imageBase64, mimeType, prompt));
     } catch (_e) {
       // fall through to OCR — Gemini being down/rate-limited shouldn't
       // leave the user with nothing.
