@@ -10,10 +10,11 @@ import { STATUS } from '../../packages/business/status.js';
 import { calcLineItemsTotal } from '../../packages/business/invoice-total.js';
 
 describe('STATUS', () => {
-  it('has the six values both the Office App and Employee App relied on independently before this extraction', () => {
+  it('has the six original values both the Office App and Employee App relied on independently before this extraction, plus ENGINEER_COMPLETED added for the Engineer two-stage completion flow', () => {
     expect(STATUS).toEqual({
       PENDING: 'Pending',
       IN_PROGRESS: 'In Progress',
+      ENGINEER_COMPLETED: 'Engineer Completed',
       COMPLETED: 'Completed',
       INVOICED: 'Invoiced',
       CANNOT_ACCESS: 'Cannot Access',

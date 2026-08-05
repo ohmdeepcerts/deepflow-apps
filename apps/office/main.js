@@ -13,7 +13,7 @@ import {
   extractCertFromPhoto, renderCertMissing, setMissingFilter, renderExpiringPanel, clearExpiringFilters,
   toggleApplianceSection, addApplianceRow, updateApplianceField, removeApplianceRow,
   openBulkApplianceModal, submitBulkAppliances, generateCertPdf, extractAppliancesFromPhoto,
-  openRenewCertModal, submitRenewCert,
+  openRenewCertModal, submitRenewCert, sendCertToClient,
 } from './certs.js';
 import {
   getCurDirSection, switchDirSection, renderDir, renderDirSection, updateDirTabBadges,
@@ -1755,8 +1755,8 @@ export function fmtDshort(s){
   try{const d=new Date(s+'T00:00:00');return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short'})}catch{return s}
 }
 
-const sEmoji={Pending:'🔴','In Progress':'🟡',Completed:'🟢',Invoiced:'🔵','Cannot Access':'🚫',Cancelled:'⚪'};
-export const sBadge=(s)=>{const cls={Pending:'b-pending','In Progress':'b-progress',Completed:'b-completed',Invoiced:'b-invoiced','Cannot Access':'b-noaccess',Cancelled:'b-cancelled'}[s]||'';return`<span class="badge ${cls}">${sEmoji[s]||'⚪'} ${s}</span>`};
+const sEmoji={Pending:'🔴','In Progress':'🟡','Engineer Completed':'🔷',Completed:'🟢',Invoiced:'🔵','Cannot Access':'🚫',Cancelled:'⚪'};
+export const sBadge=(s)=>{const cls={Pending:'b-pending','In Progress':'b-progress','Engineer Completed':'b-engcompleted',Completed:'b-completed',Invoiced:'b-invoiced','Cannot Access':'b-noaccess',Cancelled:'b-cancelled'}[s]||'';return`<span class="badge ${cls}">${sEmoji[s]||'⚪'} ${s}</span>`};
 const tradeColor=(t)=>{const f=(S.trades||[]).find(x=>x.name===t);return f?f.color:'#4a5570'};
 
 // ════════════════════════════════════════════════════════════════
@@ -1905,7 +1905,7 @@ async function bulkCopyToDate(){
 async function bulkSetStatus(){
   const ids=[...selJobs];
   if(!ids.length){toast('Select jobs first','error');return;}
-  const status=await _pickFromList('Set status to:',['Pending','In Progress','Completed','Invoiced','Cannot Access','Cancelled']);
+  const status=await _pickFromList('Set status to:',['Pending','In Progress','Engineer Completed','Completed','Invoiced','Cannot Access','Cancelled']);
   if(!status) return;
   // Sequential, not concurrent: onJobComplete()/createCertEntry() coordinate
   // through a shared _pendCertJob global, so completing several jobs at
@@ -2407,7 +2407,7 @@ function renderMiniCal(){
     else if(isSel)  cls += ' jcal-selected';
     if(isPast)      cls += ' jcal-past';
     if(jobs.length) cls += ' jcal-has-jobs';
-    const statusColors = {Pending:'#f5a623','In Progress':'#4f8fff',Completed:'#22c55e',Invoiced:'#a855f7',Emergency:'#e05252'};
+    const statusColors = {Pending:'#f5a623','In Progress':'#4f8fff','Engineer Completed':'#0891b2',Completed:'#22c55e',Invoiced:'#a855f7',Emergency:'#e05252'};
     const dotSet = [...new Set(jobs.map(j=>j.status).slice(0,3))];
     const dots = dotSet.map(s=>`<div class="jcal-dot" style="background:${statusColors[s]||'#4e6080'}"></div>`).join('');
     html += `<div class="${cls}" onclick="jCalPickDate('${iso}');${jobs.length ? `setJRange('all');renderJobs();` : ''}" title="${iso}" style="${jobs.length ? 'cursor:pointer' : ''}">${d}${dots ? `<div class="jcal-dots">${dots}</div>` : ''}</div>`;
@@ -2544,7 +2544,7 @@ async function renderJobs(){
   jobs.forEach(j=>{ const d=j.date||'TBC'; if(!groups[d]){groups[d]=[];groupOrder.push(d);} groups[d].push(j); });
 
   const stripeClass = s => ({'Pending':'jsr-stripe-pending','In Progress':'jsr-stripe-progress','Completed':'jsr-stripe-done','Invoiced':'jsr-stripe-invoiced','Cannot Access':'jsr-stripe-noaccess','Cancelled':'jsr-stripe-cancelled','Emergency':'jsr-stripe-emg'}[s]||'jsr-stripe-pending');
-  const statusSel = (jid,s,label) => `<select class="jsr-sel" aria-label="Status for ${escHtml(label||'job')}" onchange="quickStatus('${jid}',this.value)" onclick="event.stopPropagation()">${['Pending','In Progress','Completed','Invoiced','Cannot Access','Cancelled'].map(st=>`<option ${s===st?'selected':''}>${st}</option>`).join('')}</select>`;
+  const statusSel = (jid,s,label) => `<select class="jsr-sel" aria-label="Status for ${escHtml(label||'job')}" onchange="quickStatus('${jid}',this.value)" onclick="event.stopPropagation()">${['Pending','In Progress','Engineer Completed','Completed','Invoiced','Cannot Access','Cancelled'].map(st=>`<option ${s===st?'selected':''}>${st}</option>`).join('')}</select>`;
 
   // Scrolling to the top of the bounded default view doesn't fetch anything
   // further back on its own — this banner is the actual way to see earlier
@@ -2591,8 +2591,8 @@ async function renderJobs(){
       // has a real text label.
       const priLabels={'Emergency':'🚨 Emergency','Urgent':'🔥 Urgent','Certificate':'📋 Cert','Repair':'🔧 Repair','Low':'▽ Low'};
       const prtyPill=priLabels[j.priority]||'';
-      const statusCls={'Pending':'jsr-chip-pend','In Progress':'jsr-chip-time','Completed':'jsr-chip-done','Invoiced':'jsr-chip-inv','Cancelled':''}[j.status]||'';
-      const statusLabel={'Pending':'⏳','In Progress':'🔨','Completed':'✓','Invoiced':'◎','Cancelled':'✕'}[j.status]||'';
+      const statusCls={'Pending':'jsr-chip-pend','In Progress':'jsr-chip-time','Engineer Completed':'jsr-chip-done','Completed':'jsr-chip-done','Invoiced':'jsr-chip-inv','Cancelled':''}[j.status]||'';
+      const statusLabel={'Pending':'⏳','In Progress':'🔨','Engineer Completed':'🔷','Completed':'✓','Invoiced':'◎','Cancelled':'✕'}[j.status]||'';
 
       // ROW 2: compact info — desc + only the contact details that exist
       // Escaped here, once, at extraction — every render use below (contact
@@ -5524,8 +5524,8 @@ async function _renderInvAuditTrail(invId, inv){
 
     // Audit entries
     (audits||[]).forEach(a=>{
-      const icons={edit:'✎',convert:'◎',sync:'↔',created:'+',deleted:'🗑',sent:'✉',paid:'✓',status:'◉'};
-      const colors={edit:'blue',convert:'purple',sync:'orange',created:'green',deleted:'red',sent:'blue',paid:'green',status:'amber'};
+      const icons={edit:'✎',convert:'◎',sync:'↔',created:'+',deleted:'🗑',sent:'✉',failed:'⚠',paid:'✓',status:'◉'};
+      const colors={edit:'blue',convert:'purple',sync:'orange',created:'green',deleted:'red',sent:'blue',failed:'red',paid:'green',status:'amber'};
       html+=_auditEntry(icons[a.action]||'●',colors[a.action]||'grey',a.action?.toUpperCase(),a.details||'',a.timestamp);
     });
 
@@ -7137,8 +7137,13 @@ async function sendInvEmail(){
     html: _invoiceReadyEmailHtml(inv, t),
     attachments: [{filename:(inv.number||'invoice')+'.pdf', content:b64}],
   });
-  if(!r.ok){ toast(r.error||'Could not send email — check email setup','error'); return; }
+  if(!r.ok){
+    await _sb('invoice_audit',{method:'POST',body:{invoiceId:id,action:'failed',details:`Email to ${inv.clientEmail} failed: ${(r.error||'unknown error').slice(0,150)}`,to:inv.clientEmail,user:_appUser?.name||'System',timestamp:Date.now()}}).catch(()=>{});
+    toast(r.error||'Could not send email — check email setup','error');
+    return;
+  }
   inv.status='Awaiting Payment';await dPut('invoices',inv);
+  await _sb('invoice_audit',{method:'POST',body:{invoiceId:id,action:'sent',details:`Emailed to ${inv.clientEmail}${inv.agentCC?' (CC: '+inv.agentCC+')':''}`,to:inv.clientEmail,user:_appUser?.name||'System',timestamp:Date.now()}}).catch(()=>{});
   _storeInvoicePDF(inv,doc).catch(e=>console.warn('[DeepFlow] Background PDF store failed for',inv.number,e));
   renderInvList();viewInv(id);updateBadges();
   closeModal('mo-inv-send');
@@ -7974,6 +7979,7 @@ function renderSettings(){
   cb('s-req-checklist',S.reqChecklist||false);
   cb('s-gas-prompt',S.gasPrompt!==false);
   cb('s-auto-inv-s',S.autoInvOnComplete!==false);
+  cb('s-cert-auto-email',S.certAutoEmail!==false);
   cb('s-show-price-eng',S.showPriceEng||false);
   cb('s-drag-sort',S.dragSort!==false);
   cb('s-confirm-delete',S.confirmDelete!==false);
@@ -9097,7 +9103,7 @@ async function saveSettings(){
     's-inv-show-sig','s-inv-email-auto','s-inv-cc-agent','s-inv-watermark-paid',
     's-inv-auto-draft-complete','s-inv-sync-amount','s-inv-sync-desc',
     's-inv-draft-on-job-change','s-inv-notify-admin-edit','s-inv-show-audit',
-    's-vat-enabled','s-vat-enabled-main'];
+    's-vat-enabled','s-vat-enabled-main','s-cert-auto-email'];
   const cbKeys=['pinLock','showOnlineStatus','showFab','animations','compactBadges',
     'notifyDash','notifyBadge','slaDash','reqChecklist','gasPrompt',
     'autoInvOnComplete','showPriceEng','dragSort','confirmDelete','autoInvOnComplete',
@@ -9106,7 +9112,7 @@ async function saveSettings(){
     'invShowSig','invEmailAuto','invCCAgent','invWatermarkPaid',
     'invAutoDraftOnComplete','invSyncAmount','invSyncDesc',
     'invDraftOnJobChange','invNotifyAdminOnEdit','invShowAuditTrail',
-    'vatEnabled','vatEnabled'];
+    'vatEnabled','vatEnabled','certAutoEmail'];
   cbs.forEach((id,i)=>{if(getCB(id)!==null)S[cbKeys[i]]=getCB(id)});
   // v3 text fields
   if(get('s-inv-pdf-color')) S.invPdfColor=get('s-inv-pdf-color');
@@ -9671,7 +9677,7 @@ async function renderEngView(){
               <button class="btn btn-wa btn-xs" onclick="waSingleEngJob('${j.id}','${eng}');event.stopPropagation()">📱 Send</button>
               <button class="btn btn-ghost btn-xs" onclick="openJobModal('${j.id}');event.stopPropagation()">✎ Edit</button>
               <select class="csel" style="font-size:11px;padding:3px 6px;width:auto;flex:1" onchange="quickStatus('${j.id}',this.value);setTimeout(renderEngView,300)" onclick="event.stopPropagation()">
-                ${['Pending','In Progress','Completed','Invoiced','Cancelled'].map(s=>`<option ${j.status===s?'selected':''}>${s}</option>`).join('')}
+                ${['Pending','In Progress','Engineer Completed','Completed','Invoiced','Cancelled'].map(s=>`<option ${j.status===s?'selected':''}>${s}</option>`).join('')}
               </select>
             </div>
           </div>`;
@@ -10720,10 +10726,11 @@ async function handleRealtimeChange(payload){
 
     // Notification for status changes — arrival/departure phrased specially
     if(prev && prev.status !== job.status) {
-      const icon = {[STATUS.COMPLETED]:'\u2705',[STATUS.IN_PROGRESS]:'\ud83d\udd28',[STATUS.INVOICED]:'\u25ce',[STATUS.PENDING]:'\u23f3'}[job.status]||'\ud83d\udd14';
+      const icon = {[STATUS.COMPLETED]:'\u2705',[STATUS.ENGINEER_COMPLETED]:'\ud83d\udd37',[STATUS.IN_PROGRESS]:'\ud83d\udd28',[STATUS.INVOICED]:'\u25ce',[STATUS.PENDING]:'\u23f3'}[job.status]||'\ud83d\udd14';
       let title;
       if(job.status===STATUS.IN_PROGRESS) title=`Engineer arrived — ${job.engineer||'Engineer'}`;
-      else if(job.status===STATUS.COMPLETED) title=`Engineer completed & left — ${job.engineer||'Engineer'}`;
+      else if(job.status===STATUS.ENGINEER_COMPLETED) title=`Engineer completed & left — needs review — ${job.engineer||'Engineer'}`;
+      else if(job.status===STATUS.COMPLETED) title=`Job finalized`;
       else title=`Job updated — ${job.status}`;
       _pushNotif(title, `${job.jobNum||''} ${job.address||''}`.trim(), icon, ()=>{ openJobModal(job.id); nav('jobs'); });
     }
@@ -11230,7 +11237,8 @@ document.addEventListener('contextmenu',async e=>{
       <div style="font-size:10px;color:var(--txt3);margin-top:2px">${job.jobNum||''} ${job.date||''}</div>
     </div>
     <div style="padding:4px 0">
-      <div class="ctx-item" onclick="quickStatus('${job.id}','Completed');closeCtx()">✅ Mark Completed</div>
+      <div class="ctx-item" onclick="quickStatus('${job.id}','Engineer Completed');closeCtx()">🔷 Mark Engineer Completed</div>
+      <div class="ctx-item" onclick="quickStatus('${job.id}','Completed');closeCtx()">✅ Mark Completed (Finalize)</div>
       <div class="ctx-item" onclick="quickStatus('${job.id}','In Progress');closeCtx()">🔨 Mark In Progress</div>
       <div class="ctx-item" onclick="quickStatus('${job.id}','Cannot Access');closeCtx()">🚫 Mark Cannot Access</div>
       <div class="ctx-item" onclick="quickStatus('${job.id}','Invoiced');closeCtx()">◎ Mark Invoiced</div>
@@ -11798,7 +11806,7 @@ async function showJobAudit(jobId){
   const typeIcon={sync:'🔗',warn:'⚠️',invoice:'◎',job:'🔧',payment:'💳',info:'ℹ️'};
   document.getElementById('audit-job-info').innerHTML=`
     <strong>${job.jobNum||''}</strong> · ${job.address||''} · <span style="color:var(--txt2)">${job.description||'—'}</span>
-    <span class="badge b-${job.status===STATUS.COMPLETED?'completed':job.status===STATUS.PENDING?'pending':'invoiced'}" style="margin-left:8px">${job.status}</span>
+    <span class="badge b-${job.status===STATUS.COMPLETED?'completed':job.status===STATUS.ENGINEER_COMPLETED?'engcompleted':job.status===STATUS.PENDING?'pending':'invoiced'}" style="margin-left:8px">${job.status}</span>
   `;
 
   document.getElementById('audit-list').innerHTML=jobActs.length?jobActs.map(a=>`
@@ -14282,7 +14290,7 @@ Object.assign(window, {
   saveCreditNote, saveDashNotes, saveDisposableInvoice, saveEngDefaults, saveExpense, saveInv, 
   saveJob, saveLandlordFromJob, saveNotifSettings, saveOvertimeLog, savePayment, savePerson, 
   saveProp, saveSettings, saveStandaloneProforma, searchJobForInvoice,
-  selectAddr, selectAllVisibleJobs, sendAllOverdueEmail, sendAllOverdueWA, sendBroadcast, sendInvEmail, sendInvWA,
+  selectAddr, selectAllVisibleJobs, sendAllOverdueEmail, sendAllOverdueWA, sendBroadcast, sendCertToClient, sendInvEmail, sendInvWA,
   showPortalInviteModal,
   sendLandlordComplete, sendLandlordWA, sendOverdueWA, sendTenantWA, sendToWA, setAccent, setCremMode, setFontSize,
   setInvFilter, setInvType, setInvView, setJRange, setJobsView, setPriFilter,

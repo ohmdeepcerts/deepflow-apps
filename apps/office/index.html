@@ -369,6 +369,7 @@ input[type=color]{border:none;background:none;cursor:pointer;padding:0;height:32
 .b-awaiting{background:rgba(180,83,9,.12);color:var(--yellow);border-color:rgba(180,83,9,.2)}
 .b-cancelled{background:rgba(107,99,85,.15);color:var(--txt3);border-color:rgba(107,99,85,.22)}
 .b-noaccess{background:rgba(249,115,22,.15);color:#f97316;border:1px solid rgba(249,115,22,.3)}
+.b-engcompleted{background:rgba(8,145,178,.12);color:#0891b2;border:1px solid rgba(8,145,178,.3)}
 
 /* ── Scrollbar ── */
 ::-webkit-scrollbar{width:7px;height:7px;transition:width .15s var(--ease)}
@@ -1879,7 +1880,7 @@ body.density-relaxed .jtable td{font-size:15px}
       </select>
       <select class="fs" id="j-status-filter" onchange="renderJobs()" style="width:110px;padding:4px 6px;font-size:11px">
         <option value="">Status</option>
-        <option>Pending</option><option>In Progress</option><option>Completed</option><option>Invoiced</option><option>Cancelled</option><option>Cannot Access</option>
+        <option>Pending</option><option>In Progress</option><option>Engineer Completed</option><option>Completed</option><option>Invoiced</option><option>Cancelled</option><option>Cannot Access</option>
       </select>
 
       <!-- Settings menu (hidden options) -->
@@ -3331,6 +3332,10 @@ body.density-relaxed .jtable td{font-size:15px}
             <input type="text" id="s-cert-ref-serial" class="fi" placeholder="e.g. GBE1000">
             <div style="font-size:11px;color:var(--txt3);margin-top:4px">When a certificate's Reference Number is left blank, one is generated automatically from here — e.g. GBE1000 → GBE1001 → GBE1002… Leave blank to keep entering reference numbers manually.</div>
           </div>
+          <div style="margin-top:10px">
+            <label class="fcheck"><input type="checkbox" id="s-cert-auto-email" checked onchange="saveSettings()"> Email certificate to client automatically once it's ready</label>
+            <div style="font-size:11px;color:var(--txt3);margin-top:4px;margin-left:24px">Turn off to send certificates manually — a "Send to Client" button will appear on each certificate instead.</div>
+          </div>
           <button class="btn btn-acc btn-sm" style="margin-top:8px" onclick="saveSettings()">Save</button>
         </div>
         <div class="set-section">
@@ -4234,6 +4239,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS last_accuracy integer;</div>
         <select id="jf-status" class="fs">
           <option value="Pending">🔴 Pending</option>
           <option value="In Progress">🟡 In Progress</option>
+          <option value="Engineer Completed">🔷 Engineer Completed</option>
           <option value="Completed">🟢 Completed</option>
           <option value="Invoiced">🔵 Invoiced</option>
           <option value="Cannot Access">🚫 Cannot Access</option>

@@ -64,7 +64,7 @@ function _showMap(pts,cLat,cLng,zoom,route,container){
   const tileUrl='https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png';
   const tileAttr='© OpenTopoMap (CC-BY-SA)';
   const markers=pts.map((p,i)=>{
-    const col=p.priority==='Emergency'?'#f04444':p.status==='Completed'?'#22c55e':p.status==='Cannot Access'?'#f97316':'#4f8fff';
+    const col=p.priority==='Emergency'?'#f04444':(p.status==='Completed'||p.status==='Engineer Completed')?'#22c55e':p.status==='Cannot Access'?'#f97316':'#4f8fff';
     const lbl=(p.label||'').replace(/'/g,"\\'").replace(/</g,'&lt;').replace(/>/g,'&gt;');
     const num=route?`<div style="background:${col};color:#fff;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;border:2.5px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.4)">${i+1}</div>`
       :`<div style="width:16px;height:16px;border-radius:50%;background:${col};border:2.5px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.4)"></div>`;

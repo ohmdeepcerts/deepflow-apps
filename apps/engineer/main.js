@@ -840,15 +840,18 @@ async function loadJobs(){
     const[todayJobs,upcoming,done]=await Promise.all([
       sb(`jobs?date=eq.${today}&engineer=ilike.${enc}&order=created.asc&select=*`),
       sb(`jobs?date=gt.${today}&date=lte.${future}&engineer=ilike.${enc}&order=date.asc&select=*`),
-      // Include Completed, Cannot Access, and Cancelled in history — not just Completed
-      sb(`jobs?engineer=ilike.${enc}&status=in.(Completed,Cannot Access,Cancelled)&order=modified.desc&limit=60&select=*`)
+      // Include Engineer Completed, Completed, Cannot Access, and Cancelled in
+      // history — from the engineer's own perspective, "Engineer Completed" IS
+      // done (they submitted it); office finalizing it later to "Completed"
+      // shouldn't make it disappear from or reappear in this list.
+      sb(`jobs?engineer=ilike.${enc}&status=in.(Engineer Completed,Completed,Cannot Access,Cancelled)&order=modified.desc&limit=60&select=*`)
     ]);
     renderJobs('jobs-today',todayJobs||[],'today');
     renderJobs('jobs-upcoming',upcoming||[],'upcoming');
     renderJobs('jobs-done',done||[],'done');
     _allJobs=[...(todayJobs||[]),...(upcoming||[]),...(done||[])];
     _checkForNewJobs(todayJobs||[]);
-    const incomplete=(todayJobs||[]).filter(j=>j.status!=='Completed').length;
+    const incomplete=(todayJobs||[]).filter(j=>j.status!==STATUS.ENGINEER_COMPLETED&&j.status!==STATUS.COMPLETED).length;
     _setBadge('today',incomplete);
     const ts=document.getElementById('refresh-ts');
     if(ts)ts.textContent='Updated '+new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
@@ -940,15 +943,15 @@ async function quickStatusUpdate(id, newStatus){
       const notifPayload={jobId:id,jobNum:j0?.jobNum,address:j0?.address,oldStatus,newStatus,landlordName:j0?.landlordName||'',landlordPhone:j0?.landlordPhone||''};
       sendNotificationWebhook('job_status_change',notifPayload);
       sendPushNotification('job_status_change',notifPayload);
-      if(newStatus==='Completed' && j0) notifyNextTenantEta(j0);
+      if(newStatus===STATUS.ENGINEER_COMPLETED && j0) notifyNextTenantEta(j0);
     }
     // Update local cache
     if(_allJobs){ const j=_allJobs.find(x=>x.id===id); if(j) j.status=newStatus; }
     if(!queued) loadJobs();
     if(queued){
       toast(`📶 Offline — status will sync to "${newStatus}" once back online`,'warn');
-    } else if(newStatus==='Completed'){
-      toast('✅ Job marked complete!','success');
+    } else if(newStatus===STATUS.ENGINEER_COMPLETED){
+      toast('✅ Marked complete — office will review and finalize','success');
       if(navigator.vibrate) navigator.vibrate([100,50,200]);
     } else if(newStatus==='In Progress'){
       toast('▶ Job started','info');
@@ -980,9 +983,9 @@ function _buildCard(j){
       ${certs}
     </div>
     <div class="job-quick-row" onclick="event.stopPropagation()">
-      ${j.status!=='Completed'?`<button class="jq-btn jq-green" onclick="quickStatusUpdate('${j.id}','Completed')">✅ Done</button>`:''}
+      ${j.status!==STATUS.ENGINEER_COMPLETED&&j.status!==STATUS.COMPLETED?`<button class="jq-btn jq-green" onclick="quickStatusUpdate('${j.id}','${STATUS.ENGINEER_COMPLETED}')">✅ Done</button>`:''}
       ${j.status==='Pending'?`<button class="jq-btn jq-blue" onclick="quickStatusUpdate('${j.id}','In Progress')">▶ Start</button>`:''}
-      ${j.status!=='Cannot Access'?`<button class="jq-btn jq-red" onclick="quickStatusUpdate('${j.id}','Cannot Access')">🚫 No Access</button>`:''}
+      ${j.status!=='Cannot Access'&&j.status!==STATUS.ENGINEER_COMPLETED&&j.status!==STATUS.COMPLETED?`<button class="jq-btn jq-red" onclick="quickStatusUpdate('${j.id}','Cannot Access')">🚫 No Access</button>`:''}
       ${j.address?`<a class="jq-btn jq-map" href="${mapUrl}" target="_blank">🗺 Map</a>`:''}
     </div>
   </div>`;
@@ -991,6 +994,7 @@ function _buildCard(j){
 function _sc(s,p){
   if(p==='Emergency')return 's-emergency';
   if(s===STATUS.COMPLETED)return 's-completed';
+  if(s===STATUS.ENGINEER_COMPLETED)return 's-completed';
   if(s===STATUS.IN_PROGRESS)return 's-progress';
   if(s===STATUS.CANNOT_ACCESS)return 's-noaccess';
   if(s===STATUS.CANCELLED)return 's-cancelled';
@@ -999,6 +1003,7 @@ function _sc(s,p){
 function _spill(s,p){
   if(p==='Emergency')return'<span class="status-pill sp-emergency">🚨 Emergency</span>';
   if(s===STATUS.COMPLETED)return'<span class="status-pill sp-completed">✅ Done</span>';
+  if(s===STATUS.ENGINEER_COMPLETED)return'<span class="status-pill sp-completed">✔ Awaiting Office Review</span>';
   if(s===STATUS.IN_PROGRESS)return'<span class="status-pill sp-progress">🔄 In Progress</span>';
   if(s===STATUS.CANNOT_ACCESS)return'<span class="status-pill sp-noaccess">🚫 No Access</span>';
   if(s===STATUS.CANCELLED)return'<span class="status-pill sp-cancelled">⚪ Cancelled</span>';
@@ -1254,12 +1259,13 @@ function _waShareNotes(){
 // ══════════════════════════════════════════════════════════════
 // Status flow: what each status can move to
 const STATUS_FLOW={
-  'Pending':       ['In Progress','Cannot Access'],
-  'In Progress':   ['Completed','Cannot Access'],
-  'Completed':     [],           // LOCKED — no going back
-  'Cannot Access': ['In Progress'], // office can reassign but engineer can re-attempt
-  'Invoiced':      [],           // LOCKED
-  'Cancelled':     []            // LOCKED
+  'Pending':            ['In Progress','Cannot Access'],
+  'In Progress':        [STATUS.ENGINEER_COMPLETED,'Cannot Access'],
+  'Engineer Completed': ['In Progress'], // engineer can reopen if marked done by mistake
+  'Completed':          [],           // LOCKED — finalized by the office, no going back
+  'Cannot Access':      ['In Progress'], // office can reassign but engineer can re-attempt
+  'Invoiced':           [],           // LOCKED
+  'Cancelled':          []            // LOCKED
 };
 
 function _statusButtons(currentStatus){
@@ -1273,6 +1279,13 @@ function _statusButtons(currentStatus){
       <div style="font-weight:400;color:var(--txt2)">Status is locked. Contact the office if changes are needed.</div></div>
     </div>`;
   }
+  if(currentStatus===STATUS.COMPLETED){
+    return `<div style="background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);border-radius:12px;padding:12px 14px;font-size:12px;color:#22c55e;font-weight:600;display:flex;align-items:center;gap:8px">
+      <span style="font-size:18px">✅</span>
+      <div><div style="font-weight:800;margin-bottom:2px">This job has been completed and finalized</div>
+      <div style="font-weight:400;color:var(--txt2)">The office has reviewed and closed this out. Contact the office if changes are needed.</div></div>
+    </div>`;
+  }
   if(currentStatus==='Cancelled'){
     return `<div style="background:rgba(100,116,139,.08);border:1px solid rgba(100,116,139,.25);border-radius:12px;padding:12px 14px;font-size:12px;color:var(--txt2);font-weight:600;display:flex;align-items:center;gap:8px">
       <span style="font-size:18px">🚫</span>
@@ -1282,10 +1295,10 @@ function _statusButtons(currentStatus){
   }
 
   const all=[
-    {key:'Pending',      label:'⏳ Pending',    cls:'sp-pending'},
-    {key:'In Progress',  label:'🔄 In Progress', cls:'sp-progress'},
-    {key:'Completed',    label:'✅ Completed',   cls:'sp-completed'},
-    {key:'Cannot Access',label:'🚫 No Access',   cls:'sp-noaccess'},
+    {key:'Pending',                  label:'⏳ Pending',    cls:'sp-pending'},
+    {key:'In Progress',              label:'🔄 In Progress', cls:'sp-progress'},
+    {key:STATUS.ENGINEER_COMPLETED,  label:'✅ Complete',    cls:'sp-completed'},
+    {key:'Cannot Access',            label:'🚫 No Access',   cls:'sp-noaccess'},
   ];
   const allowed=STATUS_FLOW[currentStatus]||[];
   return all.map(s=>{
@@ -1340,7 +1353,7 @@ async function updateStatus(status, btn){
       const notifPayload={jobId,jobNum:currentJob.jobNum,address:currentJob.address,oldStatus,newStatus:status,landlordName:currentJob.landlordName||'',landlordPhone:currentJob.landlordPhone||''};
       sendNotificationWebhook('job_status_change',notifPayload);
       sendPushNotification('job_status_change',notifPayload);
-      if(status==='Completed') notifyNextTenantEta(currentJob);
+      if(status===STATUS.ENGINEER_COMPLETED) notifyNextTenantEta(currentJob);
     }
     currentJob.status=status;
     document.getElementById('modal-status-pill').innerHTML=_spill(status,currentJob.priority);
@@ -1358,6 +1371,7 @@ function playStatusAnim(status){
   // Subtle haptic
   const haptics={
     'Completed':[30,20,60],
+    'Engineer Completed':[30,20,60],
     'In Progress':[15],
     'Cancelled':[60],
     'Cannot Access':[60]
@@ -1367,6 +1381,7 @@ function playStatusAnim(status){
   // Professional status bar — slides in from top, fades out
   const colors={
     'Completed':   {bg:'#166534',border:'#22c55e',icon:'✓'},
+    'Engineer Completed':{bg:'#166534',border:'#22c55e',icon:'✓'},
     'In Progress': {bg:'#1e3a5f',border:'#3b82f6',icon:'◉'},
     'Cancelled':   {bg:'#450a0a',border:'#e05252',icon:'✕'},
     'Cannot Access':{bg:'#450a0a',border:'#e05252',icon:'✕'},
@@ -1479,10 +1494,15 @@ async function loadDash(){
     // would break badge counts, new-job detection, and the job list display.
     const dashJobs=(await sb(`jobs?engineer=ilike.${enc}&select=*&limit=5000`))||[];
     const todayJ=dashJobs.filter(j=>j.date===today);
-    const todayDone=todayJ.filter(j=>j.status==='Completed').length;
-    const monthDone=dashJobs.filter(j=>j.status==='Completed'&&(j.date||'')>=monStart).length;
-    const yearDone=dashJobs.filter(j=>j.status==='Completed'&&(j.date||'')>=yrStart).length;
-    const totalDone=dashJobs.filter(j=>j.status==='Completed').length;
+    // From the engineer's own perspective a job they've marked Engineer
+    // Completed IS done — these dashboard counts intentionally differ from
+    // the office-side "completed" business stats (which wait for office to
+    // finalize) since this screen is about the engineer's own workload.
+    const _isDone=j=>j.status==='Completed'||j.status===STATUS.ENGINEER_COMPLETED;
+    const todayDone=todayJ.filter(_isDone).length;
+    const monthDone=dashJobs.filter(j=>_isDone(j)&&(j.date||'')>=monStart).length;
+    const yearDone=dashJobs.filter(j=>_isDone(j)&&(j.date||'')>=yrStart).length;
+    const totalDone=dashJobs.filter(_isDone).length;
     const openJobs=dashJobs.filter(j=>j.status==='Pending'||j.status==='In Progress').length;
     const areas={};
     dashJobs.forEach(j=>{const p=(j.address||'').split(',');const a=(p.length>1?p[p.length-2]:p[0]||'Unknown').trim();areas[a]=(areas[a]||0)+1;});
@@ -1511,9 +1531,9 @@ async function loadDash(){
     const topCerts=Object.entries(certs).sort((a,b)=>b[1]-a[1]).slice(0,8);
     const mMap={};
     for(let i=5;i>=0;i--){const d=new Date();d.setMonth(d.getMonth()-i);mMap[localDateStr(d).slice(0,7)]=0;}
-    dashJobs.filter(j=>j.status==='Completed').forEach(j=>{const m=(j.date||'').slice(0,7);if(mMap[m]!==undefined)mMap[m]++;});
+    dashJobs.filter(_isDone).forEach(j=>{const m=(j.date||'').slice(0,7);if(mMap[m]!==undefined)mMap[m]++;});
     const mL=Object.keys(mMap),mV=Object.values(mMap),mMx=Math.max(...mV,1);
-    const recent=[...dashJobs].filter(j=>j.status==='Completed').sort((a,b)=>(b.modified||0)-(a.modified||0)).slice(0,5);
+    const recent=[...dashJobs].filter(_isDone).sort((a,b)=>(b.modified||0)-(a.modified||0)).slice(0,5);
     const wBanner=_weather?`<div style="display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.08);border-radius:20px;padding:5px 14px;width:fit-content;margin-top:10px">
       <span style="font-size:20px">${_weather.icon}</span>
       <span style="font-size:13px;font-weight:700">${_weather.temp}°C</span>

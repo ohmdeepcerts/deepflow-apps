@@ -1506,7 +1506,8 @@ export function renderCertPdfSection(certId,url){
   if(url){
     wraps.forEach(wrap=>wrap.innerHTML=`<button type="button" class="btn btn-ghost btn-sm" onclick="previewCertPdf('${url}')">📄 View Current PDF</button>
       <button class="btn btn-red btn-xs" onclick="removeCertPdf()" style="margin-left:6px">Remove</button>
-      <label class="btn btn-ghost btn-xs" style="margin-left:6px;cursor:pointer">Replace<input type="file" accept="application/pdf" style="display:none" onchange="uploadCertPdf(this)"></label>${genBtn}`);
+      <label class="btn btn-ghost btn-xs" style="margin-left:6px;cursor:pointer">Replace<input type="file" accept="application/pdf" style="display:none" onchange="uploadCertPdf(this)"></label>${genBtn}
+      <button type="button" class="btn btn-ghost btn-xs" style="margin-left:6px" onclick="sendCertToClient()">✉ Send to Client</button>`);
   }else{
     wraps.forEach(wrap=>wrap.innerHTML=`<span style="color:var(--txt3);font-size:12px;margin-right:8px">No document uploaded yet</span>
       <label class="btn btn-acc btn-sm" style="cursor:pointer">⬆ Upload PDF<input type="file" accept="application/pdf" style="display:none" onchange="uploadCertPdf(this)"></label>${genBtn}`);
@@ -1640,21 +1641,24 @@ export async function uploadCertPdf(inputEl){
   }
 }
 
-// Auto-emails the client the moment their certificate PDF is actually
-// ready — the previous flow left the office to remember to tell anyone.
-// Prefers the cert's own .email field; most certs are created straight
-// from a job though, where that field is never filled in, so falls back
-// to the linked job's landlord/agency email. Silently does nothing if
-// neither is on file — a missing address shouldn't block the upload.
-async function _maybeEmailCertReady(certId, pdfUrl){
+// Emails the client their certificate PDF. Auto-fires the moment the PDF is
+// ready unless S.certAutoEmail is turned off in Settings (Certificates tab),
+// in which case only an explicit "Send to Client" click (manual:true, see
+// sendCertToClient) will trigger it. Prefers the cert's own .email field;
+// most certs are created straight from a job though, where that field is
+// never filled in, so falls back to the linked job's landlord/agency email.
+// Every outcome — sent, no email on file, or a real send failure — is
+// logged to the Audit Trail so office staff can see what actually went out.
+async function _maybeEmailCertReady(certId, pdfUrl, {manual=false}={}){
+  if(!manual && S.certAutoEmail===false) return {sent:false,reason:'auto-disabled'};
   const c=await dGet('certs',certId);
-  if(!c) return;
+  if(!c) return {sent:false,reason:'not-found'};
   let email=c.email;
   if(!email && c.jobId){
     const job=await dGet('jobs',c.jobId);
     email=job?.landlordEmail||job?.agencyEmail||null;
   }
-  if(!email) return;
+  if(!email) return {sent:false,reason:'no-email'};
   // Attach the actual PDF, not just the download link — the link stays in
   // the email body too as a fallback for the rare oversized cert. 15MB is
   // well past any realistic scanned EICR/Gas Safety report; only a genuine
@@ -1668,12 +1672,32 @@ async function _maybeEmailCertReady(certId, pdfUrl){
       attachments=[{filename:_certFilename(c), content:await _blobToBase64(blob)}];
     }
   }catch(e){ console.warn('[DeepFlow] Could not fetch cert PDF to attach, sending link only',e); }
-  await _sendEmail({
+  const result=await _sendEmail({
     to: email,
     subject: `Your ${c.type||'Compliance'} Certificate — ${c.address||''}`,
     html: _certReadyEmailHtml(c, pdfUrl),
     attachments,
   });
+  if(result.ok){
+    logActivity(`Certificate emailed to ${email} for ${c.address||'certificate'}`,'cert');
+    return {sent:true};
+  }
+  logActivity(`Certificate email FAILED for ${c.address||'certificate'} (${email}): ${(result.error||'unknown error').slice(0,120)}`,'cert');
+  return {sent:false,reason:'send-failed',error:result.error};
+}
+
+// Manual "Send to Client" button — works regardless of the S.certAutoEmail
+// setting, so a manual-mode office can still send on demand, and an
+// auto-mode office can resend.
+export async function sendCertToClient(){
+  const certId=window._editCertModalId;
+  if(!certId){ toast('Save the certificate first','warn'); return; }
+  const c=await dGet('certs',certId);
+  if(!c?.pdfUrl){ toast('Generate or upload the certificate PDF first','warn'); return; }
+  const result=await _maybeEmailCertReady(certId,c.pdfUrl,{manual:true});
+  if(result.sent) toast('✅ Certificate emailed to client','success');
+  else if(result.reason==='no-email') toast('No client email on file for this certificate','warn');
+  else toast('❌ Send failed: '+(result.error||'unknown error').slice(0,80),'error');
 }
 
 export async function removeCertPdf(){

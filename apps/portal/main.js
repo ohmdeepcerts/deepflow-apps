@@ -790,8 +790,11 @@ function complianceRing(score){
 
 // ── OVERVIEW ──────────────────────────────────────────────────────────────────
 function vOverview(d){
+  // Engineer Completed is an internal office/engineer handoff state — to the
+  // client the job simply isn't finished yet until the office finalizes it,
+  // so it counts as active here, same as In Progress.
   const done=d.jobs.filter(j=>j.status==='Completed').length;
-  const active=d.jobs.filter(j=>j.status==='Pending'||j.status==='In Progress').length;
+  const active=d.jobs.filter(j=>j.status==='Pending'||j.status==='In Progress'||j.status===STATUS.ENGINEER_COMPLETED).length;
   const cExp=d.certs.filter(c=>!c.noExpiry&&c.expiryDate&&dd(c.expiryDate)<0).length;
   const c30=d.certs.filter(c=>!c.noExpiry&&c.expiryDate&&dd(c.expiryDate)>=0&&dd(c.expiryDate)<=30).length;
   const c60=d.certs.filter(c=>!c.noExpiry&&c.expiryDate&&dd(c.expiryDate)>30&&dd(c.expiryDate)<=60).length;
@@ -822,7 +825,7 @@ function vOverview(d){
   // whose scheduled date happens to fall in this window but is already
   // Completed/Invoiced/Cancelled isn't "upcoming" anymore, it's done.
   const now=new Date();
-  const upcomingJobs=d.jobs.filter(j=>j.date&&Math.ceil((new Date(j.date)-now)/86400000)<=7&&Math.ceil((new Date(j.date)-now)/86400000)>=0&&j.status!==STATUS.COMPLETED&&j.status!==STATUS.INVOICED&&j.status!==STATUS.CANCELLED).slice(0,2);
+  const upcomingJobs=d.jobs.filter(j=>j.date&&Math.ceil((new Date(j.date)-now)/86400000)<=7&&Math.ceil((new Date(j.date)-now)/86400000)>=0&&j.status!==STATUS.COMPLETED&&j.status!==STATUS.ENGINEER_COMPLETED&&j.status!==STATUS.INVOICED&&j.status!==STATUS.CANCELLED).slice(0,2);
   const upcomingCerts=d.certs.filter(c=>!c.noExpiry&&c.expiryDate&&dd(c.expiryDate)<=7&&dd(c.expiryDate)>=0).slice(0,2);
   const upcomingHtml=[...upcomingJobs.map(j=>`<div class="act-item"><div class="act-dot" style="background:var(--accent)"></div><div class="act-body"><div class="act-title">Job scheduled · ${e(j.address||'')}</div><div class="act-meta">${fd(j.date)} · ${e(j.status||'')}</div></div></div>`),
     ...upcomingCerts.map(c=>`<div class="act-item"><div class="act-dot" style="background:var(--danger)"></div><div class="act-body"><div class="act-title">Certificate expires · ${e(c.type||'')}</div><div class="act-meta">${e(c.address||'')} · ${fd(c.expiryDate)}</div></div></div>`)]
@@ -943,7 +946,11 @@ export function jobCard(j,d){
   const docs=atts.filter(a=>!photos.includes(a));
   const hasBody=photos.length||jc.length||docs.length;
   const steps=['Pending','In Progress','Completed'];
-  const sIdx=steps.indexOf(j.status)>=0?steps.indexOf(j.status):0;
+  // Engineer Completed is an internal handoff state the client shouldn't
+  // need to understand — show it as "In Progress" on the timeline; the job
+  // only visibly reaches "Completed" once the office finalizes it.
+  const _displayStatus=j.status===STATUS.ENGINEER_COMPLETED?STATUS.IN_PROGRESS:j.status;
+  const sIdx=steps.indexOf(_displayStatus)>=0?steps.indexOf(_displayStatus):0;
   const timeline=`<div class="timeline">
     ${steps.map((s,i)=>`<div class="tl-step ${i<sIdx?'done':i===sIdx?'active':''}">
       <div class="tl-dot">${i<sIdx?'<i data-lucide="check" style="width:12px;height:12px"></i>':''}</div>
@@ -956,7 +963,7 @@ export function jobCard(j,d){
       <div class="jc-addr">${e(j.address||'—')}</div>
       ${j.description?`<div class="jc-desc">${e(j.description)}</div>`:''}
       ${timeline}
-    </div>${jsBadge(j.status)}</div>
+    </div>${jsBadge(_displayStatus)}</div>
     <div class="jc-strip">
       ${j.date?`<span class="chip"><i data-lucide="calendar" style="width:12px;height:12px"></i> ${fd(j.date)}</span>`:''}
       ${j.date&&j.engineer?'<span style="color:var(--border)">·</span>':''}
@@ -998,24 +1005,30 @@ function vInvoices(d){
   const sorted=[...d.invoices].sort((a,b)=>new Date(b.createdAt||b.date||0)-new Date(a.createdAt||a.date||0));
   const rows=sorted.map(inv=>{
     const t=calcTotal(inv);const paid=inv.status==='Paid',can=inv.status==='Cancelled';
+    // A freshly auto-created Draft invoice can genuinely have no priced line
+    // items yet (job price not set at completion time) — showing "£0.00" to
+    // the client reads as an error, not a work-in-progress state.
+    const pending=inv.status==='Draft'&&t.grand===0;
     const ds=inv.createdAt?fd(inv.createdAt.slice(0,10)):fd(inv.date);
     if(inv.id)_INV_STORE.set(inv.id,inv);
     return`<div class="ic">
-      <div class="ic-ic" style="background:${paid?'var(--success-light)':can?'var(--border-subtle)':'var(--info-light)'};color:${paid?'var(--success)':can?'var(--text-tertiary)':'var(--info)'}">
+      <div class="ic-ic" style="background:${paid?'var(--success-light)':can?'var(--border-subtle)':pending?'var(--border-subtle)':'var(--info-light)'};color:${paid?'var(--success)':can?'var(--text-tertiary)':pending?'var(--text-tertiary)':'var(--info)'}">
         <i data-lucide="receipt" style="width:20px;height:20px"></i>
       </div>
       <div class="ic-body">
         <div class="ic-num">${e(inv.number||inv.id?.slice(0,8)||'—')}</div>
-        <div class="ic-desc">${ds} · <span class="pill ${paid?'p-ok':can?'p-n':'p-s'}" style="font-size:10px">${paid?'Paid':can?'Cancelled':'Awaiting'}</span>
-        ${inv.dueDate&&!paid?` · Due ${fd(inv.dueDate)}`:''}
+        <div class="ic-desc">${ds} · <span class="pill ${paid?'p-ok':can?'p-n':pending?'p-n':'p-s'}" style="font-size:10px">${paid?'Paid':can?'Cancelled':pending?'Preparing':'Awaiting'}</span>
+        ${inv.dueDate&&!paid&&!pending?` · Due ${fd(inv.dueDate)}`:''}
         </div>
       </div>
       <div class="ic-r">
-        <div class="ic-amt" style="color:${paid?'var(--success)':can?'var(--text-tertiary)':'var(--danger)'}">${fgbp(t.grand)}</div>
-        <div class="ic-lbl">${paid?'PAID':can?'VOID':'OUTSTANDING'}</div>
+        ${pending
+          ?`<div class="ic-amt" style="color:var(--text-tertiary);font-size:13px">Invoicing in progress</div>`
+          :`<div class="ic-amt" style="color:${paid?'var(--success)':can?'var(--text-tertiary)':'var(--danger)'}">${fgbp(t.grand)}</div>
+        <div class="ic-lbl">${paid?'PAID':can?'VOID':'OUTSTANDING'}</div>`}
         <div style="display:flex;gap:6px;margin-top:6px">
-          <button class="dl sm" data-action="preview-inv" data-id="${ea(inv.id||'')}">Preview</button>
-          ${!paid&&!can&&inv.url?`<a href="${ea(inv.url)}" target="_blank" class="dl sm" style="background:var(--success)">Pay</a>`:''}
+          ${pending?'':`<button class="dl sm" data-action="preview-inv" data-id="${ea(inv.id||'')}">Preview</button>`}
+          ${!paid&&!can&&!pending&&inv.url?`<a href="${ea(inv.url)}" target="_blank" class="dl sm" style="background:var(--success)">Pay</a>`:''}
         </div>
       </div>
     </div>`;
