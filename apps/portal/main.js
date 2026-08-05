@@ -946,11 +946,30 @@ export function jobCard(j,d){
   const docs=atts.filter(a=>!photos.includes(a));
   const hasBody=photos.length||jc.length||docs.length;
   const steps=['Pending','In Progress','Completed'];
-  // Engineer Completed is an internal handoff state the client shouldn't
-  // need to understand — show it as "In Progress" on the timeline; the job
-  // only visibly reaches "Completed" once the office finalizes it.
-  const _displayStatus=j.status===STATUS.ENGINEER_COMPLETED?STATUS.IN_PROGRESS:j.status;
-  const sIdx=steps.indexOf(_displayStatus)>=0?steps.indexOf(_displayStatus):0;
+  // The 3-step timeline only has words for the "happy path" — every other
+  // real status has to be mapped onto it, or steps.indexOf() returns -1 and
+  // silently falls back to step 0, making an Invoiced/Cancelled/etc. job's
+  // timeline look like it's still sitting at "Pending" even though the
+  // badge next to it correctly shows the real status.
+  // - Engineer Completed is an internal office/engineer handoff the client
+  //   shouldn't need to understand — shown as "In Progress" until the
+  //   office finalizes it to Completed.
+  // - Invoiced/Cannot Access/Cancelled all mean the on-site work already
+  //   happened (or was never going to) — shown as "Completed" so the
+  //   timeline doesn't regress to looking unstarted.
+  // Only the timeline needs the "completed-ish" statuses folded into
+  // Completed — the badge (below) still shows the real Invoiced/Cancelled/
+  // Cannot Access text, it's only the 3-word timeline that has no room for
+  // them.
+  const _timelineStatus=
+    j.status===STATUS.ENGINEER_COMPLETED?STATUS.IN_PROGRESS
+    :(j.status===STATUS.INVOICED||j.status===STATUS.CANNOT_ACCESS||j.status===STATUS.CANCELLED)?STATUS.COMPLETED
+    :j.status;
+  const sIdx=steps.indexOf(_timelineStatus)>=0?steps.indexOf(_timelineStatus):0;
+  // Engineer Completed is an internal office/engineer handoff state — the
+  // client shouldn't be shown that label at all, so the badge displays it
+  // as "In Progress" until the office finalizes it to Completed.
+  const _badgeStatus=j.status===STATUS.ENGINEER_COMPLETED?STATUS.IN_PROGRESS:j.status;
   const timeline=`<div class="timeline">
     ${steps.map((s,i)=>`<div class="tl-step ${i<sIdx?'done':i===sIdx?'active':''}">
       <div class="tl-dot">${i<sIdx?'<i data-lucide="check" style="width:12px;height:12px"></i>':''}</div>
@@ -963,7 +982,7 @@ export function jobCard(j,d){
       <div class="jc-addr">${e(j.address||'—')}</div>
       ${j.description?`<div class="jc-desc">${e(j.description)}</div>`:''}
       ${timeline}
-    </div>${jsBadge(_displayStatus)}</div>
+    </div>${jsBadge(_badgeStatus)}</div>
     <div class="jc-strip">
       ${j.date?`<span class="chip"><i data-lucide="calendar" style="width:12px;height:12px"></i> ${fd(j.date)}</span>`:''}
       ${j.date&&j.engineer?'<span style="color:var(--border)">·</span>':''}

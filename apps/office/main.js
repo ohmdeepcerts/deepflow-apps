@@ -2959,24 +2959,27 @@ function onJobComplete(j){
     if(kws.some(kw=>kw.trim()&&descL.includes(kw.trim().toLowerCase()))) selectedIds.add(ct.id||ct.name);
   });
 
-  // Create all matching certs silently — no modal, no asking
+  // Create placeholder certs silently — no modal, no asking — so office has
+  // a record that this job owes a certificate. Previously this also guessed
+  // an expiry date (today + the cert type's validity period) even though no
+  // actual inspection had happened yet and no PDF existed — that fabricated
+  // date looked like a real, already-valid certificate to anyone viewing it
+  // (including the client, in the Portal), when in fact nothing had been
+  // issued. Leaving expiryDate blank correctly routes these into the
+  // Certificates dashboard's existing "Missing Dates" tab instead, where
+  // office fills in the real issue/expiry date once the certificate is
+  // actually ready.
   if(selectedIds.size){
     _pendCertJob=j;
     selectedIds.forEach(id=>{
       const ct=allCertTypes.find(c=>(c.id||c.name)===id)||{name:String(id),validity:12,color:'#f5a623',prefix:'CERT-'};
-      // Calculate default expiry from validity months
-      let defaultExpiry=null;
-      if(ct.validity){
-        const d=new Date();d.setMonth(d.getMonth()+(ct.validity||12));
-        defaultExpiry=localDateStr(d);
-      }
-      createCertEntry(ct,defaultExpiry,null,TODAY());
+      createCertEntry(ct,null,null,TODAY(),false);
     });
     const count=selectedIds.size;
     setTimeout(()=>{
       updateBadges();
       if(getCertTab()==='dash')renderCertDash();else if(getCertTab()==='list')renderCertTable();
-      toast(`✅ ${count} certificate${count!==1?'s':''} auto-created — review in Certificates`,'success',5000);
+      toast(`✅ ${count} certificate${count!==1?'s':''} auto-created — fill in the expiry date under Certificates`,'success',5000);
       _pendCertJob=null;
     },800);
   }
@@ -3043,7 +3046,13 @@ export function skipCertExpiry(){
   setTimeout(()=>promptNextCertExpiry(),300);
 }
 
-async function createCertEntry(ct,expiry,certNum,issueDate){
+// noExpiry defaults to "no expiry given ⇒ genuinely doesn't expire" (the
+// original behavior, still correct for the explicit-skip modal flow below).
+// onJobComplete's silent auto-creation passes noExpiry:false explicitly —
+// there it means "not known yet", which must show up in the Certificates
+// dashboard's "Missing Dates" tab (that filter excludes noExpiry:true), not
+// get treated as a certificate that was reviewed and deliberately has none.
+async function createCertEntry(ct,expiry,certNum,issueDate,noExpiry){
   if(!_pendCertJob)return;
   // Guard: don't create a duplicate cert for the same job + same type.
   // Matches by job id when we have a real one (the normal case); falls back
@@ -3070,7 +3079,7 @@ async function createCertEntry(ct,expiry,certNum,issueDate){
     jobNum:_pendCertJob.jobNum||'',
     engineer:_pendCertJob.engineer||'',
     notes:'Auto-created on job completion',
-    noExpiry:!expiry,
+    noExpiry:noExpiry===undefined?!expiry:noExpiry,
   };
   await dPut('certs',cert);
   await logActivity(`Cert created: ${ct.name} at ${_pendCertJob.address}${expiry?` · Exp: ${expiry}`:''}`, 'cert');
@@ -8956,22 +8965,67 @@ async function syncOfficeUsers(){
 // ════════════════════════════════════════════════════════════════
 //  SUPABASE STORAGE STATS
 // ════════════════════════════════════════════════════════════════
+// The project ref is only used to build direct links into the real
+// Supabase dashboard below — it's public info (also visible in SB_URL),
+// not a credential.
+const SB_PROJECT_REF=(SB_URL.match(/https?:\/\/([a-z0-9]+)\.supabase\.co/)||[])[1]||'';
+const SB_DASH=SB_PROJECT_REF?`https://supabase.com/dashboard/project/${SB_PROJECT_REF}`:'';
+// Full table list this app actually uses, grouped for display. Row counts
+// are exact (fetched live), storage/DB usage % is measured against the
+// Supabase Free plan's real limits (1GB files, 500MB database) — an admin
+// on Pro should read the live numbers off the Billing/Usage link instead
+// of trusting these percentages, since a client-side app has no safe way
+// to read the account's actual billing plan (that needs an org-level key
+// this app must never hold).
+const SB_TABLE_GROUPS=[
+  {label:'Business Records',tables:[
+    {id:'jobs',label:'Jobs',icon:'⚡'},
+    {id:'certs',label:'Certificates',icon:'📜'},
+    {id:'invoices',label:'Invoices',icon:'🧾'},
+    {id:'persons',label:'Landlords',icon:'🏠'},
+    {id:'agencies',label:'Agencies',icon:'🏢'},
+    {id:'agents',label:'Agents',icon:'👤'},
+    {id:'payments',label:'Payments',icon:'💳'},
+    {id:'expenses',label:'Expenses',icon:'💸'},
+  ]},
+  {label:'Team & Access',tables:[
+    {id:'users',label:'Office & Engineer Users',icon:'👷'},
+    {id:'push_subscriptions',label:'Push Subscriptions',icon:'🔔'},
+  ]},
+  {label:'Activity & Logs',tables:[
+    {id:'activity',label:'Activity Log',icon:'🕐'},
+    {id:'audit_log',label:'Audit Log',icon:'🔍'},
+    {id:'invoice_audit',label:'Invoice Email Trail',icon:'✉'},
+    {id:'engineer_requests',label:'Job Requests',icon:'📬'},
+    {id:'engineer_alerts',label:'Engineer Alerts',icon:'📢'},
+    {id:'cert_reminder_log',label:'Cert Reminder Log',icon:'⏰'},
+    {id:'attachments',label:'Attachments (rows)',icon:'📎'},
+    {id:'portal_contacts',label:'Portal Contacts',icon:'☎'},
+    {id:'job_comments',label:'Job Comments',icon:'💬'},
+    {id:'overtime',label:'Overtime Logs',icon:'🕑'},
+  ]},
+];
 async function loadStorageStats(){
   const el=document.getElementById('sb-stats-body');
   if(!el)return;
-  el.innerHTML='<div style="color:var(--txt3)">⏳ Loading…</div>';
+  el.innerHTML='<div style="color:var(--txt3)">⏳ Loading live data from Supabase…</div>';
   try{
-    // Get all files in deepflow bucket
-    // Use raw fetch for storage API (different base path)
-    const storageRes=await fetch(`${SB_URL}/storage/v1/object/list/deepflow`,{
-      method:'POST',
-      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+(await _getJWT()),'Content-Type':'application/json'},
-      body:JSON.stringify({prefix:'',limit:10000,offset:0,sortBy:{column:'created_at',order:'desc'}})
-    });
-    const files=storageRes.ok?await storageRes.json():[];
-    const items=Array.isArray(files)?files:[];
-    let totalBytes=0;
-    let photoCount=0, docCount=0;
+    const [storageRes, tableGroups]=await Promise.all([
+      fetch(`${SB_URL}/storage/v1/object/list/deepflow`,{
+        method:'POST',
+        headers:{'apikey':SB_KEY,'Authorization':'Bearer '+(await _getJWT()),'Content-Type':'application/json'},
+        body:JSON.stringify({prefix:'',limit:10000,offset:0,sortBy:{column:'created_at',order:'desc'}})
+      }).then(r=>r.ok?r.json():[]).catch(()=>[]),
+      Promise.all(SB_TABLE_GROUPS.map(async g=>({
+        label:g.label,
+        tables:await Promise.all(g.tables.map(async t=>{
+          try{ const rows=await _sb(t.id+'?select=id'); return {...t,count:(rows||[]).length}; }
+          catch(e){ return {...t,count:null}; }
+        })),
+      }))),
+    ]);
+    const items=Array.isArray(storageRes)?storageRes:[];
+    let totalBytes=0, photoCount=0, docCount=0;
     items.forEach(f=>{
       const sz=f.metadata?.size||0;
       totalBytes+=sz;
@@ -8979,51 +9033,92 @@ async function loadStorageStats(){
       else if(sz>0) docCount++;
     });
     const usedMB=(totalBytes/1024/1024).toFixed(2);
-    const usedPct=Math.min(100,(totalBytes/(1024*1024*1024))*100).toFixed(1); // free tier = 1GB
+    const usedPct=Math.min(100,(totalBytes/(1024*1024*1024))*100).toFixed(1); // Free tier = 1GB
     const freeMB=(1024-parseFloat(usedMB)).toFixed(0);
+
+    const totalRows=tableGroups.reduce((s,g)=>s+g.tables.reduce((s2,t)=>s2+(t.count||0),0),0);
+    // Rough DB-size estimate (Supabase doesn't expose exact bytes over the
+    // client REST API) — ~1.5KB/row average across this schema's mix of
+    // small (jobs/certs) and larger (activity/audit) rows.
+    const estDbMB=(totalRows*1.5/1024);
+    const dbPct=Math.min(100,(estDbMB/500*100)).toFixed(1); // Free tier = 500MB DB
+
+    const bar=(pct,usedLabel,limitLabel)=>`<div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:11px">
+        <span style="color:var(--txt3)">${usedLabel}</span>
+        <span style="font-weight:700;color:${pct>80?'#ef4444':pct>50?'#f59e0b':'#25d366'}">${pct}% of ${limitLabel}</span>
+      </div>
+      <div style="height:8px;background:var(--s3);border-radius:4px;overflow:hidden">
+        <div style="height:100%;width:${Math.max(pct,1)}%;background:${pct>80?'#ef4444':pct>50?'#f59e0b':'#25d366'};border-radius:4px;transition:width .6s"></div>
+      </div>
+    </div>`;
+
+    const links=SB_DASH?[
+      {label:'📋 Table Editor',url:`${SB_DASH}/editor`},
+      {label:'🗄 SQL Editor',url:`${SB_DASH}/sql/new`},
+      {label:'☁ Storage Buckets',url:`${SB_DASH}/storage/buckets`},
+      {label:'👤 Auth Users',url:`${SB_DASH}/auth/users`},
+      {label:'⚡ Edge Functions',url:`${SB_DASH}/functions`},
+      {label:'📊 Usage & Billing',url:`${SB_DASH}/settings/billing/usage`},
+      {label:'⚙ Project Settings',url:`${SB_DASH}/settings/general`},
+    ]:[];
+
+    const tableRow=t=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:13px;width:18px;text-align:center">${t.icon}</span>
+      <span style="font-size:12px;color:var(--txt2);flex:1">${t.label}</span>
+      <span style="font-size:12px;font-weight:700;color:var(--txt1);font-variant-numeric:tabular-nums">${t.count===null?'—':t.count.toLocaleString()}</span>
+    </div>`;
+
     el.innerHTML=`
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:12px">
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)">
+        <span style="font-size:11px;color:var(--txt3)">Project</span>
+        <span style="font-size:12px;font-weight:700;color:var(--txt1)">JobManagement</span>
+        <span style="font-size:11px;color:var(--txt3)">·</span>
+        <span style="font-size:11px;color:var(--txt3)">eu-west-1</span>
+        <span style="font-size:11px;color:var(--txt3)">·</span>
+        <span style="font-size:11px;padding:2px 8px;border-radius:10px;background:rgba(37,211,102,.12);color:#25d366;font-weight:700">● Active</span>
+        <span style="font-size:11px;padding:2px 8px;border-radius:10px;background:rgba(245,166,35,.12);color:#f5a623;font-weight:700">Free Plan</span>
+        <span style="margin-left:auto;font-size:10px;color:var(--txt3)">Exact billing/plan numbers: use Usage &amp; Billing link below</span>
+      </div>
+
+      ${links.length?`<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px">
+        ${links.map(l=>`<a href="${escAttr(l.url)}" target="_blank" rel="noopener" class="btn btn-ghost btn-xs">${l.label} ↗</a>`).join('')}
+      </div>`:''}
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px">
         <div style="background:var(--s2);border-radius:8px;padding:12px;border:1px solid var(--border)">
-          <div style="font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Used</div>
+          <div style="font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Files Used</div>
           <div style="font-size:20px;font-weight:700;color:var(--txt1)">${usedMB} <span style="font-size:12px">MB</span></div>
           <div style="font-size:11px;color:var(--txt3)">of 1,024 MB free</div>
         </div>
         <div style="background:var(--s2);border-radius:8px;padding:12px;border:1px solid var(--border)">
-          <div style="font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Free</div>
+          <div style="font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Files Free</div>
           <div style="font-size:20px;font-weight:700;color:#25d366">${freeMB} <span style="font-size:12px">MB</span></div>
           <div style="font-size:11px;color:var(--txt3)">remaining</div>
         </div>
         <div style="background:var(--s2);border-radius:8px;padding:12px;border:1px solid var(--border)">
-          <div style="font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Files</div>
-          <div style="font-size:20px;font-weight:700;color:var(--txt1)">${items.length}</div>
+          <div style="font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Uploaded Files</div>
+          <div style="font-size:20px;font-weight:700;color:var(--txt1)">${items.length.toLocaleString()}</div>
           <div style="font-size:11px;color:var(--txt3)">📷 ${photoCount} photos · 📄 ${docCount} docs</div>
         </div>
         <div style="background:var(--s2);border-radius:8px;padding:12px;border:1px solid var(--border)">
-          <div style="font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">DB Tables</div>
-          <div style="font-size:20px;font-weight:700;color:var(--txt1)" id="sb-table-count">—</div>
-          <div style="font-size:11px;color:var(--txt3)">loading rows…</div>
+          <div style="font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Database Rows</div>
+          <div style="font-size:20px;font-weight:700;color:var(--txt1)">${totalRows.toLocaleString()}</div>
+          <div style="font-size:11px;color:var(--txt3)">across ${SB_TABLE_GROUPS.reduce((s,g)=>s+g.tables.length,0)} tables</div>
         </div>
       </div>
-      <div style="background:var(--s2);border-radius:8px;padding:10px 12px;border:1px solid var(--border)">
-        <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:11px">
-          <span style="color:var(--txt3)">Storage used</span>
-          <span style="font-weight:600;color:var(--txt1)">${usedPct}%</span>
-        </div>
-        <div style="height:8px;background:var(--s3);border-radius:4px;overflow:hidden">
-          <div style="height:100%;width:${usedPct}%;background:${parseFloat(usedPct)>80?'#ef4444':parseFloat(usedPct)>50?'#f59e0b':'#25d366'};border-radius:4px;transition:width .6s"></div>
-        </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;background:var(--s2);border-radius:8px;padding:12px;border:1px solid var(--border);margin-bottom:16px">
+        ${bar(parseFloat(usedPct),'File storage','1 GB free')}
+        ${bar(parseFloat(dbPct),'Database (estimated)','500 MB free')}
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px">
+        ${tableGroups.map(g=>`<div>
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--txt3);margin-bottom:4px">${g.label}</div>
+          ${g.tables.map(tableRow).join('')}
+        </div>`).join('')}
       </div>`;
-    // Load row counts
-    Promise.all(['jobs','persons','agencies','agents','certs','invoices'].map(async t=>{
-      const r=await _sb(t+'?select=id&limit=1',{headers:{'Prefer':'count=exact'}}).catch(()=>null);
-      return t;
-    })).then(()=>{
-      // Count all jobs
-      _sb('jobs?select=id&limit=1',{prefer:'count=exact'}).then(r=>{
-        const el2=document.getElementById('sb-table-count');
-        if(el2) el2.textContent='active';
-      }).catch(()=>{});
-    });
   }catch(err){
     console.error('Storage stats error:',err);
     el.innerHTML=`<div style="color:#ef4444;font-size:12px">⚠️ Could not load stats: ${err.message?.slice(0,80)||'Check console'}</div>`;
