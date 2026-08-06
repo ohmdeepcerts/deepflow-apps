@@ -276,7 +276,8 @@ async function sendNotificationWebhook(eventType, payload){
   }catch(e){ console.warn('[NotifWebhook]',e); }
 }
 
-// Mirrors index.html's sendPushNotification() — see PHASE6_PUSH_NOTIFICATIONS_SQL.md
+// Mirrors index.html's sendPushNotification() — see
+// docs/history/sql-migration-notes/PHASE6_PUSH_NOTIFICATIONS_SQL.md
 // and PHASE6B_PUSH_EDGE_FUNCTION.md.
 async function sendPushNotification(eventType, payload){
   const s=_officeSettingsCache;

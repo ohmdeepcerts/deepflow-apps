@@ -114,7 +114,8 @@ export const token=P.get('id'), ptype=P.get('type')||'landlord';
 
 // ── PUSH NOTIFICATIONS ───────────────────────────────────────────────────────
 // Free Web Push (VAPID) — no third-party service, no account. See
-// PHASE6_PUSH_NOTIFICATIONS_SQL.md / PHASE6B for the sending side. This
+// docs/history/sql-migration-notes/PHASE6_PUSH_NOTIFICATIONS_SQL.md /
+// PHASE6B for the sending side. This
 // public key is safe to expose; the matching private key lives only in the
 // Edge Function's environment secrets.
 const VAPID_PUBLIC_KEY = 'BCM7SAk356QodrcNAwoO7gOSwXnfGb7ooqN514kYfR8Fv72h1gbkMD23REa7toVURlZPqTTH8BfpWOJSqLRitTE';
@@ -176,7 +177,7 @@ async function enablePushNotifications(){
 export const _INV_STORE=new Map();
 
 // ── PIN GATE ─────────────────────────────────────────────────────────────────
-// See PHASE5_PORTAL_PIN_AUTH_SQL.md. The link alone used to be the only thing
+// See docs/history/sql-migration-notes/PHASE5_PORTAL_PIN_AUTH_SQL.md. The link alone used to be the only thing
 // protecting a client's data, with no expiry and no revoke. This adds a
 // 6-digit PIN on top: the office can reset it (never reveal it — it's
 // hashed) which forces the client to set a fresh one on their next visit.
@@ -478,7 +479,7 @@ async function init(){
     if(ptype==='agency'){
       // Was a direct, unscoped `agencies?id=eq...` read — now a narrow
       // SECURITY DEFINER function that only ever returns the one row asked
-      // for, matched server-side. See PHASE1_PORTAL_RPC_SQL.md.
+      // for, matched server-side. See docs/history/sql-migration-notes/PHASE1_PORTAL_RPC_SQL.md.
       const rows=await sb(`rpc/portal_get_agency`,{method:'POST',body:{p_id:token}});
       if(!rows?.length){showErr('Not Found','This link is invalid or has expired.');return;}
       entity=_fix(rows[0]);

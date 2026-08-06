@@ -64,7 +64,8 @@ export async function sendNotificationWebhook(eventType, payload){
   }catch(e){ console.warn('[NotifWebhook]', e); }
 }
 
-// ── Real push notifications — see PHASE6_PUSH_NOTIFICATIONS_SQL.md and
+// ── Real push notifications — see
+//    docs/history/sql-migration-notes/PHASE6_PUSH_NOTIFICATIONS_SQL.md and
 //    PHASE6B_PUSH_EDGE_FUNCTION.md. Off by default; needs the Edge Function
 //    deployed before this does anything (fails silently/logged if not —
 //    same "off until set up" fallback used everywhere else in this app).
