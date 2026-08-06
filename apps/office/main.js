@@ -496,7 +496,7 @@ function _downloadQR(name) {
   toast('📥 QR code downloading...', 'success');
 }
 
-// Resets a client's portal PIN — see PHASE5_PORTAL_PIN_AUTH_SQL.md. This
+// Resets a client's portal PIN — see docs/history/sql-migration-notes/PHASE5_PORTAL_PIN_AUTH_SQL.md. This
 // deletes the stored (hashed) PIN rather than revealing it; the client will
 // be asked to set a brand new one the next time they open their link. The
 // link itself never changes.
@@ -3161,7 +3161,7 @@ function getVatRate(){return officeVatRate(S);}
 // auto-invoiced twice if it's called twice in quick succession within this
 // tab (e.g. a duplicate completion event). This does NOT cover two separate
 // Office tabs/devices racing each other — there's no DB constraint backing
-// this (see AUDIT.md 3.2); the re-check immediately before the write below
+// this (see docs/history/2026-07-initial-audit/AUDIT.md 3.2); the re-check immediately before the write below
 // narrows that window but doesn't eliminate it.
 const _autoInvoiceInProgress=new Set();
 
