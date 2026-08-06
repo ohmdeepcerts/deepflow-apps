@@ -19,7 +19,7 @@ import {
   getCurDirSection, switchDirSection, renderDir, renderDirSection, updateDirTabBadges,
   openPersonModal, openPersonModalFor, savePerson, deleteCurrentPerson, openPersonWA, toggleArchivePerson,
   openAgencyModal, saveAgency, deleteCurrentAgency, openAgentModal, saveAgent, deleteCurrentAgent,
-  openEngDir, matchDir, fillFromMatch, openImportModal,
+  openEngDir, matchDir, fillFromMatch, openImportModal, currentEditId, renderAgentsSection,
 } from './directory.js';
 import {
   logAudit, sendNotificationWebhook, sendPushNotification, notifyNextTenantEta,
@@ -37,7 +37,7 @@ import {
 import {
   openExpenseModal, saveExpense, deleteCurrentExpense, renderExpenses, exportExpensesCSV,
 } from './expenses.js';
-import { openCreditNoteModal, addCreditItem, fillCreditNote, saveCreditNote, creditNote } from './credit-notes.js';
+import { openCreditNoteModal, addCreditItem, fillCreditNote, saveCreditNote, creditNote, updateCreditItem, removeCreditItem } from './credit-notes.js';
 import { renderInvCustomTexts, addInvCustomText, removeInvCustomText } from './invoice-custom-text.js';
 import { renderSqlSnippets, copySql } from './sql-guide.js';
 import { exportMasterXLSX } from './master-xlsx-export.js';
@@ -14391,7 +14391,7 @@ Object.assign(window, {
   df, showAddEngineerModal, closeAddEngineerModal, submitAddEngineer,
   enablePhoneLogin, submitEnablePhoneLogin, engineerResetPin, engineerForceLogout, engineerGrantAccess, engineerRevokeAccess,
   engineerChangePhone, submitEngineerChangePhone, _reactivateEngineer, _confirmNewDespiteCollision, _reactivateInCollision,
-  _addLiveItem, _copyJobDesc, _copyPortalLink, _editEngFromDeep, _emailPortalShare, _removeLiveItem, _renderEngDeepJobsList,
+  _addLiveItem, _copyJobDesc, _copyPortalLink, _editEngFromDeep, _emailPortalShare, _moveJobOrder, _removeLiveItem, _renderEngDeepJobsList,
   _reqAcknowledge, _reqApproveEng, _reqCreateJob, _reqReject, _reqReopen, _reqSendReply, 
   _saveInvField, _saveLiveItem, _sendPLReminder, _showReqDetail, _switchEngDeepTab, _switchPLTab, _updateLiveTotal,
   _waPortalShare, addAccessRow, addApplianceRow, addCertTypeInline, addCertTypeRow, addCompanyProfileRow, addCreditItem, addEngRow, addExpiryToExistingCert,
@@ -14403,7 +14403,7 @@ Object.assign(window, {
   clearNotifs, clearSel, clearStore, closeCtx, closeModal, closePLDashboard, 
   closePortalInviteModal, confirmKS, convertProformaToInvoice, copyCremMsg, copyJobToNextDay, copySql,
   copyText, copyWAText, copyWaTemplate, createAllTables, creditNote, createDraftsForCompleted, createInvFromJob,
-  createJobFromPortalReq, createProforma, createRecurringInv, createRenewalJob, ctxCopyAddr, ctypeToggle, cvLoadClient,
+  createJobFromPortalReq, createProforma, createRecurringInv, createRenewalJob, ctxCopyAddr, ctypeToggle, currentEditId, cvLoadClient,
   cvSearch, cvSwitchTab, debounceRenderCmd, debounceRenderJobs, deleteAttachment, deleteComment, deleteCurrentAgency,
   deleteCurrentAgent, deleteCurrentExpense, deleteCurrentJob, deleteCurrentPerson, deleteCurrentProp, deleteDuplicateInvoices,
   deleteInv, deleteJobById, deletePortalContact, deleteSavedView, deleteUser, dismissInvBanner, doLogin,
@@ -14416,14 +14416,14 @@ Object.assign(window, {
   invClientSelected, invNavSelect, jCalPickDate, jPickDate, jcalShiftMonth, kanbanDragOver, 
   kanbanDragStart, kanbanDrop, loadEarlierJobs, loadEngPerms, loadEngineerLocations, loadStorageDashboard, 
   loadStorageStats, loadTeam, markInvPaid, markInvSent, markInvUnpaid, matchDir, 
-  mergeJobsInvoice, nav, onMapViewChange, oneClickBackup, openAgencyModal, openAgentModal, 
-  openBroadcast, openBulkApplianceModal, openCertForm, openCmd, openCreditNoteModal, openDisposableModal, openEngDeepReport, 
-  openEngDir, openExpenseModal, openImportModal, openInvoiceForJob, openInvSendModal, openJobForInvoice, openJobModal, openJobModalByNum, openMergeModal,
+  mergeJobsInvoice, nav, onMapViewChange, oneClickBackup, openAgencyModal, openAgentModal,
+  openBroadcast, openBulkApplianceModal, openCertForm, openCmd, openCreditNoteModal, openDisposableModal, openEngDeepReport,
+  openEngDir, openExpenseModal, openImportModal, openInvoiceForJob, openInvSendModal, openJobForInvoice, openJobModal, openJobModalByNum, openMergeModal, openNewInvModal,
   openOvertimeModal, openPLDashboard, openPaymentModal, openPersonModal, openPersonModalFor, openPersonWA,
   toggleArchivePerson,
   openPropModal, openRenewCertModal, openStandaloneProformaModal, openWhatsApp, postComment, previewCertPdf,
   previewWaTemplate, printFilteredInvoices, printProforma, quickConfirm, quickEditPrice, quickEditTime, quickStatus,
-  removeApplianceRow, removeCertPdf, removeInvCustomText, renderAuditLog, renderCertMissing, renderCertStats, renderCertTable, renderClientPicker,
+  removeApplianceRow, removeCertPdf, removeCreditItem, removeInvCustomText, renderAgentsSection, renderAuditLog, renderCertMissing, renderCertStats, renderCertTable, renderClientPicker,
   renderExpiringPanel, setMissingFilter, clearExpiringFilters,
   renderDirSection, renderEngReport, renderExpenses, renderInvItems, renderInvList, renderJobs, renderMapPage,
   renderNotifPreview, renderPLDashboard, renderProps, renderReports, renderRequests, renderSettings, renderStmt,
@@ -14439,10 +14439,10 @@ Object.assign(window, {
   setReqType, setSidebarWidth, setTheme, shiftDay, showAgeBucket, showAllEngJobs,
   showColMenu, showJobAudit, showPropertyCerts, showWaPanel, skipCertExpiry, smartAutofill, stmtClearFilters,
   stmtQuickRange, stmtToggleAll, stmtToggleSel, submitBulkAppliances, submitRenewCert, switchAuditTab, switchCertTab, switchDirSection,
-  switchSetTab, teamAdd, teamChangeRole, teamRevoke, testNotifWebhook, toggleAllCerts,
+  switchSetTab, teamAdd, teamChangeRole, teamRevoke, testNotifWebhook, toast, toggleAllCerts, toggleApplianceSection,
   toggleBillToOverride, toggleBulkSelectMode, toggleCalPane, toggleCertChip, toggleCol, toggleColPicker, toggleInvSync,
   toggleNotifPanel, toggleOTHours, toggleOnlinePanel, togglePersonSelect, togglePwVis, toggleSelRow, toggleSidebar, toggleTheme,
-  toggleUnassignedView, toggleUserMenu, updateApplianceField, updateCertAddrSugg, updateEngPerm, updateLogo, updatePortalContact, updInvTotals,
+  toggleUnassignedView, toggleUserMenu, unlockPaidInv, updateApplianceField, updateCertAddrSugg, updateCreditItem, updateEngPerm, updateLogo, updatePortalContact, updInvTotals,
   uploadCertPdf, uploadProfileLogo, viewInv, viewPropJobs, waEngineerAllJobs, waJobsSelected, waShowEng,
   waSingleEngJob, waSingleJob, waSingleJobById, 
 });

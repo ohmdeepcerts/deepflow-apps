@@ -62,12 +62,29 @@ export function renderCreditItems(){
   const c = document.getElementById('cn-items');
   c.innerHTML = _cnItems.map((it,i) => `
     <div style="display:flex;gap:6px;margin-bottom:6px;align-items:center">
-      <input class="fi" style="flex:2" value="${it.desc}" placeholder="Description" oninput="_cnItems[${i}].desc=this.value">
-      <input class="fi" type="number" style="width:55px" value="${it.qty}" min="1" oninput="_cnItems[${i}].qty=+this.value;updCNTotal()">
-      <input class="fi" type="number" style="width:80px" value="${it.unit}" min="0" step="0.01" placeholder="£" oninput="_cnItems[${i}].unit=+this.value;updCNTotal()">
-      <button class="btn btn-red btn-xs" onclick="_cnItems.splice(${i},1);renderCreditItems()">✕</button>
+      <input class="fi" style="flex:2" value="${it.desc}" placeholder="Description" oninput="updateCreditItem(${i},'desc',this.value)">
+      <input class="fi" type="number" style="width:55px" value="${it.qty}" min="1" oninput="updateCreditItem(${i},'qty',this.value)">
+      <input class="fi" type="number" style="width:80px" value="${it.unit}" min="0" step="0.01" placeholder="£" oninput="updateCreditItem(${i},'unit',this.value)">
+      <button class="btn btn-red btn-xs" onclick="removeCreditItem(${i})">✕</button>
     </div>`).join('');
   updCNTotal();
+}
+
+// updateCreditItem/removeCreditItem exist because the row markup above runs
+// from inline onclick/oninput handlers, which execute in global scope —
+// they can't see _cnItems, a module-private variable, directly (this was a
+// real bug: editing/removing a line item silently did nothing). Same
+// pattern as updateApplianceField/removeApplianceRow in certs.js.
+export function updateCreditItem(i,field,value){
+  const it=_cnItems[i];
+  if(!it) return;
+  it[field]=(field==='qty'||field==='unit')?(+value||0):value;
+  updCNTotal();
+}
+
+export function removeCreditItem(i){
+  _cnItems.splice(i,1);
+  renderCreditItems();
 }
 
 export function updCNTotal(){

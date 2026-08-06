@@ -1861,7 +1861,7 @@ Object.assign(window, {
   refreshAll, rewriteAddJobDesc, rewriteJobNotes, saveNotes, sendOmwClient, sendOmwOffice, setMapView,
   setQuality, showTool, submitAddJob, submitLeaveRequest,
   submitOvertimeRequest, switchTab, toggleGuide, toggleSort, toggleTheme,
-  updateConduit, updateStatus,
+  updateConduit, updateOmwPreview, updateStatus,
 });
 (function(){
   if('serviceWorker' in navigator){
