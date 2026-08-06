@@ -77,7 +77,7 @@ export async function checkCronSetup(){
   if(el) el.textContent='Checking…';
   try{
     // Honest 3-part check (table / function / cron schedule) — see
-    // PHASE4_CERT_REMINDER_CHECK_SQL.md. The old version of this only ever
+    // docs/history/sql-migration-notes/PHASE4_CERT_REMINDER_CHECK_SQL.md. The old version of this only ever
     // checked the table and called it "complete," which was misleading.
     const rows=await _sb('rpc/check_cert_reminder_setup',{method:'POST',body:{}});
     if(!Array.isArray(rows)||!rows.length) throw new Error('no data returned');
@@ -91,6 +91,6 @@ export async function checkCronSetup(){
       `<div style="margin-top:6px;font-weight:700;color:${allDone?'var(--green)':'var(--yellow)'}">${allDone?'✅ Fully set up and running':'⚠️ Setup incomplete — run the missing SQL steps above'}</div>`;
     if(el) el.innerHTML=html;
   }catch(e){
-    if(el) el.innerHTML='<span style="color:var(--yellow)">⚠️ Could not check — run PHASE4_CERT_REMINDER_CHECK_SQL.md first, then the Task 27 SQL above</span>';
+    if(el) el.innerHTML='<span style="color:var(--yellow)">⚠️ Could not check — run docs/history/sql-migration-notes/PHASE4_CERT_REMINDER_CHECK_SQL.md first, then the Task 27 SQL above</span>';
   }
 }
