@@ -10,7 +10,7 @@
 
 import { localDateStr } from '@business';
 import { buildMastheadHTML, escHtml } from '@ui';
-import { S, dAll, dGet, toast, nav, calcInvTotal, downloadInvPDFById } from './main.js';
+import { S, dAll, dGet, toast, nav, calcInvTotal, downloadInvPDFById, signedUrl } from './main.js';
 
 let _stmtSelected = new Set();
 let _stmtInvoices = [];
@@ -247,10 +247,11 @@ export async function bulkDownloadPDFs() {
   let stored = 0, generated = 0;
   for (const id of ids) {
     const inv = await dGet('invoices', id);
-    if (inv?.pdfUrl) {
+    const storedUrl = inv?.pdfPath ? await signedUrl(inv.pdfPath) : null;
+    if (storedUrl) {
       // Already generated and stored — just fetch the fixed file rather
       // than rebuilding it client-side again.
-      try { await _downloadStoredPDF(inv.pdfUrl, (inv.number || 'invoice') + '.pdf'); stored++; }
+      try { await _downloadStoredPDF(storedUrl, (inv.number || 'invoice') + '.pdf'); stored++; }
       catch (e) { console.warn('[DeepFlow] Stored PDF fetch failed, falling back to regenerate for', inv.number, e); await downloadInvPDFById(id); generated++; }
     } else {
       // No stored copy yet (an invoice created before this feature existed)

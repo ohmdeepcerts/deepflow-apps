@@ -4118,6 +4118,11 @@ async function loadJobAttachments(jobId){
       panel.style.display='none'; // hide panel if no attachments
       return;
     }
+    // Bucket is private — the stored .url is a dead public-style link now.
+    // Resolve every photo/doc to a fresh signed one, all at once, before
+    // building any HTML (the <img>/<a> tags below are plain synchronous
+    // strings, so this has to happen first, not per-tag).
+    await Promise.all(atts.map(async a=>{ if(a.storage_path) a.url=await signedUrl(a.storage_path); }));
     countEl.textContent='('+atts.length+')';
     const photos=atts.filter(a=>a.type==='photo'||a.mime?.startsWith('image/'));
     const docs=atts.filter(a=>a.type!=='photo'&&!a.mime?.startsWith('image/'));
@@ -7233,6 +7238,30 @@ async function _invPdfSbStorage(path,file){
   });
   if(!res.ok) throw new Error('Upload failed: '+(await res.text()).slice(0,200));
   return `${SB_URL}/storage/v1/object/public/deepflow/${path}`;
+}
+
+// The `deepflow` bucket is private (see migration
+// 20260808_make_deepflow_bucket_private) — no stored URL works as a direct
+// link anymore, only a fresh short-lived signed one. Office always has a
+// real Supabase Auth session, so this just calls Storage's own sign
+// endpoint with the current JWT; the existing `deepflow_staff_select` RLS
+// policy (is_office() OR is_engineer() OR is_valid_engineer_token()) is
+// what actually authorizes it. `expiresIn` defaults to 1 hour for in-app
+// viewing; callers that embed the link somewhere long-lived (an emailed
+// certificate) pass a much larger value — see _maybeEmailCertReady.
+export async function signedUrl(path,expiresIn=3600){
+  if(!path) return null;
+  try{
+    const jwt=await _getJWT();
+    const res=await fetch(`${SB_URL}/storage/v1/object/sign/deepflow/${path}`,{
+      method:'POST',
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+jwt,'Content-Type':'application/json'},
+      body:JSON.stringify({expiresIn})
+    });
+    if(!res.ok) return null;
+    const {signedURL}=await res.json();
+    return signedURL?`${SB_URL}/storage/v1${signedURL}`:null;
+  }catch(e){ console.warn('[DeepFlow] signedUrl failed for',path,e); return null; }
 }
 
 // Uploads an already-built PDF doc to Storage and records the URL on the

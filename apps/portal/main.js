@@ -3,7 +3,7 @@
 // ARCHITECTURE_REDESIGN_PROPOSAL.md Phase 1. This wrapper preserves the
 // Client Portal's exact prior behavior: always authenticate as anon (no
 // Supabase Auth session exists here), same error-message format.
-import { SB_KEY, restFetch } from '@core';
+import { SB_URL, SB_KEY, restFetch } from '@core';
 import { escText as e, escAttr as ea, initNetworkCanvas } from '@ui';
 import { FROM_DB } from '@data';
 import { calcLineItemsTotal, portalVatRate, STATUS } from '@business';
@@ -528,6 +528,7 @@ async function init(){
       attachments=(ra||[]).map(_fix);
       certs=(rc||[]).map(_fix);
       invoices=ri||[];
+      await _resolveFileUrls(ptype,token,attachments,certs,invoices);
       // Ratings: no `ratings` table exists in the live database (rr is always
       // []), so the outer `ratings` variable simply stays at its initial `[]`.
       // This block previously declared a second, block-scoped `const ratings`
@@ -621,6 +622,37 @@ async function fetchJobs(type,id){
     if(Array.isArray(raw)) return raw.map(_fix);
   }catch(e){console.warn('[Portal] jobs fetch failed',e);}
   return [];
+}
+
+// The `deepflow` bucket is private — every stored .url/.pdf_url is a dead
+// public-style link now. Portal has no session at all (see
+// docs/architecture/08-authentication-and-roles.md), so it can't sign a
+// URL itself; the portal-sign-url Edge Function re-resolves this same
+// (type, id) identity server-side — exactly like portal_get_certs/
+// portal_get_attachments/portal_get_invoices already do — and only signs a
+// path if it's genuinely found among that identity's own records. Called
+// once at load with every path this visit will need, then overwrites
+// .url/.pdf_url in place so every existing render site (job photos, cert
+// cards, invoice preview/download/share) keeps reading the same field
+// names unchanged and just gets a working link instead of a dead one.
+async function _resolveFileUrls(type,id,attachments,certs,invoices){
+  const paths=new Set();
+  attachments.forEach(a=>{ if(a.storage_path) paths.add(a.storage_path); });
+  certs.forEach(c=>{ if(c.pdf_path) paths.add(c.pdf_path); });
+  invoices.forEach(inv=>{ if(inv.pdf_path) paths.add(inv.pdf_path); });
+  if(!paths.size) return;
+  try{
+    const res=await fetch(`${SB_URL}/functions/v1/portal-sign-url`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY},
+      body:JSON.stringify({type,id,paths:[...paths]})
+    });
+    const data=await res.json();
+    const urls=data?.urls||{};
+    attachments.forEach(a=>{ if(a.storage_path && urls[a.storage_path]) a.url=urls[a.storage_path]; });
+    certs.forEach(c=>{ if(c.pdf_path && urls[c.pdf_path]) c.pdf_url=urls[c.pdf_path]; });
+    invoices.forEach(inv=>{ if(inv.pdf_path && urls[inv.pdf_path]) inv.pdf_url=urls[inv.pdf_path]; });
+  }catch(e){ console.warn('[Portal] signed URL resolution failed',e); }
 }
 
 // ── AGENCY AGENT FILTER (multi-select) ──────────────────────────────────────

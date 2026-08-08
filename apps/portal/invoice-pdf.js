@@ -53,10 +53,18 @@ export function previewInv(id){
   // show that fixed file instead of re-rendering the invoice from data in
   // this browser. Only invoices from before that existed fall through to
   // the client-side rebuild below.
-  if(inv.pdfUrl){
+  // NOTE: this used to check inv.pdfUrl (camelCase), a field that never
+  // actually existed on this object — _fix() here only renames a small,
+  // explicit list of no-underscore legacy columns (see the _fixMap comment
+  // near the top of main.js), and pdf_url isn't one of them, so this
+  // branch was silently dead: every invoice always fell through to the
+  // client-side rebuild below. Fixed to the real field name, which
+  // _resolveFileUrls() in main.js now also keeps pointed at a live signed
+  // URL rather than the dead public one.
+  if(inv.pdf_url){
     bd.innerHTML=`
       ${_payable(inv)?`<div style="display:flex;justify-content:flex-end;margin-bottom:10px"><button id="pay-now-btn" class="dl" onclick="payInvoice('${id}')" style="background:var(--success,#16a34a)">Pay Now — £${calcTotal(inv).grand.toFixed(2)}</button></div>`:''}
-      <iframe src="${e(inv.pdfUrl)}" style="width:100%;height:70vh;border:0;border-radius:var(--radius)" title="Invoice ${e(inv.number||'')}"></iframe>`;
+      <iframe src="${e(inv.pdf_url)}" style="width:100%;height:70vh;border:0;border-radius:var(--radius)" title="Invoice ${e(inv.number||'')}"></iframe>`;
     document.getElementById('pdf-modal').classList.add('show');
     return;
   }
@@ -121,10 +129,11 @@ export function closeModal(ev){
 export async function downloadInvPDF(id){
   const inv=_INV_STORE.get(id);
   if(!inv){toast('Invoice not found');return;}
-  // Prefer the stored, office-generated PDF — same reasoning as previewInv.
-  if(inv.pdfUrl){
+  // Prefer the stored, office-generated PDF — same reasoning as previewInv
+  // (and same pdf_url vs pdfUrl field-name fix, see the comment there).
+  if(inv.pdf_url){
     const a=document.createElement('a');
-    a.href=inv.pdfUrl; a.target='_blank'; a.rel='noopener'; a.download=(inv.number||'invoice')+'.pdf';
+    a.href=inv.pdf_url; a.target='_blank'; a.rel='noopener'; a.download=(inv.number||'invoice')+'.pdf';
     document.body.appendChild(a); a.click(); a.remove();
     return;
   }

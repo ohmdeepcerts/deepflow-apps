@@ -21,8 +21,14 @@ import {
   S, dAll, dGet, dPut, dDel, toast, confirm2, uid, TODAY, logActivity,
   updateBadges, nav, closeModal, openModal, _getJWT, setJDate, _sb,
   saveCertExpiry, skipCertExpiry, setPendCertJob, _sendEmail, _certReadyEmailHtml, _blobToBase64,
-  resolveCompanyProfile, saveAllSettings,
+  resolveCompanyProfile, saveAllSettings, signedUrl,
 } from './main.js';
+
+// Emailed/shared links need to keep working long after this browser
+// session ends — a 1-hour preview expiry would break the "Download
+// Certificate" button in an email opened next week. 10 years is
+// effectively permanent for this business's compliance-retention purposes.
+const _LONG_SIGNED_URL_SECONDS = 10*365*24*60*60;
 
 let _certTab='dash';
 let _ctPage=1,_ctblHidden=[];
@@ -420,7 +426,7 @@ export function openCertForm(existing){
   if(s('cf2-nr'))     s('cf2-nr').checked=existing?.notResponding||false;
   // PDF attachment status
   window._editCertModalId=_editCertId;
-  renderCertPdfSection(_editCertId,existing?.pdfUrl||null);
+  renderCertPdfSection(_editCertId,existing?.pdfPath||null);
   // Recent
   renderCertFormRecent();
   // Switch to form tab only if not already there
@@ -507,7 +513,7 @@ export async function saveCertForm(){
     _editCertId=savedId;
     window._editCertModalId=savedId;
     const saved=await dGet('certs',savedId);
-    renderCertPdfSection(savedId,saved?.pdfUrl||null);
+    renderCertPdfSection(savedId,saved?.pdfPath||null);
     renderCertFormRecent();
   }else{
     _editCertId=null; _selCertTypes=new Set();
@@ -1039,9 +1045,9 @@ export function setMissingFilter(mode){
 
 export async function renderCertMissing(){
   const all=await dAll('certs');
-  const missingPdf=all.filter(c=>!c.pdfUrl);
+  const missingPdf=all.filter(c=>!c.pdfPath);
   const missingDate=all.filter(c=>!c.expiryDate&&!c.noExpiry);
-  const missingBoth=all.filter(c=>!c.pdfUrl&&!c.expiryDate&&!c.noExpiry);
+  const missingBoth=all.filter(c=>!c.pdfPath&&!c.expiryDate&&!c.noExpiry);
 
   const kpiEl=document.getElementById('cm-kpis');
   if(kpiEl){
@@ -1072,7 +1078,7 @@ export async function renderCertMissing(){
     return;
   }
   listEl.innerHTML=list.map(c=>{
-    const noPdf=!c.pdfUrl, noDate=!c.expiryDate&&!c.noExpiry;
+    const noPdf=!c.pdfPath, noDate=!c.expiryDate&&!c.noExpiry;
     const ct=(S.certTypes||[]).find(t=>t.name===c.type)||{color:'var(--acc)'};
     return`<div class="prow" onclick="editCertRecord('${c.id}')">
       <div class="prow-ic" style="color:${ct.color||'var(--acc)'}">📄</div>
@@ -1084,7 +1090,7 @@ export async function renderCertMissing(){
         ${noPdf?`<span class="pbadge" style="background:rgba(185,28,28,.12);color:var(--red)">No PDF</span>`:''}
         ${noDate?`<span class="pbadge" style="background:rgba(180,83,9,.12);color:var(--yellow)">No Date</span>`:''}
       </div>
-      ${!noPdf?`<button class="btn btn-ghost btn-xs" onclick="previewCertPdf('${c.pdfUrl}');event.stopPropagation()">👁 Preview</button>`:''}
+      ${!noPdf?`<button class="btn btn-ghost btn-xs" onclick="previewCertPdf('${c.pdfPath}');event.stopPropagation()">👁 Preview</button>`:''}
       <button class="btn btn-acc btn-xs" onclick="editCertRecord('${c.id}');event.stopPropagation()">${noPdf?'📤 Upload':'📅 Fill In'}</button>
     </div>`;
   }).join('');
@@ -1174,7 +1180,7 @@ export async function renderExpiringPanel(){
       </div>
       <div class="exp-card-actions">
         <button class="btn btn-acc btn-xs" onclick="createRenewalJob('${c.id}')">🔁 Renew</button>
-        ${c.pdfUrl?`<button class="btn btn-ghost btn-xs" onclick="previewCertPdf('${c.pdfUrl}')">👁 View PDF</button>`:''}
+        ${c.pdfPath?`<button class="btn btn-ghost btn-xs" onclick="previewCertPdf('${c.pdfPath}')">👁 View PDF</button>`:''}
         <button class="btn btn-ghost btn-xs" onclick="editCertRecord('${c.id}')">✎ Edit</button>
       </div>
     </div>`;
@@ -1470,7 +1476,7 @@ export async function openEditCert(id){
   const ts=document.getElementById('cf-type');
   if(ts) ts.value=c.type||ts.options[0]?.value||'';
   window._editCertModalId=id;
-  renderCertPdfSection(id,c.pdfUrl||null);
+  renderCertPdfSection(id,c.pdfPath||null);
   _certAppliances=(c.appliances||[]).map(a=>({...a}));
   toggleApplianceSection();
   openModal('mo-cert');
@@ -1492,7 +1498,10 @@ function _currentCertHasAppliances(){
   return !!ct?.hasAppliances;
 }
 
-export function renderCertPdfSection(certId,url){
+// `path` is a storage path (certs.pdf_path), not a URL — the bucket is
+// private, so the actual viewing URL is resolved fresh by previewCertPdf()
+// at click time instead of being baked into this markup.
+export function renderCertPdfSection(certId,path){
   const wraps=['cf-pdf-wrap','cf2-pdf-wrap'].map(id=>document.getElementById(id)).filter(Boolean);
   if(!wraps.length) return;
   if(!certId){
@@ -1502,9 +1511,9 @@ export function renderCertPdfSection(certId,url){
   // Generating is an alternative to uploading, never a replacement for it —
   // the manual Upload/Replace button stays visible either way, so a cert
   // that can't be auto-generated for some reason always still has a path.
-  const genBtn=_currentCertHasAppliances()?`<button type="button" class="btn btn-acc btn-xs" style="margin-left:6px" onclick="generateCertPdf()">⚡ ${url?'Regenerate':'Generate'} PDF</button>`:'';
-  if(url){
-    wraps.forEach(wrap=>wrap.innerHTML=`<button type="button" class="btn btn-ghost btn-sm" onclick="previewCertPdf('${url}')">📄 View Current PDF</button>
+  const genBtn=_currentCertHasAppliances()?`<button type="button" class="btn btn-acc btn-xs" style="margin-left:6px" onclick="generateCertPdf()">⚡ ${path?'Regenerate':'Generate'} PDF</button>`:'';
+  if(path){
+    wraps.forEach(wrap=>wrap.innerHTML=`<button type="button" class="btn btn-ghost btn-sm" onclick="previewCertPdf('${path}')">📄 View Current PDF</button>
       <button class="btn btn-red btn-xs" onclick="removeCertPdf()" style="margin-left:6px">Remove</button>
       <label class="btn btn-ghost btn-xs" style="margin-left:6px;cursor:pointer">Replace<input type="file" accept="application/pdf" style="display:none" onchange="uploadCertPdf(this)"></label>${genBtn}
       <button type="button" class="btn btn-ghost btn-xs" style="margin-left:6px" onclick="sendCertToClient()">✉ Send to Client</button>`);
@@ -1535,16 +1544,21 @@ export async function generateCertPdf(){
     const doc=await renderPatCertificatePDF(window.jspdf.jsPDF,window.html2canvas,{cert,profile,engineerName});
     const blob=doc.output('blob');
     const path=`certs/${certId}/${_certFilename(cert)}`;
-    const url=await sbStorage(path,blob);
-    await _sb(`certs?id=eq.${encodeURIComponent(certId)}`,{method:'PATCH',body:{pdf_url:url,pdf_path:path},prefer:'return=minimal'});
-    renderCertPdfSection(certId,url);
+    await sbStorage(path,blob);
+    // pdf_url is no longer written — the bucket is private, so a stored
+    // public-style URL wouldn't work as a direct link anyway. pdf_path is
+    // the one source of truth now; every viewer resolves a fresh signed
+    // URL from it on demand (previewCertPdf, _maybeEmailCertReady, Portal's
+    // portal-sign-url Edge Function).
+    await _sb(`certs?id=eq.${encodeURIComponent(certId)}`,{method:'PATCH',body:{pdf_path:path},prefer:'return=minimal'});
+    renderCertPdfSection(certId,path);
     toast('✅ Certificate PDF generated','success');
     logActivity(`Certificate PDF generated for ${cert.address||'certificate'}`,'cert');
-    _maybeEmailCertReady(certId,url).catch(e=>console.warn('[DeepFlow] Cert-ready email failed',e));
+    _maybeEmailCertReady(certId).catch(e=>console.warn('[DeepFlow] Cert-ready email failed',e));
   }catch(e){
     console.error('[DeepFlow] PDF generation failed',e);
     toast('❌ PDF generation failed: '+(e.message||'').slice(0,80),'error');
-    renderCertPdfSection(certId,cert.pdfUrl||null);
+    renderCertPdfSection(certId,cert.pdfPath||null);
   }
 }
 
@@ -1608,7 +1622,13 @@ export async function extractCertFromPhoto(inputEl){
   }
 }
 
-export function previewCertPdf(url){
+// Takes a storage PATH (not a URL) — the bucket is private, so every
+// preview needs a fresh signed URL, resolved just-in-time rather than
+// baked in at render time.
+export async function previewCertPdf(path){
+  if(!path){ toast('No PDF on file for this certificate','warn'); return; }
+  const url=await signedUrl(path);
+  if(!url){ toast('Could not load PDF preview','error'); return; }
   document.getElementById('pdf-preview-frame').src=url;
   document.getElementById('pdf-preview-open').href=url;
   document.getElementById('pdf-preview-download').href=url;
@@ -1629,12 +1649,12 @@ export async function uploadCertPdf(inputEl){
   try{
     const c=await dGet('certs',certId);
     const path=`certs/${certId}/${_certFilename(c)}`;
-    const url=await sbStorage(path,file);
-    await _sb(`certs?id=eq.${encodeURIComponent(certId)}`,{method:'PATCH',body:{pdf_url:url,pdf_path:path},prefer:'return=minimal'});
-    renderCertPdfSection(certId,url);
+    await sbStorage(path,file);
+    await _sb(`certs?id=eq.${encodeURIComponent(certId)}`,{method:'PATCH',body:{pdf_path:path},prefer:'return=minimal'});
+    renderCertPdfSection(certId,path);
     toast('✅ Certificate PDF uploaded','success');
     logActivity(`Certificate PDF uploaded for ${document.getElementById('cf-addr')?.value||'certificate'}`,'cert');
-    _maybeEmailCertReady(certId,url).catch(e=>console.warn('[DeepFlow] Cert-ready email failed',e));
+    _maybeEmailCertReady(certId).catch(e=>console.warn('[DeepFlow] Cert-ready email failed',e));
   }catch(e){
     toast('❌ Upload failed: '+(e.message||'').slice(0,80),'error');
     renderCertPdfSection(certId,null);
@@ -1649,16 +1669,22 @@ export async function uploadCertPdf(inputEl){
 // never filled in, so falls back to the linked job's landlord/agency email.
 // Every outcome — sent, no email on file, or a real send failure — is
 // logged to the Audit Trail so office staff can see what actually went out.
-async function _maybeEmailCertReady(certId, pdfUrl, {manual=false}={}){
+async function _maybeEmailCertReady(certId, {manual=false}={}){
   if(!manual && S.certAutoEmail===false) return {sent:false,reason:'auto-disabled'};
   const c=await dGet('certs',certId);
   if(!c) return {sent:false,reason:'not-found'};
+  if(!c.pdfPath) return {sent:false,reason:'no-pdf'};
   let email=c.email;
   if(!email && c.jobId){
     const job=await dGet('jobs',c.jobId);
     email=job?.landlordEmail||job?.agencyEmail||null;
   }
   if(!email) return {sent:false,reason:'no-email'};
+  // Long-lived: this link is going in an email, which might be opened
+  // years from now for a compliance record — a short in-app preview
+  // expiry would break it.
+  const pdfUrl=await signedUrl(c.pdfPath,_LONG_SIGNED_URL_SECONDS);
+  if(!pdfUrl) return {sent:false,reason:'sign-failed'};
   // Attach the actual PDF, not just the download link — the link stays in
   // the email body too as a fallback for the rare oversized cert. 15MB is
   // well past any realistic scanned EICR/Gas Safety report; only a genuine
@@ -1693,8 +1719,8 @@ export async function sendCertToClient(){
   const certId=window._editCertModalId;
   if(!certId){ toast('Save the certificate first','warn'); return; }
   const c=await dGet('certs',certId);
-  if(!c?.pdfUrl){ toast('Generate or upload the certificate PDF first','warn'); return; }
-  const result=await _maybeEmailCertReady(certId,c.pdfUrl,{manual:true});
+  if(!c?.pdfPath){ toast('Generate or upload the certificate PDF first','warn'); return; }
+  const result=await _maybeEmailCertReady(certId,{manual:true});
   if(result.sent) toast('✅ Certificate emailed to client','success');
   else if(result.reason==='no-email') toast('No client email on file for this certificate','warn');
   else toast('❌ Send failed: '+(result.error||'unknown error').slice(0,80),'error');

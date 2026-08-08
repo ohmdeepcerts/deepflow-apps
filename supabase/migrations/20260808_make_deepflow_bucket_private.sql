@@ -1,0 +1,13 @@
+-- The deepflow bucket was public=true, meaning every stored file (cert
+-- PDFs, invoice PDFs, job/engineer photos) was fetchable by anyone with
+-- the URL, no auth, no expiry — bypassing the 7 storage.objects RLS
+-- policies entirely (those only ever gated INSERT/UPDATE/DELETE plus an
+-- authenticated-context SELECT; download via the public URL pattern
+-- checked none of them). Zero objects were stored at the time of this
+-- change (post-reset), so there is no existing file whose access this
+-- breaks. All 3 apps were updated in the same session to resolve
+-- short-lived signed URLs on demand instead of relying on the bucket
+-- being public — see apps/office/main.js:signedUrl,
+-- apps/engineer/main.js:signedUrl, and the new portal-sign-url Edge
+-- Function (Portal has no session of its own to sign a URL with).
+update storage.buckets set public=false where id='deepflow';

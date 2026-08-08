@@ -473,6 +473,25 @@ export async function sbStorage(path,file){
   return `${SB_URL}/storage/v1/object/public/deepflow/${path}`;
 }
 
+// The `deepflow` bucket is private — no stored URL works as a direct link
+// anymore, only a fresh short-lived signed one. Uses the same
+// _storageAuthHeaders() as sbStorage() above, so it works identically
+// whether this engineer is on a real Supabase Auth session (password
+// login) or a phone+PIN token session (x-engineer-token) — the
+// deepflow_staff_select RLS policy accepts either.
+export async function signedUrl(path,expiresIn=3600){
+  if(!path) return null;
+  try{
+    const headers = await _storageAuthHeaders({'Content-Type':'application/json'});
+    const res=await fetch(`${SB_URL}/storage/v1/object/sign/deepflow/${path}`,{
+      method:'POST', headers, body:JSON.stringify({expiresIn})
+    });
+    if(!res.ok) return null;
+    const {signedURL}=await res.json();
+    return signedURL?`${SB_URL}/storage/v1${signedURL}`:null;
+  }catch(e){ console.warn('[DeepFlow] signedUrl failed for',path,e); return null; }
+}
+
 // ══════════════════════════════════════════════════════════════
 //  THEME
 // ══════════════════════════════════════════════════════════════
@@ -1041,7 +1060,12 @@ export async function openJob(id){
     document.getElementById('modal-status-pill').innerHTML=_spill(j.status,j.priority);
     const pcMatch=(j.address||'').match(/\b([A-Z]{1,2}\d{1,2}[A-Z]?\s*\d[A-Z]{2})\b/i);
     const lrPromise=pcMatch?fetchLandRegistry(pcMatch[1]):Promise.resolve(null);
-    renderJobDetail(j,atts||[]);
+    // Bucket is private — resolve every photo/doc to a fresh signed URL
+    // before rendering, since renderJobDetail/_renderPhotoGrid build plain
+    // synchronous HTML strings from a.url.
+    const attsList=atts||[];
+    await Promise.all(attsList.map(async a=>{ if(a.storage_path) a.url=await signedUrl(a.storage_path); }));
+    renderJobDetail(j,attsList);
     lrPromise.then(lr=>{
       if(!lr)return;
       const el=document.getElementById('land-reg-info');
