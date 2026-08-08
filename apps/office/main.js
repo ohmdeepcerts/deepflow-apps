@@ -7270,10 +7270,14 @@ export async function signedUrl(path,expiresIn=3600){
 async function _storeInvoicePDF(inv,doc){
   const path=`invoices/${inv.id}/${(inv.number||'invoice').replace(/[^a-z0-9-]/gi,'_')}.pdf`;
   const blob=doc.output('blob');
-  const url=await _invPdfSbStorage(path,blob);
-  await _sb(`invoices?id=eq.${encodeURIComponent(inv.id)}`,{method:'PATCH',body:{pdf_url:url,pdf_path:path},prefer:'return=minimal'});
+  await _invPdfSbStorage(path,blob);
+  // pdf_url is no longer written — the bucket is private, so a stored
+  // public-style URL wouldn't work as a direct link anyway. pdf_path is
+  // the one source of truth; every viewer (statements.js bulk download,
+  // Portal's portal-sign-url) resolves a fresh signed URL from it.
+  await _sb(`invoices?id=eq.${encodeURIComponent(inv.id)}`,{method:'PATCH',body:{pdf_path:path},prefer:'return=minimal'});
   _invalidateCache('invoices');
-  return url;
+  return path;
 }
 
 // Automatic generation — call this after any change that affects what the
