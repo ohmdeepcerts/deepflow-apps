@@ -3352,6 +3352,7 @@ async function createProforma(jobId){
     engineer:job.engineer||'',
     certTypes:job.certTypes||'',
     agentName:job.agentName||'',
+    agencyName:job.agencyName||'',
     clientName:job.llName||job.clientName||'',
     clientEmail:job.llEmail||job.clientEmail||'',
     items:[{desc:job.description||job.certTypes||'Work',qty:1,unit:price,vat:true}],
@@ -3444,19 +3445,26 @@ async function createStandaloneProforma(clientName,desc,price,notes){
     const r=await _sb('invoices',{method:'POST',body});
     if(!r?.[0]){toast('Failed to create proforma','error');return;}
     const inv=r[0];
-    // Auto-create a PR job linked to this proforma
-    const prNum=await nextJobNum('PR');
+    // Auto-create a job linked to this proforma. nextJobNum() only ever
+    // special-cases the literal 'CR' — any other argument, including the
+    // 'PR' this used to pass, falls straight through to the regular
+    // JOB-#### branch, which ignores the prefix argument entirely. So this
+    // has only ever produced an ordinary job number from the same shared
+    // sequence as every other job, never a distinct PR- series; passing
+    // 'PR' implied one exists when it doesn't, so it's dropped rather than
+    // left as a misleading no-op argument.
+    const jobNum=await nextJobNum();
     const jobBody={
-      jobNum:prNum,status:'Pending',priority:'Normal',
+      jobNum,status:'Pending',priority:'Normal',
       description:desc||'Work from proforma',
       address:'TBC',price:Number(price)||0,
       date:TODAY(),certTypes:'Proforma',modified:now,created:now
     };
     const jr=await _sb('jobs',{method:'POST',body:jobBody});
     if(jr?.[0]){
-      // Link the proforma to the PR job
-      await _sb('invoices?id=eq.'+inv.id,{method:'PATCH',body:{jobId:jr[0].id,jobNum:prNum,modified:now}});
-      toast('Proforma '+num+' created + Job '+prNum+' added','success');
+      // Link the proforma to the job
+      await _sb('invoices?id=eq.'+inv.id,{method:'PATCH',body:{jobId:jr[0].id,jobNum,modified:now}});
+      toast('Proforma '+num+' created + Job '+jobNum+' added','success');
     }
     renderInvList();return inv;
   }catch(e){toast('Failed: '+e.message,'error');}
@@ -3467,7 +3475,13 @@ async function convertProformaToInvoice(proformaId){
   const inv=await dGet('invoices',proformaId);
   if(!inv){toast('Proforma not found','error');return;}
   if(inv.type!=='proforma'){toast('Not a proforma invoice','error');return;}
-  const isAgency=inv.agentName?true:false;
+  // Matches _autoInvoiceInner()'s series check (§1.4) — either field routes
+  // to AGN-. Used to check agentName only, so a job referred purely through
+  // an agency (agencyName, no separate agentName) landed on INV- if it went
+  // through a proforma first, but AGN- if auto-invoiced directly — same job,
+  // different series depending on path. createProforma() now also copies
+  // agencyName onto the proforma so this check has something to see.
+  const isAgency=!!(inv.agentName||inv.agencyName);
   const realNum=await nextInvNum(isAgency);
   const now=Date.now();
   try{

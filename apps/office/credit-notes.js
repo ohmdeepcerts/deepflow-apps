@@ -75,14 +75,38 @@ export function updCNTotal(){
   document.getElementById('cn-total').textContent = '£' + total.toFixed(2);
 }
 
+// A credit note's number is derived from the original invoice's, not
+// drawn from a sequence — used to always strip S.invPrefix ('INV-') even
+// against an agency invoice, so a credit note against AGN-2007 came out
+// as the malformed INV-CN-AGN-2007 instead of AGN-CN-2007. Now strips
+// whichever prefix (agency or landlord) the original number actually
+// starts with. Also used to have no collision guard at all — two credit
+// notes against the same invoice would silently save with the identical
+// human-facing number (each still gets its own unique id, so neither
+// write failed, but the reference number wasn't unique) — now appends
+// -2, -3, etc. if the base number is already taken.
+async function _nextCreditNoteNumber(origInv){
+  const origNum = origInv?.number||'';
+  const agencyPrefix = S.agencyInvPrefix||'AGN-';
+  const landlordPrefix = S.invPrefix||'INV-';
+  const prefix = origNum.startsWith(agencyPrefix) ? agencyPrefix : landlordPrefix;
+  const base = prefix + 'CN-' + origNum.replace(prefix,'');
+  const existing = new Set((await dAll('invoices')).map(i=>i.number).filter(Boolean));
+  if(!existing.has(base)) return base;
+  let n = 2;
+  while(existing.has(`${base}-${n}`)) n++;
+  return `${base}-${n}`;
+}
+
 export async function saveCreditNote(){
   const invId = document.getElementById('cn-inv').value;
   if(!invId){toast('Select an invoice','error');return}
   if(!_cnItems.length){toast('Add at least one credit item','error');return}
   const origInv = await dGet('invoices', invId);
+  const cnNumber = await _nextCreditNoteNumber(origInv);
   const cn = {
     id: uid(),
-    number: (S.invPrefix||'INV-') + 'CN-' + (origInv?.number||'').replace(S.invPrefix||'INV-',''),
+    number: cnNumber,
     clientId: origInv?.clientId, clientName: origInv?.clientName,
     clientEmail: origInv?.clientEmail, clientAddr: origInv?.clientAddr,
     clientWA: origInv?.clientWA||'',

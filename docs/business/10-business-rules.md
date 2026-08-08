@@ -200,7 +200,11 @@ appointment," tracked alongside the main status, not instead of it.
   (not verified as part of this document — check via `mcp_supabase` `list_migrations`/`execute_sql`
   if this matters for a specific deployment).
 - **Prefix rule (unchanged):** default prefix `JOB-`, 4-digit pad; portal-submitted job requests get
-  a `CR-####` reference (3-digit pad) via the same dual-path mechanism.
+  a `CR###` reference — no hyphen, 3-digit pad (e.g. `CR007`), confirmed against `nextJobNum('CR')`
+  in `apps/office/main.js` and its parser regex `/^CR(\d+)$/i` — via the same dual-path mechanism.
+  See [`docs/business/14-certificate-and-invoice-numbering.md` §3.2](14-certificate-and-invoice-numbering.md#32-portal-submitted-client-requests--cr)
+  for the full numbering reference, including a related gotcha (§3.3) where a standalone-proforma's
+  auto-created job was misleadingly *named* like it might get a `PR-` series but never actually did.
 
 ### 1.8 Manual Sort Order, Realtime Conflict Rules
 
