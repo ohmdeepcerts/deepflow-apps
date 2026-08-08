@@ -118,7 +118,13 @@ export const token=P.get('id'), ptype=P.get('type')||'landlord';
 // PHASE6B for the sending side. This
 // public key is safe to expose; the matching private key lives only in the
 // Edge Function's environment secrets.
-const VAPID_PUBLIC_KEY = 'BCM7SAk356QodrcNAwoO7gOSwXnfGb7ooqN514kYfR8Fv72h1gbkMD23REa7toVURlZPqTTH8BfpWOJSqLRitTE';
+// Rotated 2026-08-09 — the previous keypair's PRIVATE half was committed in
+// plaintext in docs/history/sql-migration-notes/PHASE6B_PUSH_EDGE_FUNCTION.md
+// and PHASE6_PUSH_NOTIFICATIONS_SQL.md (GitGuardian flagged it; this repo is
+// public). The public half here was never the secret — VAPID public keys are
+// meant to ship in client code — but it's rotated too since it's paired with
+// the private key, which must change.
+const VAPID_PUBLIC_KEY = 'BOVLJmNzqwDDxsNN1vBzk7RVKZ7m0hgKLr_xpnZfyjL5eCC7Z_cCRgWGdlXbXtm1U4-i9CQSByFRslUW45pcmiw';
 
 function _urlBase64ToUint8Array(base64String){
   const padding='='.repeat((4-base64String.length%4)%4);

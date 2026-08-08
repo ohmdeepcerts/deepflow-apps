@@ -145,9 +145,18 @@ Deno.serve(async (req) => {
 Never put these in the function file itself — secrets, not code:
 
 ```
-supabase secrets set VAPID_PUBLIC_KEY=BCM7SAk356QodrcNAwoO7gOSwXnfGb7ooqN514kYfR8Fv72h1gbkMD23REa7toVURlZPqTTH8BfpWOJSqLRitTE
-supabase secrets set VAPID_PRIVATE_KEY=rbO_aJZ2KV6IDHaKIAAOKPccja0L3w8WDpXbpCl-Rz8
+supabase secrets set VAPID_PUBLIC_KEY=<your-public-key>
+supabase secrets set VAPID_PRIVATE_KEY=<your-private-key>
 ```
+
+**2026-08-09 — the real key values that used to be here were redacted.** They
+were committed in plaintext, this repo is public, and GitGuardian flagged
+them within minutes of the file being touched by an unrelated docs-reorg
+commit. Both were rotated — see `apps/portal/main.js` for the new public key
+and the Supabase project's Edge Function secrets for the new private key,
+which is never written to this repo. Treat the old values (start
+`BCM7SAk3...` / `rbO_aJZ2...`) as permanently compromised even after this
+edit, since they remain in this file's git history.
 
 (`SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` are
 provided automatically to every Edge Function — you don't set those.)

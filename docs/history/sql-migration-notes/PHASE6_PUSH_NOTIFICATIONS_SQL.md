@@ -10,9 +10,16 @@ environment secrets in the next phase (Phase 6B), never into any HTML file.
 The public key is safe to expose (it already will be, in `client-portal.html`).
 
 ```
-VAPID_PUBLIC_KEY  = BCM7SAk356QodrcNAwoO7gOSwXnfGb7ooqN514kYfR8Fv72h1gbkMD23REa7toVURlZPqTTH8BfpWOJSqLRitTE
-VAPID_PRIVATE_KEY = rbO_aJZ2KV6IDHaKIAAOKPccja0L3w8WDpXbpCl-Rz8
+VAPID_PUBLIC_KEY  = <redacted 2026-08-09 — see note below>
+VAPID_PRIVATE_KEY = <redacted 2026-08-09 — see note below>
 ```
+
+**2026-08-09 — redacted.** The real values that used to be here were
+committed in plaintext to a public repo; GitGuardian flagged the private key
+within minutes. Both keys were rotated (new public key in
+`apps/portal/main.js`, new private key set only in the Supabase project's
+Edge Function secrets, never committed). The old values are permanently
+compromised, including in this file's own git history — don't reuse them.
 
 ## What this adds
 
