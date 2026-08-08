@@ -422,6 +422,7 @@ export function openCertForm(existing){
   if(s('cf2-email'))  s('cf2-email').value=existing?.email||'';
   if(s('cf2-phone'))  s('cf2-phone').value=existing?.phone||'+44';
   if(s('cf2-agent'))  s('cf2-agent').value=existing?.agent||'';
+  if(s('cf2-engineer'))s('cf2-engineer').value=existing?.engineer||'';
   if(s('cf2-notes'))  s('cf2-notes').value=existing?.notes||'';
   if(s('cf2-nr'))     s('cf2-nr').checked=existing?.notResponding||false;
   // PDF attachment status
@@ -493,6 +494,13 @@ export async function saveCertForm(){
       certNum, landlord:g('cf2-landlord'),
       email:g('cf2-email'), phone:g('cf2-phone'),
       agent:g('cf2-agent'), notes:g('cf2-notes'),
+      // Only shown/filled for PAT-type certs (the appliance section, and
+      // this field with it, only renders when hasAppliances is set) — a
+      // manually-added cert has no linked job for generateCertPdf() to
+      // pull an engineer name from otherwise, which was leaving the PDF's
+      // Engineer box blank for every PAT cert added this way. Harmless
+      // empty string for every other cert type, which never reads it.
+      engineer:g('cf2-engineer'),
       noExpiry:!g('cf2-expiry'),
       notResponding:document.getElementById('cf2-nr')?.checked||false,
       // Only the single type that actually has an appliance log shown gets
@@ -1539,8 +1547,13 @@ export async function generateCertPdf(){
   wraps.forEach(wrap=>wrap.innerHTML=`<span style="color:var(--txt3);font-size:12px">Generating PDF…</span>`);
   try{
     const profile=resolveCompanyProfile(cert.type);
-    let engineerName='';
-    if(cert.jobId){ const job=await dGet('jobs',cert.jobId); engineerName=job?.engineer||''; }
+    // Job-linked certs (auto-created on job completion) pull the engineer
+    // from the job; a manually-added cert has no job to pull from, so
+    // falls back to whatever was typed into the form's own Engineer field
+    // (cert.engineer) — previously there was no fallback at all, leaving
+    // the PDF's Engineer box blank for every manually-added PAT cert.
+    let engineerName=cert.engineer||'';
+    if(cert.jobId){ const job=await dGet('jobs',cert.jobId); engineerName=job?.engineer||engineerName; }
     const doc=await renderPatCertificatePDF(window.jspdf.jsPDF,window.html2canvas,{cert,profile,engineerName});
     const blob=doc.output('blob');
     const path=`certs/${certId}/${_certFilename(cert)}`;
