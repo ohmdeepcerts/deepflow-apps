@@ -8,7 +8,7 @@ This document is scoped to Storage specifically — what's stored, how the uploa
 
 ---
 
-## 1. The bucket: one bucket, public, currently empty
+## 1. The bucket: one bucket, private, currently empty
 
 ```sql
 select id, name, public, file_size_limit, allowed_mime_types, created_at from storage.buckets;
@@ -16,9 +16,11 @@ select id, name, public, file_size_limit, allowed_mime_types, created_at from st
 
 | id | name | public | file_size_limit | allowed_mime_types | created_at |
 |---|---|---|---|---|---|
-| `deepflow` | `deepflow` | **true** | `null` (unlimited) | `null` (unrestricted) | 2026-03-07 11:04:01 UTC |
+| `deepflow` | `deepflow` | **false** (as of migration `20260808_make_deepflow_bucket_private.sql`) | `null` (unlimited) | `null` (unrestricted) | 2026-03-07 11:04:01 UTC |
 
-There is exactly one bucket. It is marked **public** at the bucket level, has no server-side file-size cap and no MIME-type allowlist — every size/type restriction described in Section 2 below is enforced client-side, in JavaScript, before the upload request is even sent, not by the bucket itself.
+There is exactly one bucket, and it has no server-side file-size cap and no MIME-type allowlist — every size/type restriction described in Section 2 below is enforced client-side, in JavaScript, before the upload request is even sent, not by the bucket itself.
+
+**This was `public: true` until this same session found it during the documentation pass** (Section 3 originally described exactly why that was a real exposure — every stored file was fetchable by anyone with its URL, no auth, no expiry, regardless of the `storage.objects` RLS policies below). It was flipped to private and every app updated to resolve short-lived signed URLs instead, in the same session, while the bucket held zero objects — see Section 3 for the current mechanism, not the one this section used to describe.
 
 **Current live contents, verified this session:**
 
@@ -37,12 +39,12 @@ Four distinct upload flows write to this bucket. A fifth thing that looks like i
 
 | Use case | Triggered by | Path convention | Filename | Public/signed |
 |---|---|---|---|---|
-| Certificate PDF (auto-generated PAT) | `generateCertPdf()` — office user clicks "Generate PDF" on a cert with appliance data | `certs/{certId}/{filename}` | Cert reference number (`certNum`), sanitized | Public bucket URL, no signature |
-| Certificate PDF (manual upload) | `uploadCertPdf()` — office user uploads/replaces a PDF for any cert type | `certs/{certId}/{filename}` | Same `_certFilename()` convention | Public bucket URL, no signature |
-| Invoice PDF (auto-generated) | `generateAndStoreInvoicePDF()` — fires after any edit that changes what the invoice PDF would look like | `invoices/{invoiceId}/{filename}` | Invoice number, sanitized | Public bucket URL, no signature |
-| Job photo (standard) | Engineer app, `handleUpload(input,'photo')` | `jobs/{jobId}/{timestamp}-{random}.{ext}` | Timestamp + random suffix | Public bucket URL, no signature |
-| Job photo (before/after pair) | Engineer app, `_handleBAUpload()` | `jobs/{jobId}/{timestamp}-{random}.{ext}` — identical format to standard photos; only the `attachments.photo_slot`/`photo_role` metadata columns distinguish a pair from a loose photo | Same as above | Public bucket URL, no signature |
-| Job document (engineer-uploaded PDF) | Engineer app, `handleUpload(input,'certificate')` — a separate upload input (`#pdf-input`) from the photo one, for e.g. a manufacturer's certificate photographed/scanned on site | `jobs/{jobId}/{timestamp}-{random}.{ext}` | Same as photos | Public bucket URL, no signature |
+| Certificate PDF (auto-generated PAT) | `generateCertPdf()` — office user clicks "Generate PDF" on a cert with appliance data | `certs/{certId}/{filename}` | Cert reference number (`certNum`), sanitized | Signed URL, 1hr in-app / 10yr in emails |
+| Certificate PDF (manual upload) | `uploadCertPdf()` — office user uploads/replaces a PDF for any cert type | `certs/{certId}/{filename}` | Same `_certFilename()` convention | Signed URL, 1hr in-app / 10yr in emails |
+| Invoice PDF (auto-generated) | `generateAndStoreInvoicePDF()` — fires after any edit that changes what the invoice PDF would look like | `invoices/{invoiceId}/{filename}` | Invoice number, sanitized | Signed URL, 1hr (Office/Engineer) or 6hr (Portal) |
+| Job photo (standard) | Engineer app, `handleUpload(input,'photo')` | `jobs/{jobId}/{timestamp}-{random}.{ext}` | Timestamp + random suffix | Signed URL, 1hr (Office/Engineer) or 6hr (Portal) |
+| Job photo (before/after pair) | Engineer app, `_handleBAUpload()` | `jobs/{jobId}/{timestamp}-{random}.{ext}` — identical format to standard photos; only the `attachments.photo_slot`/`photo_role` metadata columns distinguish a pair from a loose photo | Same as above | Signed URL, 1hr (Office/Engineer) or 6hr (Portal) |
+| Job document (engineer-uploaded PDF) | Engineer app, `handleUpload(input,'certificate')` — a separate upload input (`#pdf-input`) from the photo one, for e.g. a manufacturer's certificate photographed/scanned on site | `jobs/{jobId}/{timestamp}-{random}.{ext}` | Same as photos | Signed URL, 1hr (Office/Engineer) or 6hr (Portal) |
 | Company logo | `handleLogoUpload()` / `uploadProfileLogo()` | **Not stored in Supabase Storage at all** — read via `FileReader.readAsDataURL()` into a base64 data URL and saved as a plain string inside the `app_settings` JSON blob (`S.logoData` / `S.companyProfiles[i].logoUrl`) | n/a | n/a — embedded inline in every page that renders it |
 | Engineer profile photo / avatar | — | **Does not exist.** Grepped for `avatarUrl`/`photoUrl`/"profile photo" across all three apps — the only avatars in the codebase are CSS-styled initial-letter badges (`(c.author||'?')[0].toUpperCase()`, `apps/office/main.js:797,839,5086,5254`), never an uploaded image | n/a | n/a |
 
@@ -52,9 +54,9 @@ function _certFilename(c){
   return (c?.certNum||c?.type||'certificate').replace(/[^\w-]/g,'_')+'.pdf';
 }
 ```
-Both `generateCertPdf()` (`apps/office/certs.js:1537-1539`) and `uploadCertPdf()` (`apps/office/certs.js:1631-1633`) build the storage path as `certs/${certId}/${_certFilename(cert)}` and PATCH the result onto `certs.pdf_url`/`certs.pdf_path` — the reference-number-based naming referenced in [05-database.md §3.2](05-database.md#32-certs--compliance-certificates) is real, current behavior, not aspirational.
+Both `generateCertPdf()` and `uploadCertPdf()` (`apps/office/certs.js`) build the storage path as `certs/${certId}/${_certFilename(cert)}` and PATCH it onto `certs.pdf_path` — the reference-number-based naming referenced in [05-database.md §3.2](05-database.md#32-certs--compliance-certificates) is real, current behavior, not aspirational. **`pdf_url` is no longer written by either function** (see Section 3 — since the bucket went private, a stored public-style URL string would never work as a direct link anyway; `pdf_path` is the one source of truth every viewer resolves a fresh signed URL from).
 
-**Invoice PDFs follow the equivalent pattern one level up:** `_storeInvoicePDF()` (`apps/office/main.js:7241-7248`) writes to `invoices/${inv.id}/${(inv.number||'invoice').replace(/[^a-z0-9-]/gi,'_')}.pdf` — folder keyed by the invoice's internal id, filename keyed by its human-facing number. `generateAndStoreInvoicePDF()` (`apps/office/main.js:7254-7262`) is the auto-regeneration entry point called after any edit that affects the rendered PDF (items, bill-to, status, dates) — the Client Portal and bulk-download features then just fetch this one stored file rather than each re-rendering their own copy.
+**Invoice PDFs follow the equivalent pattern one level up:** `_storeInvoicePDF()` (`apps/office/main.js`) writes to `invoices/${inv.id}/${(inv.number||'invoice').replace(/[^a-z0-9-]/gi,'_')}.pdf` — folder keyed by the invoice's internal id, filename keyed by its human-facing number, `pdf_path` the only column written for the same reason as certs above. `generateAndStoreInvoicePDF()` is the auto-regeneration entry point called after any edit that affects the rendered PDF (items, bill-to, status, dates) — the Client Portal and bulk-download features then just fetch this one stored file rather than each re-rendering their own copy.
 
 **Client-side size/type limits** (enforced in JS before upload, not by the bucket):
 - Certificate PDF manual upload: 25MB max, must look like a PDF (`apps/office/certs.js:1626`)
@@ -63,11 +65,15 @@ Both `generateCertPdf()` (`apps/office/certs.js:1537-1539`) and `uploadCertPdf()
 
 ---
 
-## 3. Access control: how three very different apps all reach the same private-by-default policies
+## 3. Access control: private bucket, signed URLs, one Edge Function bridging Portal's missing session
 
-### 3.1 The bucket is `public`, but `storage.objects` still carries real RLS
+### 3.1 What used to be here, and why it changed
 
-These look contradictory at first — they're not. `public: true` on the bucket controls exactly one thing: whether `GET /storage/v1/object/public/deepflow/{path}` serves the file with **no auth check at all**. Every write operation (`upload`/`insert`), and every *authenticated* read (`list`, `download`, `sign`), still goes through `storage.objects` Row Level Security like any other table. Live policies, queried directly (`pg_policies where schemaname='storage'`) since none of the migrations that created them exist in the repo (`07-sql-migrations.md §3` lists `c5_lock_down_storage_bucket`, `fix_invoice_pdf_storage_upload_rls`, and `add_storage_select_policy_deepflow` as three of the 36 live migrations with no corresponding file):
+This section originally documented the bucket as `public: true` and concluded that `storage.objects`' RLS policies (below) never actually stood between anyone with a file's URL and the file itself, because the unauthenticated `/object/public/...` URL form bypassed them entirely — access control for reads was effectively "the URL is unguessable," not a real authorization check. That finding was accurate as a description of the live system, and real enough that it was fixed in the same session that found it: the bucket was flipped to `public: false` (migration `20260808_make_deepflow_bucket_private.sql`), while it held zero objects, and all three apps were updated to resolve short-lived signed URLs instead of relying on the public form. Sections 3.2–3.3 below describe the current mechanism.
+
+### 3.2 `storage.objects` RLS — now the real gate on every read, not just writes
+
+Every write operation (`upload`/`insert`) and every read (`sign`, `list`, `download`) goes through `storage.objects` Row Level Security like any other table. Live policies, queried directly (`pg_policies where schemaname='storage'`) since none of the migrations that created them exist in the repo (`07-sql-migrations.md §3` lists `c5_lock_down_storage_bucket`, `fix_invoice_pdf_storage_upload_rls`, and `add_storage_select_policy_deepflow` as three of the 36 live migrations with no corresponding file):
 
 | Policy | Command | Condition |
 |---|---|---|
@@ -86,16 +92,16 @@ The three helper functions, read directly from `pg_proc` (none of them are defin
 - **`is_engineer()`** — same shape, `role = 'engineer'`. True for an Engineer app session authenticated via real Supabase Auth (password-mode login).
 - **`is_valid_engineer_token()`** — reads the `x-engineer-token` request header, matches it against `users.session_token` for an active, unexpired engineer session. True for an Engineer app session authenticated via the PIN-login flow instead of Supabase Auth (see [05-database.md §6](05-database.md#6-portal-access-portal_token-vs-portal_pin_hash) for the equivalent client-portal PIN mechanism — this is the analogous engineer-side one).
 
-**Notice what's absent: there is no SELECT (or any) policy that returns true for a Client Portal visitor.** The Portal has no login at all — no Supabase Auth session, no `x-engineer-token` header, nothing `is_office()`/`is_engineer()`/`is_valid_engineer_token()` could ever match. If the Portal tried to call the authenticated storage endpoints (`.storage.from('deepflow').download(...)`, `.list(...)`, `.createSignedUrl(...)`), RLS would deny every one of them.
+**Notice what's still absent: there is no SELECT (or any) policy that returns true for a Client Portal visitor.** The Portal has no login at all — no Supabase Auth session, no `x-engineer-token` header, nothing `is_office()`/`is_engineer()`/`is_valid_engineer_token()` could ever match. That's still true after the bucket went private — it's *why* Portal needed its own mechanism rather than just calling `createSignedUrl()` itself (Section 3.3).
 
-### 3.2 How each app actually gets a working URL
+### 3.3 How each app actually gets a working URL now
 
-- **Office App and Engineer App** — both call the same two-step pattern: `POST /storage/v1/object/deepflow/{path}` to upload (goes through `deepflow_staff_insert`/`deepflow_engineer_token_insert`, so it's genuinely RLS-gated), then immediately construct the public-read URL as a plain string, `${SB_URL}/storage/v1/object/public/deepflow/{path}` — see `sbStorage()` in `apps/office/certs.js:134-143` and `apps/engineer/main.js:466-474`. Neither app calls Supabase's `getPublicUrl()` SDK helper; both hand-build the identical URL shape it would return. **`createSignedUrl` does not appear anywhere in the codebase** — grepped across `apps/`, zero matches. Signed, expiring URLs are simply not a mechanism this app uses anywhere, for any app.
-- **Client Portal — never touches Storage's HTTP API at all.** Grepped `apps/portal/*.js` for `.storage.from(`, `sbStorage`, `createSignedUrl`, `getPublicUrl`, `.upload(` — zero matches, in contrast to the Office/Engineer grep above which found several. Instead, the Portal calls `SECURITY DEFINER` RPCs — `portal_get_attachments`, `portal_get_certs`, `portal_get_invoices` (`apps/portal/main.js:523-524,600`) — which are the same anon-callable RPC family documented in [05-database.md §4.2](05-database.md#42-the-loose-reference-pattern--client_person_idclient_agency_id-and-why-its-not-a-real-fk). Those RPCs return rows that already contain the `url`/`pdf_url` column value — the exact same public-bucket URL string the Office/Engineer app wrote at upload time — and the Portal just renders it directly (`apps/portal/certs.js:119`, `apps/portal/main.js:1135,1219`: `const url = c.pdf_url||c.url`, used as an `<img src>`/link/iframe target with no further processing).
+- **Office App and Engineer App** — both have a real session (Supabase Auth password login, or the Engineer app's `x-engineer-token` PIN session), so both sign URLs themselves. `signedUrl(path, expiresIn)` — one copy in `apps/office/main.js`, one in `apps/engineer/main.js`, same shape — calls `POST /storage/v1/object/sign/deepflow/{path}` with the current auth (JWT or `x-engineer-token` header via `_storageAuthHeaders()`), which is checked against `deepflow_staff_select` above exactly like any other authenticated read. Office defaults to a 1-hour expiry for in-app viewing (`previewCertPdf`, the job-photo grid) and a 10-year expiry for links embedded in an emailed certificate (`_maybeEmailCertReady` — a short expiry would break a "Download Certificate" link opened from an old email).
+- **Client Portal — still never touches Storage's HTTP API directly** (no session to authenticate the call with), but now has a purpose-built bridge: the **`portal-sign-url` Edge Function** (`supabase/functions/portal-sign-url/index.ts`). Portal calls it once per visit, right after loading attachments/certs/invoices, with the same `(type, id)` the `portal_get_*` RPCs already trust plus the full list of storage paths those records reference. The function re-resolves that identity's own jobs/certs/attachments/invoices server-side with the service role (bypassing RLS the same way `portal_get_*` does internally), and signs a requested path **only if it's found among that identity's own records** — a guessed or adjacent path is silently dropped, never signed. `_resolveFileUrls()` (`apps/portal/main.js`) then overwrites `.url`/`.pdf_url` on the in-memory records with the signed results, so every existing render site (`apps/portal/certs.js:119`, `apps/portal/main.js:995,1000,1017-1018,1135`) keeps reading the same field names unchanged and just gets a working 6-hour link instead of a dead public one.
 
-**The practical result:** the `deepflow_staff_select` RLS policy is real and does gate the *authenticated* download/list/sign endpoints — but because the bucket is `public: true` and every stored file's URL is the unauthenticated `/object/public/...` form, that SELECT policy never actually stands between a Client Portal visitor (or literally anyone with the URL, portal session or not) and any file in the bucket. Access control for reads is effectively "the URL is unguessable" (it embeds a `certId`/`invoiceId`/`jobId` plus, for photos, a timestamp+random suffix) rather than an authorization check — the same shape as the bare `?id=` portal link itself, which [05-database.md §6](05-database.md#6-portal-access-portal_token-vs-portal_pin_hash) already documents as the reason the `portal_pin_hash` layer exists on `persons`/`agencies`/`agents`. There is no equivalent PIN/expiry gate on file URLs — this is worth being aware of as the real, current security posture, not a defect introduced by this document's analysis; `get_advisors` (security) was run live against the project this session and returned no bucket- or storage-specific finding at all (its only results are the two already-known, accepted items covered in `07-sql-migrations.md §5`: `push_subscriptions`' policy-less RLS and the anon-callable `SECURITY DEFINER` RPCs), i.e. Supabase's own linter doesn't flag a public bucket as a lint condition — this finding comes from reading the code and the live policies directly, not from a tool warning.
+**The practical result:** `deepflow_staff_select` now genuinely gates every read, for every app — Office/Engineer because they hold a real session that satisfies it directly, Portal because `portal-sign-url` runs under the service role (which bypasses RLS by design, same as every other `SECURITY DEFINER` portal RPC) and re-derives authorization from the identity check instead. There is no more "the URL is unguessable" fallback — a copied/leaked file URL now expires (1 hour to 6 hours depending on which app issued it, 10 years for the one deliberate exception of emailed certificates) and a Portal visitor can never sign a path that isn't genuinely theirs, regardless of what they pass to the function. `get_advisors` (security) was re-run immediately after the bucket flip and returned no new finding.
 
-### 3.3 Delete behavior — best-effort, can orphan a file
+### 3.4 Delete behavior — best-effort, can orphan a file
 
 Every delete path removes the `attachments`/`certs`/`invoices` **database row** first-class, and fires the matching Storage object delete as a secondary, non-blocking `fetch(...).catch(()=>{})` — e.g. `removeCertPdf()` (`apps/office/certs.js:1703-1717`), `deleteAttachment()` (`apps/office/main.js:4163-4179`), `_deleteBAPhoto()` (`apps/engineer/photos.js:232-251`). The Office App's version even says so directly in a code comment (`apps/office/main.js:4171`): *"Storage blob delete failed for ... the DB row is still being removed, leaving an orphaned file."* If the storage DELETE request fails (network blip, expired session) after the DB row is already gone, the file itself is left behind in the bucket with nothing in Postgres pointing at it any more — a known, accepted trade-off in the current code, not a hidden bug.
 
@@ -125,5 +131,6 @@ Two parallel certificate create/edit UIs exist in `apps/office/`:
 ## See also
 
 - [05-database.md](05-database.md) — `attachments`, `certs`, `invoices` table schemas; the `portal_pin_hash` mechanism referenced in Section 3.2 above
-- [06-supabase.md](06-supabase.md) — Auth, Realtime, and full RLS reference for `public` schema tables (once written)
+- [06-supabase.md](06-supabase.md) — Auth, Realtime, and full RLS reference for `public` schema tables
+- [`supabase/functions/portal-sign-url/index.ts`](../../supabase/functions/portal-sign-url/index.ts) — the Edge Function Section 3.3 describes
 - [07-sql-migrations.md](07-sql-migrations.md) — the repo-vs-live migration gap; Section 3 of that document lists the four storage-related migrations (`c5_lock_down_storage_bucket`, `fix_invoice_pdf_storage_upload_rls`, `add_storage_select_policy_deepflow`, `add_invoice_pdf_path`) that exist live with no file in the repo
