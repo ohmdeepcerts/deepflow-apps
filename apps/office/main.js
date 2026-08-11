@@ -6585,7 +6585,7 @@ async function renderInvDashboard(){
 
   const kpi=(val,lbl,col,onclick='')=>`
     <div style="background:var(--s1);border:1px solid var(--border);border-radius:10px;padding:14px 16px;cursor:${onclick?'pointer':'default'}" ${onclick?`onclick="${onclick}"`:''}
-      onmouseover="if('${onclick}')this.style.borderColor='var(--acc)'" onmouseout="this.style.borderColor='var(--border)'">
+      ${onclick?`onmouseover="this.style.borderColor='var(--acc)'" onmouseout="this.style.borderColor='var(--border)'"`:''}>
       <div style="font-size:22px;font-weight:900;color:${col};line-height:1;margin-bottom:4px">${val}</div>
       <div style="font-size:10px;color:var(--txt3);font-weight:600;text-transform:uppercase;letter-spacing:.4px">${lbl}</div>
     </div>`;
