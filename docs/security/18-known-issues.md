@@ -188,28 +188,29 @@ factually, an open gap in the code today.
 
 ---
 
-## 4. Process: unmerged branches
+## 4. Process: unmerged branches — RESOLVED 2026-08-09
 
-Two long-running feature branches exist on `origin`, both still unmerged as of this writing (confirmed
-via `git log main..origin/<branch>`, one commit ahead each):
+Both branches described in the original version of this section (`docs/reorganize-and-archive-history`,
+`fix/broken-onclick-handlers-and-portal-sw`) were rebased onto current `main`, verified (build + 50 unit
+tests, plus a manual check that neither silently clobbered the other's or `main`'s later changes), merged,
+and their PRs closed. Both remote and local copies of the branches were deleted afterward — `main` is now
+the only branch in the repo. No open item remains here.
 
-- `docs/reorganize-and-archive-history` — `32bb6d5`, reorganizes 30 root-level point-in-time audit docs
-  into `docs/history/` and removes 3 confirmed-duplicate files.
-- `fix/broken-onclick-handlers-and-portal-sw` — `7a38190`, fixes 10 UI actions that were called from
-  inline `onclick=""` handlers but never exposed on `window`, plus the Vite plugin that copies
-  `apps/portal/sw.js` into the build output (currently missing from a clean `main` build).
+---
 
-Both diverged from the same older commit that local `main` has since moved 8 commits past (local `main`
-is itself 8 commits ahead of `origin/main`, unpushed) — landing either now needs a real merge, not a
-fast-forward. Full detail, including exactly which files overlap with `main`'s more recent changes and
-the current push/deploy state, is in [`19-deployment.md` §5](../ops/19-deployment.md#5-current-branch--merge-state) —
-summarized here as an open item, not re-derived.
+## 5. A live secret was found and rotated (2026-08-09) — not fully closed
 
-**Why this matters (low severity, process debt):** neither branch is stale or abandoned — both are
-described as functionally complete; what's missing is someone reviewing and landing them. No user-facing
-risk from leaving them open, but the `fix/broken-onclick-handlers-and-portal-sw` branch does contain a
-real, currently-live bug fix (the 10 dead-button issues, and the missing `sw.js` in the build) that stays
-unfixed on `main` until it lands.
+GitGuardian flagged a VAPID private key committed in plaintext in two archived docs
+(`docs/history/sql-migration-notes/PHASE6_PUSH_NOTIFICATIONS_SQL.md` and
+`PHASE6B_PUSH_EDGE_FUNCTION.md`) — this repo is public, so the key had to be treated as compromised. A
+new keypair was generated, the new public key is committed (`apps/portal/main.js`), and both docs were
+redacted. **What's still outstanding:** the new `VAPID_PRIVATE_KEY` has been generated but not yet set as
+the live Supabase Edge Function secret — that step requires entering a secret value into a dashboard/CLI,
+which isn't something done on the user's behalf. Until it's set, `send-push` will fail (low practical
+impact right now: `push_subscriptions` has 0 rows, so nothing is actually trying to send). Also not done:
+scrubbing the old key out of git *history* (the current files are fixed, but the old value is still
+recoverable from past commits) — a full rewrite would need a force-push and is a separate, optional
+decision, not assumed here.
 
 ---
 
