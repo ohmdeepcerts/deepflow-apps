@@ -37,8 +37,8 @@ let _cremMode='email',_cremEmailLink='';
 // Working copy of the currently-open cert's appliance test log (asset ID,
 // description, instrument, date, retest period, calculated next-test date,
 // Pass/Fail). Only ever shown/saved for cert types with hasAppliances set
-// (see toggleApplianceSection()) — reset in openCertModal(), populated from
-// the record in openEditCert(), written back in saveCert().
+// (see toggleApplianceSection()) — reset and populated in openCertForm(),
+// written back in saveCertForm().
 let _certAppliances=[];
 
 export function getCertTab(){ return _certTab; }
@@ -1470,26 +1470,6 @@ export async function addExpiryToExistingCert(id){
   openModal('mo-cert-expiry');
 }
 
-export async function openEditCert(id){
-  const c=await dGet('certs',id);
-  if(!c)return;
-  // Use the add cert modal for editing
-  document.getElementById('cf-addr').value=c.address||'';
-  document.getElementById('cf-ll').value=c.landlord||'';
-  document.getElementById('cf-issue').value=c.issueDate||TODAY();
-  document.getElementById('cf-expiry').value=c.expiryDate||'';
-  document.getElementById('cf-num').value=c.certNum||'';
-  document.getElementById('cf-notes').value=c.notes||'';
-  // Set type select
-  const ts=document.getElementById('cf-type');
-  if(ts) ts.value=c.type||ts.options[0]?.value||'';
-  window._editCertModalId=id;
-  renderCertPdfSection(id,c.pdfPath||null);
-  _certAppliances=(c.appliances||[]).map(a=>({...a}));
-  toggleApplianceSection();
-  openModal('mo-cert');
-}
-
 // ── Certificate PDF upload/remove/status — lets office staff attach the
 // actual signed compliance document so the client can download it from their
 // portal. Upload requires a real, already-saved certificate id (Storage
@@ -1510,7 +1490,7 @@ function _currentCertHasAppliances(){
 // private, so the actual viewing URL is resolved fresh by previewCertPdf()
 // at click time instead of being baked into this markup.
 export function renderCertPdfSection(certId,path){
-  const wraps=['cf-pdf-wrap','cf2-pdf-wrap'].map(id=>document.getElementById(id)).filter(Boolean);
+  const wraps=['cf2-pdf-wrap'].map(id=>document.getElementById(id)).filter(Boolean);
   if(!wraps.length) return;
   if(!certId){
     wraps.forEach(wrap=>wrap.innerHTML=`<span style="color:var(--txt3);font-size:12px">Save the certificate first, then reopen it to attach a PDF.</span>`);
@@ -1543,7 +1523,7 @@ export async function generateCertPdf(){
   const cert=await dGet('certs',certId);
   if(!cert){ toast('Certificate not found','error'); return; }
   if(!(cert.appliances||[]).length){ toast('Add at least one appliance first','warn'); return; }
-  const wraps=['cf-pdf-wrap','cf2-pdf-wrap'].map(id=>document.getElementById(id)).filter(Boolean);
+  const wraps=['cf2-pdf-wrap'].map(id=>document.getElementById(id)).filter(Boolean);
   wraps.forEach(wrap=>wrap.innerHTML=`<span style="color:var(--txt3);font-size:12px">Generating PDF…</span>`);
   try{
     const profile=resolveCompanyProfile(cert.type);
@@ -1575,66 +1555,6 @@ export async function generateCertPdf(){
   }
 }
 
-// Reads cf-num/cf-expiry/cf-issue/cf-type off a photo of the certificate
-// via the extract-cert-data Edge Function (Gemini, falling back to
-// OCR.space — see that function for the fallback logic). Runs before the
-// certificate is saved, so this pre-fills the form rather than attaching
-// a permanent document — that's still the separate PDF upload below.
-const _CERT_TYPE_MAP={'eicr':'Electrical','electrical':'Electrical','gas safety':'Gas Safety','gas':'Gas Safety','pat testing':'Other','pat':'Other','epc':'EPC'};
-function _matchCertTypeOption(certType){
-  if(!certType) return null;
-  const key=String(certType).toLowerCase().trim();
-  if(_CERT_TYPE_MAP[key]) return _CERT_TYPE_MAP[key];
-  const sel=document.getElementById('cf-type');
-  const opt=sel && [...sel.options].find(o=>o.value.toLowerCase()===key);
-  return opt ? opt.value : null;
-}
-
-export async function extractCertFromPhoto(inputEl){
-  const file=inputEl.files[0];
-  inputEl.value='';
-  if(!file) return;
-  if(!file.type.startsWith('image/')){ toast('Please choose a photo (JPG/PNG)','error'); return; }
-  if(file.size>10*1024*1024){ toast(`File too large (${(file.size/1024/1024).toFixed(1)}MB) — 10MB max`,'error'); return; }
-  const status=document.getElementById('cf-extract-status');
-  if(status) status.textContent='Reading certificate…';
-  try{
-    const imageBase64=await new Promise((resolve,reject)=>{
-      const reader=new FileReader();
-      reader.onload=()=>resolve(String(reader.result).split(',')[1]||'');
-      reader.onerror=reject;
-      reader.readAsDataURL(file);
-    });
-    const jwt=await _getJWT();
-    const res=await fetch(`${SB_URL}/functions/v1/extract-cert-data`,{
-      method:'POST',
-      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+jwt,'Content-Type':'application/json'},
-      body:JSON.stringify({imageBase64, mimeType:file.type, preferGemini:S.aiExtractEnabled!==false})
-    });
-    const data=await res.json();
-    if(!res.ok){ if(status) status.textContent=''; toast(data.error||'Could not read the certificate','error'); return; }
-
-    if(data.source==='gemini'){
-      if(data.certNum) document.getElementById('cf-num').value=data.certNum;
-      if(data.issueDate) document.getElementById('cf-issue').value=data.issueDate;
-      if(data.expiryDate) document.getElementById('cf-expiry').value=data.expiryDate;
-      if(data.propertyAddress && !document.getElementById('cf-addr').value) document.getElementById('cf-addr').value=data.propertyAddress;
-      const matchedType=_matchCertTypeOption(data.certType);
-      if(matchedType) document.getElementById('cf-type').value=matchedType;
-      if(status) status.textContent='✅ Filled in from photo — please double-check before saving';
-      toast('📷 Certificate details extracted — please check them','success');
-    } else {
-      // OCR fallback — text only, no structured fields. Show it so the
-      // user can read the number/dates off it themselves.
-      if(status) status.innerHTML=`⚠️ AI extraction unavailable — raw text below, please fill in the fields:<div style="margin-top:6px;padding:8px;background:var(--s2);border-radius:6px;font-size:11px;white-space:pre-wrap;max-height:120px;overflow:auto">${(data.rawText||'').replace(/</g,'&lt;')}</div>`;
-      toast('Could not auto-fill — showing raw text from the photo instead','warn');
-    }
-  }catch(e){
-    if(status) status.textContent='';
-    toast('❌ Extraction failed: '+(e.message||'').slice(0,80),'error');
-  }
-}
-
 // Takes a storage PATH (not a URL) — the bucket is private, so every
 // preview needs a fresh signed URL, resolved just-in-time rather than
 // baked in at render time.
@@ -1657,7 +1577,7 @@ export async function uploadCertPdf(inputEl){
   const looksLikePdf=(file.type==='application/pdf')||file.name.toLowerCase().endsWith('.pdf');
   if(!looksLikePdf){ toast('Please choose a PDF file','error'); return; }
   if(file.size>25*1024*1024){ toast(`File too large (${(file.size/1024/1024).toFixed(1)}MB) — 25MB max`,'error'); return; }
-  const wraps=['cf-pdf-wrap','cf2-pdf-wrap'].map(id=>document.getElementById(id)).filter(Boolean);
+  const wraps=['cf2-pdf-wrap'].map(id=>document.getElementById(id)).filter(Boolean);
   wraps.forEach(wrap=>wrap.innerHTML=`<span style="color:var(--txt3);font-size:12px">Uploading…</span>`);
   try{
     const c=await dGet('certs',certId);
@@ -1666,7 +1586,7 @@ export async function uploadCertPdf(inputEl){
     await _sb(`certs?id=eq.${encodeURIComponent(certId)}`,{method:'PATCH',body:{pdf_path:path},prefer:'return=minimal'});
     renderCertPdfSection(certId,path);
     toast('✅ Certificate PDF uploaded','success');
-    logActivity(`Certificate PDF uploaded for ${document.getElementById('cf-addr')?.value||'certificate'}`,'cert');
+    logActivity(`Certificate PDF uploaded for ${document.getElementById('cf2-addr')?.value||'certificate'}`,'cert');
     _maybeEmailCertReady(certId).catch(e=>console.warn('[DeepFlow] Cert-ready email failed',e));
   }catch(e){
     toast('❌ Upload failed: '+(e.message||'').slice(0,80),'error');
@@ -1868,12 +1788,12 @@ export function submitBulkAppliances(){
 }
 
 // Reads a photo of a (often handwritten) PAT appliance test log and
-// appends one row per appliance found — same extract-cert-data Edge
-// Function as extractCertFromPhoto() above, just with mode:'appliances'
-// so it asks Gemini for a table of rows instead of one cert's header
-// fields. Only assetId/description/result come back structured; instrument/
-// date/retest period are filled with the same defaults addApplianceRow()
-// uses, since a paper log essentially never varies those per row.
+// appends one row per appliance found, via the extract-cert-data Edge
+// Function with mode:'appliances' so it asks Gemini for a table of rows
+// instead of one cert's header fields. Only assetId/description/result
+// come back structured; instrument/date/retest period are filled with
+// the same defaults addApplianceRow() uses, since a paper log essentially
+// never varies those per row.
 export async function extractAppliancesFromPhoto(inputEl){
   const file=inputEl.files[0];
   inputEl.value='';
@@ -1925,86 +1845,6 @@ export async function extractAppliancesFromPhoto(inputEl){
   }
 }
 
-export function openCertModal(){
-  window._editCertModalId=null;
-  window._certLinkedJob=null;
-  const d=new Date();d.setFullYear(d.getFullYear()+1);
-  document.getElementById('cf-addr').value='';document.getElementById('cf-ll').value='';
-  document.getElementById('cf-issue').value=TODAY();document.getElementById('cf-expiry').value=localDateStr(d);
-  document.getElementById('cf-num').value='';document.getElementById('cf-notes').value='';
-  document.getElementById('cf-job-id').value='';
-  document.getElementById('cf-job-num').value='';
-  document.getElementById('cf-job-banner').style.display='none';
-  // Populate type dropdown from S.certTypes
-  const ts=document.getElementById('cf-type');
-  if(ts) ts.innerHTML=(S.certTypes||[]).map(ct=>`<option value="${ct.name}">${ct.name}</option>`).join('')||'<option>Other</option>';
-  renderCertPdfSection(null,null);
-  _certAppliances=[];
-  toggleApplianceSection();
-  openModal('mo-cert');
-}
-
-// FIX 10 helper: open cert form pre-filled and linked to a specific job.
-// Call this instead of openCertModal() when creating a cert from a completed job.
-export async function openCertModalFromJob(jobId, jobNum, prefill={}){
-  openCertModal(); // resets everything first
-  window._certLinkedJob={id:jobId, jobnum:jobNum};
-  document.getElementById('cf-job-id').value=jobId||'';
-  document.getElementById('cf-job-num').value=jobNum||'';
-  if(jobNum){
-    document.getElementById('cf-job-banner').style.display='block';
-    document.getElementById('cf-job-banner-num').textContent=jobNum;
-  }
-  // Pre-fill address, landlord etc from job if provided
-  if(prefill.address) document.getElementById('cf-addr').value=prefill.address;
-  if(prefill.landlord) document.getElementById('cf-ll').value=prefill.landlord;
-  if(prefill.type){
-    const ts=document.getElementById('cf-type');
-    if(ts){const opt=[...ts.options].find(o=>o.value===prefill.type);if(opt)ts.value=opt.value;}
-  }
-}
-let _certSaving=false;
-export async function saveCert(){
-  if(_certSaving){ toast('Already saving, please wait…','info',1500); return; }
-  _certSaving=true;
-  try{
-  const certId=window._editCertModalId||uid();
-
-  // FIX 10: Capture optional job link. When the cert modal is opened from a job context
-  // (e.g. the future "create cert from completed job" prompt), the caller sets
-  // window._certLinkedJob = {id, jobnum}. We store both fields on the cert record so
-  // certs and jobs are permanently linked and can be navigated between.
-  const linkedJob=window._certLinkedJob||null;
-
-  const c={
-    id:certId,
-    address:document.getElementById('cf-addr').value.trim(),
-    type:document.getElementById('cf-type').value,
-    landlord:document.getElementById('cf-ll').value.trim(),
-    issueDate:document.getElementById('cf-issue').value,
-    expiryDate:document.getElementById('cf-expiry').value,
-    certNum:document.getElementById('cf-num').value,
-    notes:document.getElementById('cf-notes').value,
-    noExpiry:!document.getElementById('cf-expiry').value,
-    // Job link fields — null when cert created standalone, populated when from a job
-    jobId:linkedJob?.id||document.getElementById('cf-job-id')?.value||null,
-    jobNum:linkedJob?.jobnum||document.getElementById('cf-job-num')?.value||null,
-    // Appliance test log — only ever populated for cert types with
-    // hasAppliances set (see toggleApplianceSection()); empty array for
-    // every other cert type, same as before this field existed.
-    appliances:_certAppliances,
-  };
-  if(!c.address){toast('Address required','error');return}
-  await dPut('certs',c);
-  await logActivity(`Certificate ${window._editCertModalId?'updated':'added'}: ${c.type} at ${c.address}${c.jobNum?' (Job '+c.jobNum+')':''}`, 'cert');
-  window._editCertModalId=null;
-  window._certLinkedJob=null;
-  closeModal('mo-cert');
-  if(_certTab==='list')renderCertTable();else if(_certTab==='dash')renderCertDash();
-  updateBadges();
-  toast('Certificate saved'+(c.jobNum?' — linked to job '+c.jobNum:''),'success');
-  } finally { _certSaving=false; }
-}
 export async function delCert(id){
   confirm2('Delete Certificate','Remove this certificate permanently?',async()=>{
     await dDel('certs',id);if(_certTab==='list')renderCertTable();else if(_certTab==='dash')renderCertDash();updateBadges();toast('Deleted','warn');

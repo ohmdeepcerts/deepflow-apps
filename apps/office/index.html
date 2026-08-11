@@ -4556,55 +4556,6 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS last_accuracy integer;</div>
 </div>
 
 <!-- Certificate Modal -->
-<div class="overlay" id="mo-cert">
-<div class="modal" style="max-width:520px">
-  <div class="modal-title">◈ Add Certificate</div>
-  <div style="margin-bottom:12px">
-    <label class="btn btn-ghost btn-sm" style="cursor:pointer">📷 Extract from photo<input type="file" accept="image/*" style="display:none" onchange="extractCertFromPhoto(this)"></label>
-    <span id="cf-extract-status" style="font-size:12px;color:var(--txt3);margin-left:8px"></span>
-  </div>
-  <div class="frow">
-    <div class="fg"><label class="fl">Property Address</label><input type="text" id="cf-addr" class="fi"></div>
-    <div class="fg"><label class="fl">Type</label><select id="cf-type" class="fs" onchange="toggleApplianceSection()"><option>Gas Safety</option><option>Electrical</option><option>EPC</option><option>Other</option></select></div>
-  </div>
-  <div class="frow">
-    <div class="fg"><label class="fl">Issue Date</label><input type="date" id="cf-issue" class="fi"></div>
-    <div class="fg"><label class="fl">Expiry Date</label><input type="date" id="cf-expiry" class="fi"></div>
-  </div>
-  <div class="frow">
-    <div class="fg"><label class="fl">Landlord / Owner</label><input type="text" id="cf-ll" class="fi"></div>
-    <div class="fg"><label class="fl">Certificate Number (optional)</label><input type="text" id="cf-num" class="fi"></div>
-  </div>
-  <div class="fg"><label class="fl">Notes</label><input type="text" id="cf-notes" class="fi" placeholder="Any notes…"></div>
-  <!-- APPLIANCE LOG — shown only when the selected cert type has hasAppliances
-       set (see Settings → Trades & Services → Certificate Types → Appliance
-       Log). Toggled by cf-type's onchange, see toggleApplianceSection(). -->
-  <div id="cf-appliances-section" style="display:none;margin-bottom:12px">
-    <label class="fl">Appliance Test Log</label>
-    <div style="overflow-x:auto;border:1px solid var(--border);border-radius:8px;margin-top:4px">
-      <table class="set-table" id="cf-appliances-tbl" style="min-width:640px"><thead><tr><th>Asset #</th><th>Description</th><th>Instrument</th><th>Date</th><th>Retest (mo)</th><th>Next Test</th><th>Result</th><th></th></tr></thead><tbody></tbody></table>
-    </div>
-    <div style="margin-top:6px;display:flex;gap:6px">
-      <button type="button" class="btn btn-ghost btn-xs" onclick="addApplianceRow()">+ Add Appliance</button>
-      <button type="button" class="btn btn-ghost btn-xs" onclick="openBulkApplianceModal()">+ Bulk Add</button>
-    </div>
-  </div>
-  <div class="fg"><label class="fl">Certificate Document (PDF)</label><div id="cf-pdf-wrap"><span style="color:var(--txt3);font-size:12px">Save the certificate first, then reopen it to attach a PDF.</span></div></div>
-  <!-- FIX 10: Hidden fields store the originating job link when cert is created from a job.
-       These are populated by openCertModalFromJob(jobId, jobNum) and cleared on close. -->
-  <input type="hidden" id="cf-job-id" value="">
-  <input type="hidden" id="cf-job-num" value="">
-  <!-- Visual indicator shown only when creating from a job -->
-  <div id="cf-job-banner" style="display:none;background:rgba(79,143,255,.08);border:1px solid rgba(79,143,255,.2);border-radius:8px;padding:9px 13px;font-size:12px;color:var(--acc);margin-top:4px">
-    🔗 Linked to job <strong id="cf-job-banner-num"></strong>
-  </div>
-  <div class="modal-actions">
-    <button class="btn btn-ghost" onclick="closeModal('mo-cert');document.getElementById('cf-job-id').value='';document.getElementById('cf-job-num').value='';document.getElementById('cf-job-banner').style.display='none';window._certLinkedJob=null;">Cancel</button>
-    <button class="btn btn-acc" onclick="saveCert()">Save</button>
-  </div>
-</div>
-</div>
-
 <!-- Certificate PDF Preview -->
 <div class="overlay" id="mo-pdf-preview">
 <div class="modal" style="max-width:820px;width:92vw;height:88vh;display:flex;flex-direction:column">
