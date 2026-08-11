@@ -198,17 +198,22 @@ the only branch in the repo. No open item remains here.
 
 ---
 
-## 5. A live secret was found and rotated (2026-08-09) — not fully closed
+## 5. A live secret was found and rotated (2026-08-09) — RESOLVED 2026-08-11
 
 GitGuardian flagged a VAPID private key committed in plaintext in two archived docs
 (`docs/history/sql-migration-notes/PHASE6_PUSH_NOTIFICATIONS_SQL.md` and
 `PHASE6B_PUSH_EDGE_FUNCTION.md`) — this repo is public, so the key had to be treated as compromised. A
-new keypair was generated, the new public key is committed (`apps/portal/main.js`), and both docs were
-redacted. **What's still outstanding:** the new `VAPID_PRIVATE_KEY` has been generated but not yet set as
-the live Supabase Edge Function secret — that step requires entering a secret value into a dashboard/CLI,
-which isn't something done on the user's behalf. Until it's set, `send-push` will fail (low practical
-impact right now: `push_subscriptions` has 0 rows, so nothing is actually trying to send). Also not done:
-scrubbing the old key out of git *history* (the current files are fixed, but the old value is still
+new keypair was generated on 2026-08-09 and the new public key was committed (`apps/portal/main.js`,
+`apps/office/main.js`, `apps/engineer/main.js`), but the matching private key was never persisted
+anywhere and was subsequently lost before it was set as the live secret — so `send-push` remained broken
+regardless. On 2026-08-11 a second, final keypair was generated; the new public key was committed to all
+three apps, and the private key was handed directly to the user (never written to any file) to set as the
+`VAPID_PRIVATE_KEY` secret on the `send-push` Edge Function. Confirmed working: an unauthenticated test
+call to `send-push` returns a clean `401 Unauthorized` from the function's own auth check rather than a
+boot-time crash, which it would if `webpush.setVapidDetails()` (called at module load, before any request
+handling) had rejected either key. Both cutovers were zero-risk — `push_subscriptions` held 0 rows
+throughout, so no existing subscription was ever tied to an old key. Also not done: scrubbing the
+original leaked key out of git *history* (the current files are fixed, but the old value is still
 recoverable from past commits) — a full rewrite would need a force-push and is a separate, optional
 decision, not assumed here.
 
