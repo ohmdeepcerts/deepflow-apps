@@ -5869,7 +5869,7 @@ function previewWaTemplate(type){
   const vars={
     engineer_name:'Izhar Ahmed', address:'44 Myrtle Street, London, E1 1EU',
     time_slot:'9:00 – 11:00 AM', access:'Keys in office', contact:'07700 900123',
-    description:'EICR Full Inspection', referrer:'Mandeep', company_name:S.coName||'GB Electricals',
+    description:'EICR Full Inspection', referrer:'Mandeep', company_name:S.coName||'Your Company',
     company_phone:S.coPhone||'+44 7865 753925',
     client_name:'N&N Properties', invoice_num:'INV-2009', amount:'£150.00',
     due_date:'21/07/2026', bank_details:`${S.bankName||'Barclays'} | ${S.bankAcc||'12345678'} | ${S.bankSort||'20-00-00'}`,
@@ -5907,7 +5907,7 @@ async function copyWaTemplate(type){
     landlord_name:j.landlordName||'—',
     address:j.address||'—', date:j.date||'—', time_slot:j.timeSlot||'—',
     engineer:j.engineer||'—', description:j.description||'—',
-    company_name:S.coName||'GB Electricals', company_phone:S.coPhone||'',
+    company_name:S.coName||'Your Company', company_phone:S.coPhone||'',
   };
   const msg=_fillWaTpl(tpl,vars);
   await navigator.clipboard.writeText(msg);
