@@ -681,9 +681,25 @@ export function nav(pg){
   }
 
   hideTip(); // Always hide tooltip when navigating — prevents it sticking across pages
+  const pgEl=document.getElementById('pg-'+pg);
+  if(!pgEl){
+    // pg doesn't match any real page element — the only way this happens
+    // today is a stale df_last_page from localStorage (set below, read back
+    // on boot at the "restore last page" call site) surviving a renamed or
+    // removed page across browser sessions. _canAccessPage() doesn't catch
+    // this for Admins (role: null = "all pages allowed", no membership
+    // check against a real page list), so nav() used to reach this line and
+    // crash with every .page/.ni already stripped of .active and nothing
+    // re-added — a blank content area with no error the user could act on.
+    // Recover instead: clear the bad value and fall back to Dashboard.
+    console.warn('[DeepFlow] nav(): no page element for "'+pg+'" — clearing stale df_last_page and falling back to dash');
+    localStorage.removeItem('df_last_page');
+    if(pg!=='dash') nav('dash');
+    return;
+  }
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.ni').forEach(n=>n.classList.remove('active'));
-  document.getElementById('pg-'+pg).classList.add('active');
+  pgEl.classList.add('active');
   const navEl = document.querySelector(`[data-pg="${pg}"]`);
   if(navEl) navEl.classList.add('active');
   document.getElementById('tb-title').textContent=PTITLES[pg]||pg;
