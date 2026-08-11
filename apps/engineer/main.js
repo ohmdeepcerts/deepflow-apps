@@ -1624,7 +1624,7 @@ function _gr(){const h=new Date().getHours();return h<12?'morning':h<17?'afterno
 // Device" (apps/office/main.js), just auto-triggered here once permission
 // is granted rather than behind a separate button, since this app's flow
 // was already a single permission prompt rather than a settings page.
-const VAPID_PUBLIC_KEY = 'BOVLJmNzqwDDxsNN1vBzk7RVKZ7m0hgKLr_xpnZfyjL5eCC7Z_cCRgWGdlXbXtm1U4-i9CQSByFRslUW45pcmiw';
+const VAPID_PUBLIC_KEY = 'BAP2fflWRQIbyXh92pQ587Qk4KhS_4btd30m7hL3UlUjhFlqcRa0FTg_maXr9a6B3IOT7-sEpgA19HJOr6bt-Ds';
 function _urlBase64ToUint8Array(base64String){
   const padding='='.repeat((4-base64String.length%4)%4);
   const base64=(base64String+padding).replace(/-/g,'+').replace(/_/g,'/');

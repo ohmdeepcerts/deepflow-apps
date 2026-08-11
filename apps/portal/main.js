@@ -124,7 +124,7 @@ export const token=P.get('id'), ptype=P.get('type')||'landlord';
 // public). The public half here was never the secret — VAPID public keys are
 // meant to ship in client code — but it's rotated too since it's paired with
 // the private key, which must change.
-const VAPID_PUBLIC_KEY = 'BOVLJmNzqwDDxsNN1vBzk7RVKZ7m0hgKLr_xpnZfyjL5eCC7Z_cCRgWGdlXbXtm1U4-i9CQSByFRslUW45pcmiw';
+const VAPID_PUBLIC_KEY = 'BAP2fflWRQIbyXh92pQ587Qk4KhS_4btd30m7hL3UlUjhFlqcRa0FTg_maXr9a6B3IOT7-sEpgA19HJOr6bt-Ds';
 
 function _urlBase64ToUint8Array(base64String){
   const padding='='.repeat((4-base64String.length%4)%4);

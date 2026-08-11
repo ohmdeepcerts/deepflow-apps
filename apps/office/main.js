@@ -99,7 +99,7 @@ export function _fix(j){if(!j||typeof j!=='object')return j;return _fromDb('jobs
 // hole. Same VAPID public key as Portal — it's one shared app identity for
 // Web Push, not a per-app secret; see apps/portal/main.js's copy of this
 // same constant for the 2026-08-09 rotation note.
-const VAPID_PUBLIC_KEY = 'BOVLJmNzqwDDxsNN1vBzk7RVKZ7m0hgKLr_xpnZfyjL5eCC7Z_cCRgWGdlXbXtm1U4-i9CQSByFRslUW45pcmiw';
+const VAPID_PUBLIC_KEY = 'BAP2fflWRQIbyXh92pQ587Qk4KhS_4btd30m7hL3UlUjhFlqcRa0FTg_maXr9a6B3IOT7-sEpgA19HJOr6bt-Ds';
 
 function _urlBase64ToUint8Array(base64String){
   const padding='='.repeat((4-base64String.length%4)%4);
