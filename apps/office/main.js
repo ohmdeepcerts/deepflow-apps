@@ -3310,6 +3310,14 @@ async function _autoInvoiceInner(j){
     date:TODAY(),
     dueDate:'',
     description:invDescription||j.description||'',
+    // Real FK columns (see migration 20260809010000) — carried over from
+    // whatever saveJob() already resolved via _resolveLandlordPerson/
+    // _resolveAgency, not re-derived here: `client` above is looked up by
+    // billName priority (agency>agent>landlord>referrer) purely for the
+    // invoice's own display fields, and doesn't always agree with which of
+    // clientPersonId/clientAgencyId the job actually carries.
+    clientPersonId:j.clientPersonId||null,
+    clientAgencyId:j.clientAgencyId||null,
     jobId:j.id,
     linkedJobId:j.id,
     jobNum:j.jobNum||'',
@@ -3431,6 +3439,8 @@ async function createProforma(jobId){
     certTypes:job.certTypes||'',
     agentName:job.agentName||'',
     agencyName:job.agencyName||'',
+    clientPersonId:job.clientPersonId||null,
+    clientAgencyId:job.clientAgencyId||null,
     clientName:job.llName||job.clientName||'',
     clientEmail:job.llEmail||job.clientEmail||'',
     items:[{desc:job.description||job.certTypes||'Work',qty:1,unit:price,vat:true}],
@@ -4114,6 +4124,10 @@ async function saveJob(){
       const _llr = await _resolveLandlordPerson(j.landlordName, j.landlordPhone, j.landlordEmail, j.landlordAddr, j.landlordWA, j.landlordNotes);
       if(_llr.cancelled){ toast('Save cancelled — fix the landlord details and try again','info'); return; }
       j.clientPersonId = _llr.id;
+    }
+    if(j.agencyName){
+      const _agr = await _resolveAgency(j.agencyName, j.agencyPhone, j.agencyEmail, j.agencyNotes);
+      j.clientAgencyId = _agr.id;
     }
     await dPut('jobs',j);
     _invalidateJobCache();
@@ -4936,6 +4950,30 @@ async function _resolveLandlordPerson(name, phone, email, addr, wa, notes){
 // save-on-job-save path, just triggered on demand and reading straight
 // from the form (useful to save a landlord's details before the rest of
 // the job form is filled in, or without saving the job at all).
+// Same shape as _resolveLandlordPerson but for agencies — deliberately
+// simpler (no phone/email conflict dialog): an agency record has much
+// less personal-contact nuance than a landlord's, and this is a new
+// resolver, not a rewrite of an existing one people already rely on.
+// Populates jobs.client_agency_id / invoices.client_agency_id, which are
+// now real foreign keys (see migration 20260809010000) instead of a
+// permanently-empty loose reference — previously nothing ever wrote
+// these columns at all.
+async function _resolveAgency(name, phone, email, notes){
+  if(!name) return {id:null};
+  const agencies = await dAll('agencies');
+  const existing = agencies.find(a=>a.name.toLowerCase()===name.toLowerCase());
+  if(existing){
+    existing.phone = phone || existing.phone;
+    existing.email = email || existing.email;
+    existing.notes = notes || existing.notes;
+    await dPut('agencies', existing);
+    return {id:existing.id};
+  }
+  const a = {id:uid(), name, phone:phone||'', email:email||'', notes:notes||'', created:Date.now()};
+  await dPut('agencies', a);
+  return {id:a.id};
+}
+
 async function saveLandlordFromJob(){
   const name = document.getElementById('jf-ll-name').value.trim();
   const phone = document.getElementById('jf-ll-phone').value.trim();

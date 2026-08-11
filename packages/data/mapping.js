@@ -18,7 +18,7 @@ export const TO_DB = {
     agencyName: 'agencyname', agencyPhone: 'agencyphone', agencyEmail: 'agencyemail',
     agencyNotes: 'agencynotes', agentName: 'agentname', agentPhone: 'agentphone',
     agentEmail: 'agentemail', _sortOrder: 'sortorder', invNumber: 'invnumber', linkedInvId: 'linkedinvid',
-    clientPersonId: 'client_person_id',
+    clientPersonId: 'client_person_id', clientAgencyId: 'client_agency_id',
   },
   certs: {
     issueDate: 'issuedate', expiryDate: 'expirydate', certNum: 'certnum', jobId: 'jobid',
@@ -34,6 +34,7 @@ export const TO_DB = {
     landlordName: 'landlordname', propertyAddress: 'propertyaddress', jobNum: 'jobnum',
     linkedInvId: 'linkedinvid', certTypes: 'certtypes', jobDate: 'jobdate', vatAmount: 'vat_amount',
     billToOverride: 'bill_to_override', pdfUrl: 'pdf_url', pdfPath: 'pdf_path',
+    clientPersonId: 'client_person_id', clientAgencyId: 'client_agency_id',
   },
   agents: { agencyId: 'agencyid' },
   persons: { agencyId: 'agencyid', bankName: 'bankname', bankAcc: 'bankacc', bankSort: 'banksort', bankRef: 'bankref' },
