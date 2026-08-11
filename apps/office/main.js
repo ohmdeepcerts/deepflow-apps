@@ -118,11 +118,29 @@ export async function initStaffPush(){
   const row=document.getElementById('notif-push-device-row');
   const active=document.getElementById('notif-push-device-active');
   if(!row) return;
-  if(!('serviceWorker' in navigator) || !('PushManager' in window)) return;
-  if(Notification.permission==='denied') return;
+  if(!('serviceWorker' in navigator) || !('PushManager' in window)){
+    console.info('[Push] init: unsupported in this browser');
+    return;
+  }
+  if(Notification.permission==='denied'){
+    console.info('[Push] init: Notification.permission is denied, not checking subscription');
+    return;
+  }
   try{
+    // Diagnostic only — if a device shows "Enable" right after a
+    // successful subscribe+refresh, this reveals whether it's because no
+    // registration exists yet, the wrong/stale registration is being
+    // checked (multiple registrations at different scopes), or the
+    // registration exists but pushManager.getSubscription() itself comes
+    // back empty. Kept as console.info (not removed after debugging)
+    // since this device-persistence issue is exactly the kind of thing
+    // that's easy to reintroduce silently and hard to catch without it.
+    const allRegs=await navigator.serviceWorker.getRegistrations();
+    console.info('[Push] init: existing registrations',allRegs.map(r=>({scope:r.scope,active:r.active?.scriptURL})));
     const reg=await navigator.serviceWorker.register('./sw.js');
+    console.info('[Push] init: registered scope',reg.scope,'active worker',reg.active?.scriptURL,'permission',Notification.permission);
     const existing=await reg.pushManager.getSubscription();
+    console.info('[Push] init: existing subscription',existing?existing.endpoint:null);
     if(existing){ row.style.display='none'; if(active) active.style.display='block'; return; }
     row.style.display='block';
   }catch(e){ console.warn('[Push] init failed',e); }
@@ -140,17 +158,29 @@ export async function enableStaffPush(){
       return;
     }
     const reg=await navigator.serviceWorker.ready;
+    console.info('[Push] enable: subscribing on scope',reg.scope,'active worker',reg.active?.scriptURL);
     const sub=await reg.pushManager.subscribe({
       userVisibleOnly:true,
       applicationServerKey:_urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
     });
     const j=sub.toJSON();
+    console.info('[Push] enable: subscribed, endpoint',j.endpoint);
     const jwt=await _getJWT();
-    await fetch(`${SB_URL}/rest/v1/rpc/staff_push_subscribe`,{
+    const rpcRes=await fetch(`${SB_URL}/rest/v1/rpc/staff_push_subscribe`,{
       method:'POST',
       headers:{'apikey':SB_KEY,'Authorization':'Bearer '+jwt,'Content-Type':'application/json'},
       body:JSON.stringify({p_endpoint:j.endpoint,p_p256dh:j.keys.p256dh,p_auth:j.keys.auth})
     });
+    // Previously unchecked — the fetch resolving just means a response
+    // came back, not that the write succeeded; a 4xx/5xx here (bad JWT,
+    // RLS, RPC error) would still fall through to the "enabled" UI below
+    // with no actual row written, exactly the kind of silent-success gap
+    // that made a real subscribe failure indistinguishable from success.
+    if(!rpcRes.ok){
+      const body=await rpcRes.text().catch(()=>'');
+      throw new Error(`staff_push_subscribe failed: ${rpcRes.status} ${body}`);
+    }
+    console.info('[Push] enable: staff_push_subscribe RPC succeeded');
     const row=document.getElementById('notif-push-device-row');
     const active=document.getElementById('notif-push-device-active');
     if(row) row.style.display='none';
