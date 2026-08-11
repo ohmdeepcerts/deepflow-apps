@@ -2,22 +2,27 @@ import { resolve } from 'node:path';
 import { copyFileSync } from 'node:fs';
 import { defineConfig } from 'vite';
 
-// Copies apps/portal/sw.js to dist/portal/sw.js after build. Vite's normal
+// Copies each app's sw.js to dist/<app>/sw.js after build. Vite's normal
 // asset pipeline only picks up files that are actually referenced from an
 // HTML entry (<script>/<link>) or dropped in publicDir (which here maps to
-// apps/public/, copied to the dist *root* — wrong location for a portal-
-// relative registration). The service worker is registered at runtime via
-// navigator.serviceWorker.register('./sw.js'), so Vite never sees the
-// reference and never bundles or copies it — this plugin is the fix. (Dev
-// mode needs no such step: Vite's dev server serves apps/portal/sw.js
-// directly at /portal/sw.js since root is already 'apps'.)
-const copyPortalServiceWorker = () => ({
-  name: 'copy-portal-service-worker',
+// apps/public/, copied to the dist *root* — wrong location for an app-
+// relative registration). Every app's service worker is registered at
+// runtime via navigator.serviceWorker.register('./sw.js'), so Vite never
+// sees the reference and never bundles or copies it — this plugin is the
+// fix. (Dev mode needs no such step: Vite's dev server serves each
+// apps/<app>/sw.js directly at /<app>/sw.js since root is already 'apps'.)
+// Originally portal-only (Client Portal push notifications); Office and
+// Engineer gained their own sw.js/push flow later, so this copies all
+// three rather than growing into three near-identical plugins.
+const copyServiceWorkers = () => ({
+  name: 'copy-service-workers',
   closeBundle() {
-    copyFileSync(
-      resolve(__dirname, 'apps/portal/sw.js'),
-      resolve(__dirname, 'dist/portal/sw.js')
-    );
+    for (const app of ['office', 'engineer', 'portal']) {
+      copyFileSync(
+        resolve(__dirname, `apps/${app}/sw.js`),
+        resolve(__dirname, `dist/${app}/sw.js`)
+      );
+    }
   },
 });
 
@@ -27,7 +32,7 @@ const copyPortalServiceWorker = () => ({
 // hosting doesn't change).
 export default defineConfig({
   root: 'apps',
-  plugins: [copyPortalServiceWorker()],
+  plugins: [copyServiceWorkers()],
   // The production build is served from a GitHub Pages *project* site
   // (github.io/deepflow-apps/), not the domain root — every asset URL Vite
   // emits needs that prefix there or they'd 404. But the Playwright

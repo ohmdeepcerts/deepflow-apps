@@ -24,6 +24,7 @@ import {
 import {
   logAudit, sendNotificationWebhook, sendPushNotification, notifyNextTenantEta,
   switchAuditTab, renderAuditLog, exportAuditLog, initAuditLog, testNotifWebhook,
+  sendEngineerAssignedPush,
 } from './audit.js';
 import { onMapViewChange, renderMapPage, loadEngineerLocations } from './maps.js';
 import {
@@ -84,6 +85,83 @@ if(!_supaAuth){console.error('[DeepFlow] Supabase client failed to load. Check i
 // aliased to their original names since 11 call sites throughout this file
 // reference them directly.
 export function _fix(j){if(!j||typeof j!=='object')return j;return _fromDb('jobs',j);}
+
+// ── STAFF PUSH NOTIFICATIONS ──────────────────────────────────
+// Real Web Push for whoever's logged into this device — separate from
+// S.notifPushEnabled above, which controls whether THIS APP SENDS pushes
+// to clients. This is "get notified on this device," mirroring the
+// Client Portal's own working subscribe flow (apps/portal/main.js) almost
+// line for line, but persisted via staff_push_subscribe() instead of
+// portal_push_subscribe() — that RPC resolves the caller's own identity
+// server-side (auth.uid() or the x-engineer-token header) rather than
+// trusting a client-supplied id, since an authenticated staff session (unlike
+// Portal's sessionless one) makes trusting client-supplied identity a real
+// hole. Same VAPID public key as Portal — it's one shared app identity for
+// Web Push, not a per-app secret; see apps/portal/main.js's copy of this
+// same constant for the 2026-08-09 rotation note.
+const VAPID_PUBLIC_KEY = 'BOVLJmNzqwDDxsNN1vBzk7RVKZ7m0hgKLr_xpnZfyjL5eCC7Z_cCRgWGdlXbXtm1U4-i9CQSByFRslUW45pcmiw';
+
+function _urlBase64ToUint8Array(base64String){
+  const padding='='.repeat((4-base64String.length%4)%4);
+  const base64=(base64String+padding).replace(/-/g,'+').replace(/_/g,'/');
+  const rawData=atob(base64);
+  const out=new Uint8Array(rawData.length);
+  for(let i=0;i<rawData.length;++i) out[i]=rawData.charCodeAt(i);
+  return out;
+}
+
+// Shows the "Get notified" prompt only if push is supported, permission
+// hasn't been denied before, and this device isn't already subscribed.
+// Called when Settings → Notifications is opened (see switchSetTab) —
+// no point checking earlier since the button only exists in that tab.
+export async function initStaffPush(){
+  const row=document.getElementById('notif-push-device-row');
+  const active=document.getElementById('notif-push-device-active');
+  if(!row) return;
+  if(!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  if(Notification.permission==='denied') return;
+  try{
+    const reg=await navigator.serviceWorker.register('./sw.js');
+    const existing=await reg.pushManager.getSubscription();
+    if(existing){ row.style.display='none'; if(active) active.style.display='block'; return; }
+    row.style.display='block';
+  }catch(e){ console.warn('[Push] init failed',e); }
+}
+
+export async function enableStaffPush(){
+  const statusEl=document.getElementById('notif-push-device-status');
+  const btn=document.getElementById('notif-push-device-btn');
+  try{
+    if(btn){btn.disabled=true;btn.textContent='Requesting…';}
+    const permission=await Notification.requestPermission();
+    if(permission!=='granted'){
+      if(statusEl) statusEl.textContent='Notifications blocked — you can enable them in your browser settings any time';
+      if(btn){btn.disabled=false;btn.textContent='🔔 Get notified on this device';}
+      return;
+    }
+    const reg=await navigator.serviceWorker.ready;
+    const sub=await reg.pushManager.subscribe({
+      userVisibleOnly:true,
+      applicationServerKey:_urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+    });
+    const j=sub.toJSON();
+    const jwt=await _getJWT();
+    await fetch(`${SB_URL}/rest/v1/rpc/staff_push_subscribe`,{
+      method:'POST',
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+jwt,'Content-Type':'application/json'},
+      body:JSON.stringify({p_endpoint:j.endpoint,p_p256dh:j.keys.p256dh,p_auth:j.keys.auth})
+    });
+    const row=document.getElementById('notif-push-device-row');
+    const active=document.getElementById('notif-push-device-active');
+    if(row) row.style.display='none';
+    if(active) active.style.display='block';
+    toast('🔔 Notifications enabled on this device','success');
+  }catch(e){
+    console.warn('[Push] subscribe failed',e);
+    if(statusEl) statusEl.textContent='Could not enable notifications — please try again later';
+    if(btn){btn.disabled=false;btn.textContent='🔔 Get notified on this device';}
+  }
+}
 
 // ── UNIFIED FETCH LAYER ──────────────────────────────────────
 export const _getJWT = makeJwtResolver(_supaAuth);
@@ -4049,6 +4127,9 @@ async function saveJob(){
       sendPushNotification('job_status_change',notifPayload);
       if(j.status===STATUS.COMPLETED) notifyNextTenantEta(j);
     }
+    // Independent of status — a job can get (re)assigned to an engineer
+    // without its status changing (e.g. reassigning a still-Pending job).
+    if(j.engineer && j.engineer!==existingJob?.engineer) sendEngineerAssignedPush(j);
 
     // ── REVERSE SYNC: Job → Invoice ──────────────────────────────
     // Find linked invoice and update description/address/status
@@ -9698,6 +9779,7 @@ async function deletePortalContact(id){
 function switchSetTab(tab){
   if(tab==='guide') setTimeout(renderSqlSnippets, 50);
   if(tab==='portal-contacts') setTimeout(loadPortalContacts, 50);
+  if(tab==='notifications') setTimeout(initStaffPush, 50);
   document.querySelectorAll('.set-tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===tab));
   document.querySelectorAll('.set-tab-panel').forEach(p=>p.classList.toggle('active',p.id==='stab-'+tab));
 }
@@ -14408,7 +14490,7 @@ Object.assign(window, {
   deleteCurrentAgent, deleteCurrentExpense, deleteCurrentJob, deleteCurrentPerson, deleteCurrentProp, deleteDuplicateInvoices,
   deleteInv, deleteJobById, deletePortalContact, deleteSavedView, deleteUser, dismissInvBanner, doLogin,
   doLogout, doResetPassword, downloadCertTemplate, downloadEngPayslip, downloadInvPDF, downloadInvPDFById, downloadPortalInviteCard,
-  dupUpdateName, dupUseExisting, duplicateInv, duplicateJob, editCertRecord, executeMerge, exportAllCSV,
+  dupUpdateName, dupUseExisting, duplicateInv, duplicateJob, editCertRecord, enableStaffPush, executeMerge, exportAllCSV,
   exportAuditLog, exportBackup, exportCertCSV, exportCertPDF, exportEngReport, exportEngReportPDF, 
   exportExpensesCSV, exportInvsCSV, exportMasterXLSX, exportPLCSV, exportPropsCSV, exportReportPDF, 
   extractAppliancesFromPhoto, fillCreditNote, fillFromMatch, filterCerts, fuzzyAddr, generateBulkReminder, generateCertPdf,

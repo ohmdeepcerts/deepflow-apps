@@ -34,7 +34,7 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { title, message, url, landlordName, agencyName, agentName } = body;
+    const { title, message, url, landlordName, agencyName, agentName, staffName, staffRoles } = body;
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
     const entities: { table: string; id: string }[] = [];
@@ -49,6 +49,21 @@ Deno.serve(async (req) => {
     if (agentName) {
       const { data } = await supabase.from('agents').select('id').ilike('name', agentName).limit(1);
       if (data?.[0]) entities.push({ table: 'agents', id: data[0].id });
+    }
+    // Staff (Office/Engineer) targeting — a name for "this one engineer"
+    // (e.g. the job's assigned engineer), or a list of roles for "everyone
+    // who can act on this" (e.g. admin/manager reviewing a completed job).
+    // Client (landlord/agency/agent) entities above are matched by a
+    // single fuzzy name since that's all the caller has; staff are looked
+    // up by exact users.name/role since the caller already knows exactly
+    // who should be notified.
+    if (staffName) {
+      const { data } = await supabase.from('users').select('id').eq('name', staffName).eq('active', true).limit(1);
+      if (data?.[0]) entities.push({ table: 'users', id: data[0].id });
+    }
+    if (Array.isArray(staffRoles) && staffRoles.length) {
+      const { data } = await supabase.from('users').select('id').in('role', staffRoles).eq('active', true);
+      for (const row of data || []) entities.push({ table: 'users', id: row.id });
     }
 
     if (!entities.length) {

@@ -306,6 +306,29 @@ async function sendPushNotification(eventType, payload){
   }catch(e){ console.warn('[Push]',e); }
 }
 
+// Notifies office staff (admin/manager) that a job needs review — the
+// other half of the two-stage completion handoff (this engineer just
+// marked it ENGINEER_COMPLETED, not the office's own client-facing
+// notifPushEnabled setting, which controls a different notification
+// entirely). Attempted unconditionally: if nobody on staff has opted a
+// device in yet (Settings → Notifications → "Get Notified On This
+// Device", Office app), send-push just reports 0 sent — a harmless no-op,
+// not an error, so there's nothing to gate this behind.
+async function sendOfficeReviewPush(job){
+  try{
+    const jwt=await _getJWT();
+    await fetch(SB_URL+'/functions/v1/send-push',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+jwt},
+      body: JSON.stringify({
+        title:'Job needs review',
+        message:`${currentUser?.name||'An engineer'} completed ${job?.address||'a job'} — ready to finalize`,
+        staffRoles:['admin','manager'],
+      })
+    });
+  }catch(e){ console.warn('[Push]',e); }
+}
+
 // Mirrors index.html's notifyNextTenantEta() — see Settings → Notifications
 // → "Next-Tenant ETA" in the Office App for what this does and why.
 function _looksLikePhone(s){
@@ -963,7 +986,7 @@ async function quickStatusUpdate(id, newStatus){
       const notifPayload={jobId:id,jobNum:j0?.jobNum,address:j0?.address,oldStatus,newStatus,landlordName:j0?.landlordName||'',landlordPhone:j0?.landlordPhone||''};
       sendNotificationWebhook('job_status_change',notifPayload);
       sendPushNotification('job_status_change',notifPayload);
-      if(newStatus===STATUS.ENGINEER_COMPLETED && j0) notifyNextTenantEta(j0);
+      if(newStatus===STATUS.ENGINEER_COMPLETED && j0){ notifyNextTenantEta(j0); sendOfficeReviewPush(j0); }
     }
     // Update local cache
     if(_allJobs){ const j=_allJobs.find(x=>x.id===id); if(j) j.status=newStatus; }
@@ -1591,15 +1614,51 @@ function _gr(){const h=new Date().getHours();return h<12?'morning':h<17?'afterno
 // ══════════════════════════════════════════════════════════════
 //  PUSH NOTIFICATIONS
 // ══════════════════════════════════════════════════════════════
+// _pushGranted/_setBaseline below only cover *foreground* alerts — polling
+// _allJobs for ids not seen before and showing a local toast/notification
+// while this tab is open. That's a real, separate mechanism from the real
+// Web Push subscription added alongside it here (_subscribeStaffPush),
+// which is what lets a notification reach this device while the tab is
+// closed or the phone is asleep — same VAPID/staff_push_subscribe pattern
+// as the Office app's Settings → Notifications → "Get Notified On This
+// Device" (apps/office/main.js), just auto-triggered here once permission
+// is granted rather than behind a separate button, since this app's flow
+// was already a single permission prompt rather than a settings page.
+const VAPID_PUBLIC_KEY = 'BOVLJmNzqwDDxsNN1vBzk7RVKZ7m0hgKLr_xpnZfyjL5eCC7Z_cCRgWGdlXbXtm1U4-i9CQSByFRslUW45pcmiw';
+function _urlBase64ToUint8Array(base64String){
+  const padding='='.repeat((4-base64String.length%4)%4);
+  const base64=(base64String+padding).replace(/-/g,'+').replace(/_/g,'/');
+  const rawData=atob(base64);
+  const out=new Uint8Array(rawData.length);
+  for(let i=0;i<rawData.length;++i) out[i]=rawData.charCodeAt(i);
+  return out;
+}
+async function _subscribeStaffPush(){
+  if(!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  try{
+    const reg=await navigator.serviceWorker.register('./sw.js');
+    const existing=await reg.pushManager.getSubscription();
+    const sub=existing||await reg.pushManager.subscribe({
+      userVisibleOnly:true,
+      applicationServerKey:_urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+    });
+    const j=sub.toJSON();
+    const headers=await _storageAuthHeaders({'Content-Type':'application/json'});
+    await fetch(`${SB_URL}/rest/v1/rpc/staff_push_subscribe`,{
+      method:'POST', headers,
+      body:JSON.stringify({p_endpoint:j.endpoint,p_p256dh:j.keys.p256dh,p_auth:j.keys.auth})
+    });
+  }catch(e){ console.warn('[Push] staff subscribe failed',e); }
+}
 async function _initPush(){
   if(!('Notification' in window))return;
-  if(Notification.permission==='granted'){_pushGranted=true;_setBaseline();return;}
+  if(Notification.permission==='granted'){_pushGranted=true;_setBaseline();_subscribeStaffPush();return;}
   if(Notification.permission==='denied')return;
   toast('🔔 Enable notifications for new job alerts','info');
   setTimeout(async()=>{
     const p=await Notification.requestPermission();
     _pushGranted=p==='granted';
-    if(_pushGranted){toast('🔔 Notifications enabled!','success');_setBaseline();}
+    if(_pushGranted){toast('🔔 Notifications enabled!','success');_setBaseline();_subscribeStaffPush();}
   },2000);
 }
 function _setBaseline(){if(_allJobs.length){_lastJobIds=new Set(_allJobs.map(j=>j.id));}}

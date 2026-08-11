@@ -106,6 +106,28 @@ export async function sendPushNotification(eventType, payload){
   }catch(e){ console.warn('[Push]',e); }
 }
 
+// Notifies the specific engineer a job was just assigned to — not gated
+// behind S.notifPushEnabled (that setting is about whether pushes go out
+// to *clients*; this is staff-to-staff). Attempted unconditionally: if
+// that engineer hasn't opted a device in yet (Engineer app prompts for
+// this automatically, see apps/engineer/main.js's _initPush), send-push
+// just reports 0 sent — a harmless no-op.
+export async function sendEngineerAssignedPush(job){
+  if(!job?.engineer) return;
+  try{
+    const jwt=await _getJWT();
+    await fetch(_pushFunctionUrl(),{
+      method:'POST',
+      headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+jwt},
+      body: JSON.stringify({
+        title:'New job assigned',
+        message:`${job.address||'A job'} on ${job.date||'today'}${job.timeSlot?' — '+job.timeSlot:''}`,
+        staffName:job.engineer,
+      })
+    });
+  }catch(e){ console.warn('[Push]',e); }
+}
+
 // ── Next-tenant ETA — see Settings → Notifications → "Next-Tenant ETA".
 // When a job completes, look for this engineer's next Pending job today
 // and, if a real person is waiting there with a phone number on file

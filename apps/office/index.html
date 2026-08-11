@@ -3774,6 +3774,22 @@ body.density-relaxed .jtable td{font-size:15px}
         </div>
 
         <div class="set-section">
+          <div class="set-title">📱 Get Notified On This Device</div>
+          <div class="set-card">
+            <div style="font-size:12px;color:var(--txt2);margin-bottom:12px;line-height:1.6">
+              Separate from the toggle above (which controls whether clients get notified) — this is
+              for you: a real notification on this browser/device for things like a job needing your
+              review, even while this tab is closed. Each device you use needs its own opt-in.
+            </div>
+            <div id="notif-push-device-row" style="display:none">
+              <button class="btn btn-acc btn-sm" id="notif-push-device-btn" onclick="enableStaffPush()">🔔 Get notified on this device</button>
+              <div id="notif-push-device-status" style="font-size:11px;color:var(--txt3);margin-top:6px"></div>
+            </div>
+            <div id="notif-push-device-active" style="display:none;font-size:12px;color:var(--success,#22c55e);font-weight:600">✓ Notifications enabled on this device</div>
+          </div>
+        </div>
+
+        <div class="set-section">
           <div class="set-title">📲 Next-Tenant ETA <span style="font-size:10px;font-weight:500;color:var(--txt3);text-transform:none;letter-spacing:0">(off by default, free)</span></div>
           <div class="set-card">
             <div style="font-size:12px;color:var(--txt2);margin-bottom:12px;line-height:1.6">
