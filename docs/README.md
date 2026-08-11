@@ -92,6 +92,7 @@ Two more things live in the build but aren't one of the three apps:
 |---|---|
 | [22-future-roadmap.md](planning/22-future-roadmap.md) | What's next |
 | [23-developer-onboarding.md](planning/23-developer-onboarding.md) | Practical first steps for someone about to start working in this codebase |
+| [24-multi-tenant-kickoff-prompt.md](planning/24-multi-tenant-kickoff-prompt.md) | A ready-to-paste prompt for a *separate* Claude Code session to scope real multi-tenant/SaaS support — not a description of the current (single-tenant) system |
 
 ### History
 [`docs/history/`](history/) holds archived, point-in-time audit and migration notes (including the pre-Vite architecture audit that drove the July 2026 migration). These are a record of decisions made, not living documentation — nothing there describes the system as it exists today. If a fact in `history/` conflicts with a doc listed above, the doc above wins.

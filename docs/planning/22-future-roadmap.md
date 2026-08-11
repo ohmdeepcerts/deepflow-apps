@@ -55,6 +55,11 @@ whether tenancy is row-scoped-shared-project or project-per-tenant, wizard UX). 
 recording that the work is wanted and roughly what it touches — not a spec. Write the spec when the
 work is actually scheduled.
 
+**2026-08-09 — this work is now scheduled, in a separate session.** See
+[24-multi-tenant-kickoff-prompt.md](24-multi-tenant-kickoff-prompt.md) — a ready-to-paste prompt for a
+dedicated Claude Code session to scope and build this, kept separate from ongoing GB Electrical
+maintenance work on purpose.
+
 ---
 
 ## 2. Near-term: merge the two open feature branches
