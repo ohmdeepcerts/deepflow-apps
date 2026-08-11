@@ -74,6 +74,27 @@ window.onerror = (msg, src, line) => {
 const _supaAuth = createSupaAuthClient();
 if(!_supaAuth){console.error('[DeepFlow] Supabase client failed to load. Check internet connection.');}
 
+// PASSWORD_RECOVERY — fires when Supabase's client-side auth listener
+// detects a recovery token in the URL (window.location.hash, handled
+// automatically by the supabase-js client itself, not code here) after a
+// user clicks a "reset your password" email link. Registered immediately
+// at module load, before bootstrap() runs below, since this event can fire
+// as soon as the client parses the hash — bootstrap()'s own hash check
+// (search for "type=recovery") is what stops it from racing ahead and
+// loading the normal app with that same session in the meantime.
+if(_supaAuth){
+  _supaAuth.auth.onAuthStateChange((event)=>{
+    if(event==='PASSWORD_RECOVERY'){
+      const pinOv=document.getElementById('pin-overlay');
+      const appEl=document.getElementById('app');
+      const pwOv=document.getElementById('pw-reset-overlay');
+      if(pinOv) pinOv.style.display='none';
+      if(appEl) appEl.style.display='none';
+      if(pwOv) pwOv.style.display='flex';
+    }
+  });
+}
+
 // STATUS now lives in @business (Phase 3) — was byte-identical to the
 // Employee App's own copy before this extraction.
 
@@ -1297,8 +1318,8 @@ function togglePwVis(inputId, btn){
   if(el.type==='password'){el.type='text';btn.textContent='🙈';}
   else{el.type='password';btn.textContent='👁';}
 }
-function _loginMsg(msg, type='error'){
-  const el=document.getElementById('login-err');
+function _loginMsg(msg, type='error', elId='login-err'){
+  const el=document.getElementById(elId);
   if(!el)return;
   el.style.display='block';
   el.style.background=type==='success'?'rgba(34,197,94,.1)':type==='info'?'rgba(79,143,255,.1)':'rgba(239,68,68,.1)';
@@ -1607,6 +1628,34 @@ async function doResetPassword(){
     _loginMsg('✅ Password reset email sent — check your inbox','success');
   }catch(e){_loginMsg('❌ Failed to send reset email');}
   finally{if(btnEl){btnEl.disabled=false;btnEl.textContent='Sign In →';}}
+}
+
+// Save button on #pw-reset-overlay, shown by the PASSWORD_RECOVERY listener
+// above. The recovery-link click already signed the browser into a real
+// (if limited) session via the token in the URL hash — updateUser() here
+// just sets its password. Reloading afterwards (stripping the hash) rather
+// than hand-rolling the profile-load/init() sequence inline lets
+// bootstrap()'s own already-correct session-restore path pick it up, the
+// same path every normal reload-while-logged-in already takes.
+async function savePasswordReset(){
+  const pw=document.getElementById('pwreset-new')?.value||'';
+  const pw2=document.getElementById('pwreset-confirm')?.value||'';
+  const btnEl=document.getElementById('pwreset-btn');
+  if(!pw||!pw2){_loginMsg('Enter and confirm your new password','error','pwreset-err');return;}
+  if(pw!==pw2){_loginMsg('Passwords do not match','error','pwreset-err');return;}
+  if(pw.length<6){_loginMsg('Password must be at least 6 characters','error','pwreset-err');return;}
+  if(!_supaAuth){_loginMsg('Not connected','error','pwreset-err');return;}
+  if(btnEl){btnEl.disabled=true;btnEl.textContent='Saving…';}
+  try{
+    const {error}=await _supaAuth.auth.updateUser({password:pw});
+    if(error){_loginMsg('❌ '+error.message,'error','pwreset-err');return;}
+    _loginMsg('✅ Password updated — loading your dashboard…','success','pwreset-err');
+    setTimeout(()=>{ window.location.href=window.location.origin+window.location.pathname; },1200);
+  }catch(e){
+    _loginMsg('❌ Could not update password — please try again','error','pwreset-err');
+  }finally{
+    if(btnEl){btnEl.disabled=false;btnEl.textContent='Save New Password';}
+  }
 }
 
 function applyUserPermissions(){
@@ -13043,6 +13092,29 @@ const _patchCmdSearch = ()=>{
 (async function bootstrap(){
   const overlay=document.getElementById('pin-overlay');
 
+  // Password-reset link landing — checked before anything else touches
+  // _supaAuth, since both cases below need to preempt the normal
+  // session-restore flow rather than race it.
+  const _authHash=window.location.hash||'';
+  if(_authHash.includes('error_code=otp_expired')||(_authHash.includes('error=access_denied')&&_authHash.includes('otp_expired'))){
+    // Expired/already-used recovery link — Supabase redirects back with the
+    // error in the hash rather than establishing a session. Surface it on
+    // the login screen (which the normal no-session fallthrough below will
+    // show) and clear the hash so a refresh doesn't keep re-reading it.
+    history.replaceState(null,'',window.location.pathname+window.location.search);
+    setTimeout(()=>_loginMsg('⚠️ Reset link expired — use "Forgot password?" below to get a new one','error'),250);
+  } else if(_authHash.includes('type=recovery')){
+    // A valid recovery link. supabase-js parses this hash itself (already
+    // in progress by the time this line runs — the client was constructed
+    // above) and fires PASSWORD_RECOVERY on the onAuthStateChange listener
+    // registered near the top of this file, which shows #pw-reset-overlay.
+    // Returning here — instead of falling through to the normal
+    // getSession()-driven profile-load/init() below — is what stops this
+    // function from racing that listener and loading the real app with the
+    // same recovery-derived session in the meantime.
+    return;
+  }
+
   if(!_supaAuth){
     if(overlay)overlay.style.display='flex';
     setTimeout(()=>{ if(window._loginCanvasStart) window._loginCanvasStart(); const f=document.getElementById('login-email');if(f)f.focus(); },200);
@@ -14596,7 +14668,7 @@ Object.assign(window, {
   requestNotifPermission, resetColWidths, resetPortalPin, resolveMergeField, saveAgency, saveAgencyFromJob, 
   saveAgent, saveAgentFromJob, saveAndSendInv, saveCertExpiry, saveCertForm,
   saveCreditNote, saveDashNotes, saveDisposableInvoice, saveEngDefaults, saveExpense, saveInv, 
-  saveJob, saveLandlordFromJob, saveNotifSettings, saveOvertimeLog, savePayment, savePerson, 
+  saveJob, saveLandlordFromJob, saveNotifSettings, saveOvertimeLog, savePasswordReset, savePayment, savePerson, 
   saveProp, saveSettings, saveStandaloneProforma, searchJobForInvoice,
   selectAddr, selectAllVisibleJobs, sendAllOverdueEmail, sendAllOverdueWA, sendBroadcast, sendCertToClient, sendInvEmail, sendInvWA,
   showPortalInviteModal,
