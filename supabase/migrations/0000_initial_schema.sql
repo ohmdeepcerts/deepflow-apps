@@ -971,7 +971,7 @@ CREATE OR REPLACE FUNCTION public.get_auth_users()
 AS $function$
 BEGIN
   IF NOT EXISTS (
-    SELECT 1 FROM users WHERE auth_id = auth.uid() AND lower(role) = 'admin' AND active = true
+    SELECT 1 FROM public.users WHERE auth_id = auth.uid() AND lower(role) = 'admin' AND active = true
   ) THEN
     RAISE EXCEPTION 'Not authorized';
   END IF;
