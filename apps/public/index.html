@@ -47,9 +47,15 @@
   /* ── NAV ── */
   nav{position:fixed;top:0;left:0;right:0;z-index:50;display:flex;align-items:center;justify-content:space-between;
     padding:16px 24px;backdrop-filter:blur(16px);background:rgba(10,22,40,.55);border-bottom:1px solid rgba(125,211,252,.1)}
-  .brand{font-size:18px;font-weight:900;letter-spacing:1.5px;font-family:Arial Black,Impact,sans-serif;
+  .brand{display:flex;align-items:center;gap:10px;font-size:18px;font-weight:900;letter-spacing:1.5px;font-family:Arial Black,Impact,sans-serif;
     background:linear-gradient(135deg,var(--cyan) 0%,var(--cyan2) 35%,var(--gold) 65%,var(--amber) 100%);
     -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+  .logo-mark{flex-shrink:0;filter:drop-shadow(0 2px 10px rgba(56,189,248,.35))}
+
+  /* Shared line-icon system — replaces emoji glyphs everywhere below with a
+     consistent stroke-icon set matching the cyan/gold palette, sized per
+     context via the wrapping element's own font-size (icons use 1em). */
+  .ic{width:1em;height:1em;display:inline-block;vertical-align:-0.15em;flex-shrink:0}
   .nav-links{display:flex;gap:26px;font-size:13px;font-weight:600;color:rgba(255,255,255,.6)}
   .nav-links a{text-decoration:none;transition:color .15s}
   .nav-links a:hover{color:var(--cyan)}
@@ -113,6 +119,8 @@
   .mockup-bar .dot.r{background:#ef4444}.mockup-bar .dot.y{background:#f59e0b}.mockup-bar .dot.g{background:#22c55e}
   .mockup-url{margin-left:10px;font-size:11px;color:rgba(255,255,255,.35);background:rgba(255,255,255,.05);
     padding:4px 12px;border-radius:6px;font-family:monospace}
+  .mockup-live{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:10px;font-weight:800;
+    letter-spacing:1px;color:#4ade80}
   .mockup-body{display:flex;min-height:340px}
   .mockup-side{width:150px;flex-shrink:0;padding:18px 10px;border-right:1px solid rgba(255,255,255,.06);display:none}
   @media(min-width:640px){.mockup-side{display:block}}
@@ -168,9 +176,18 @@
   @media(max-width:960px){.bento{grid-template-columns:repeat(2,1fr)}}
   @media(max-width:600px){.bento{grid-template-columns:1fr;grid-auto-rows:auto}}
   .bento-card{padding:24px;background:rgba(255,255,255,.04);border:1px solid rgba(125,211,252,.12);border-radius:16px;
-    backdrop-filter:blur(16px);transition:transform .2s,border-color .2s,box-shadow .2s;
-    display:flex;flex-direction:column;overflow:hidden;position:relative}
+    backdrop-filter:blur(16px);display:flex;flex-direction:column;overflow:hidden;position:relative;
+    opacity:0;transform:translateY(22px);
+    transition:opacity .6s ease,transform .6s ease,border-color .2s,box-shadow .2s}
+  .bento.in .bento-card{opacity:1;transform:translateY(0)}
+  .bento.in .bento-card:nth-child(1){transition-delay:0s}
+  .bento.in .bento-card:nth-child(2){transition-delay:.08s}
+  .bento.in .bento-card:nth-child(3){transition-delay:.16s}
+  .bento.in .bento-card:nth-child(4){transition-delay:.24s}
+  .bento.in .bento-card:nth-child(5){transition-delay:.32s}
+  .bento.in .bento-card:nth-child(6){transition-delay:.4s}
   .bento-card:hover{transform:translateY(-4px);border-color:rgba(125,211,252,.35);box-shadow:0 16px 40px rgba(56,189,248,.15)}
+  .bento.in .bento-card:hover{transition-delay:0s}
   .bento-lg{grid-column:span 2;grid-row:span 2}
   @media(max-width:600px){.bento-lg{grid-column:span 1;grid-row:auto}}
   .bento-decochart{display:flex;align-items:flex-end;gap:5px;height:44px;margin-top:auto;opacity:.55}
@@ -290,7 +307,18 @@
 <div class="bg-overlay"></div>
 
 <nav>
-  <div class="brand">DEEPFLOW</div>
+  <div class="brand">
+    <svg class="logo-mark" width="30" height="30" viewBox="0 0 34 34" aria-hidden="true">
+      <defs><linearGradient id="logoGradNav" x1="0" y1="0" x2="34" y2="34" gradientUnits="userSpaceOnUse">
+        <stop offset="0" stop-color="#7dd3fc"/><stop offset="0.35" stop-color="#38bdf8"/>
+        <stop offset="0.65" stop-color="#fde68a"/><stop offset="1" stop-color="#f59e0b"/>
+      </linearGradient></defs>
+      <rect width="34" height="34" rx="9" fill="#0a1628"/>
+      <rect x="1" y="1" width="32" height="32" rx="8" fill="none" stroke="url(#logoGradNav)" stroke-width="1.3" opacity=".55"/>
+      <text x="17" y="23.5" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-size="16" font-weight="900" fill="url(#logoGradNav)" letter-spacing="-0.9">DF</text>
+    </svg>
+    DEEPFLOW
+  </div>
   <div class="nav-links">
     <a href="#preview">Product</a>
     <a href="#features">Features</a>
@@ -310,9 +338,9 @@
       <a class="btn btn-ghost magnetic" href="#preview">See what it does</a>
     </div>
     <div class="hero-badges">
-      <span class="hbadge">🔒 Row-level secured on Supabase</span>
-      <span class="hbadge">⚡ Real-time sync across all 3 apps</span>
-      <span class="hbadge">📅 Automatic cert expiry alerts</span>
+      <span class="hbadge"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Row-level secured on Supabase</span>
+      <span class="hbadge"><svg class="ic" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Real-time sync across all 3 apps</span>
+      <span class="hbadge"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Automatic cert expiry alerts</span>
     </div>
   </div>
   <div class="scroll-hint"><span class="chev"></span>Scroll</div>
@@ -329,14 +357,15 @@
       <div class="mockup-bar">
         <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
         <div class="mockup-url">deepflowsuite.co.uk</div>
+        <span class="mockup-live"><span class="pulse-dot"></span>LIVE</span>
       </div>
       <div class="mockup-body">
         <div class="mockup-side">
-          <div class="mside-item active">📋 Jobs</div>
-          <div class="mside-item">📜 Certificates</div>
-          <div class="mside-item">💰 Invoices</div>
-          <div class="mside-item">👥 Team</div>
-          <div class="mside-item">📍 Live Map</div>
+          <div class="mside-item active"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="15" y2="16"/></svg> Jobs</div>
+          <div class="mside-item"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Certificates</div>
+          <div class="mside-item"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/></svg> Invoices</div>
+          <div class="mside-item"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Team</div>
+          <div class="mside-item"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg> Live Map</div>
         </div>
         <div class="mockup-main">
           <div class="mockup-stats">
@@ -370,17 +399,17 @@
       <div class="section-eyebrow">The old way is breaking</div>
       <h2 class="section-title">Still running compliance<br>out of spreadsheets?</h2>
       <ul class="problem-list">
-        <li><span class="pl-ic">📉</span><div class="pl-body"><b>Certificates slip through the cracks</b><span>Nothing flags an EICR expiring next month until it's already overdue.</span></div></li>
-        <li><span class="pl-ic">💬</span><div class="pl-body"><b>Updates live in chat threads</b><span>Job status, photos and notes scattered across messages no one can search later.</span></div></li>
-        <li><span class="pl-ic">📄</span><div class="pl-body"><b>Paperwork doubles the work</b><span>Certificates and invoices re-typed by hand between systems that don't talk to each other.</span></div></li>
+        <li><span class="pl-ic"><svg class="ic" style="font-size:20px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></svg></span><div class="pl-body"><b>Certificates slip through the cracks</b><span>Nothing flags an EICR expiring next month until it's already overdue.</span></div></li>
+        <li><span class="pl-ic"><svg class="ic" style="font-size:20px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span><div class="pl-body"><b>Updates live in chat threads</b><span>Job status, photos and notes scattered across messages no one can search later.</span></div></li>
+        <li><span class="pl-ic"><svg class="ic" style="font-size:20px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span><div class="pl-body"><b>Paperwork doubles the work</b><span>Certificates and invoices re-typed by hand between systems that don't talk to each other.</span></div></li>
       </ul>
     </div>
     <div class="problem-visual">
       <div class="chaos-stack">
-        <div class="chip chip-1">📊 Spreadsheets</div>
-        <div class="chip chip-2">💬 Group chats</div>
-        <div class="chip chip-3">📄 Paper certs</div>
-        <div class="chip chip-4">📧 Email chains</div>
+        <div class="chip chip-1"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-3"/></svg> Spreadsheets</div>
+        <div class="chip chip-2"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Group chats</div>
+        <div class="chip chip-3"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg> Paper certs</div>
+        <div class="chip chip-4"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg> Email chains</div>
       </div>
       <div class="chaos-arrow">↓</div>
       <div class="order-stack">
@@ -397,9 +426,9 @@
   <div class="section-eyebrow">What DeepFlow does</div>
   <h2 class="section-title">Everything compliance work needs,<br>in one place</h2>
   <p class="section-sub">Replace the spreadsheets, group chats and paper certificates with a single system your whole team already knows how to use.</p>
-  <div class="bento">
+  <div class="bento" id="bento">
     <div class="bento-card bento-lg">
-      <div class="feat-ic">🔧</div>
+      <div class="feat-ic"><svg class="ic" style="font-size:24px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></div>
       <div class="feat-t">Job Management</div>
       <div class="feat-d">Schedule, track and manage every job from one live view — no more double-booked engineers or lost paperwork.</div>
       <div class="bento-decochart">
@@ -409,27 +438,27 @@
       </div>
     </div>
     <div class="bento-card">
-      <div class="feat-ic">📜</div>
+      <div class="feat-ic"><svg class="ic" style="font-size:22px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg></div>
       <div class="feat-t">Compliance</div>
       <div class="feat-d">Gas, EICR, EPC and more — tracked with automatic expiry alerts before anything lapses.</div>
     </div>
     <div class="bento-card">
-      <div class="feat-ic">💰</div>
+      <div class="feat-ic"><svg class="ic" style="font-size:22px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/></svg></div>
       <div class="feat-t">Invoicing</div>
       <div class="feat-d">Create, send and track invoices in seconds, with balances always visible.</div>
     </div>
     <div class="bento-card">
-      <div class="feat-ic">📱</div>
+      <div class="feat-ic"><svg class="ic" style="font-size:22px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg></div>
       <div class="feat-t">Multi-Portal</div>
       <div class="feat-d">Purpose-built portals for office, engineers and clients.</div>
     </div>
     <div class="bento-card">
-      <div class="feat-ic">🔄</div>
+      <div class="feat-ic"><svg class="ic" style="font-size:22px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg></div>
       <div class="feat-t">Real-time Sync</div>
       <div class="feat-d">Every update lands instantly across all three apps.</div>
     </div>
     <div class="bento-card">
-      <div class="feat-ic">📸</div>
+      <div class="feat-ic"><svg class="ic" style="font-size:22px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg></div>
       <div class="feat-t">Photo Evidence</div>
       <div class="feat-d">Engineers attach timestamped photos straight from site.</div>
     </div>
@@ -442,7 +471,7 @@
   <p class="section-sub">Each portal is purpose-built for who's using it — office staff, engineers on-site, or your clients checking on a job.</p>
   <div class="app-grid">
     <a class="app-card office" href="office/">
-      <div class="app-ic">🏢</div>
+      <div class="app-ic"><svg class="ic" style="font-size:20px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4M10 10h4M10 14h4M10 18h4"/></svg></div>
       <div>
         <div class="app-name">Office App</div>
         <div class="app-who">For office staff</div>
@@ -455,28 +484,28 @@
       <div class="app-go">Open Office App <span>→</span></div>
     </a>
     <a class="app-card engineer" href="engineer/">
-      <div class="app-ic">👷</div>
+      <div class="app-ic"><svg class="ic" style="font-size:20px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15a8 8 0 0 1 16 0" /><rect x="2" y="15" width="20" height="3" rx="1.5"/><path d="M12 8V4"/><path d="M9 4h6"/></svg></div>
       <div>
         <div class="app-name">Employee App</div>
         <div class="app-who">For field engineers</div>
       </div>
       <div class="app-desc">Today's jobs, photo uploads with auto-stamping, quick issue notes, and a live map.</div>
       <div class="app-mini">
-        <div class="app-mini-row"><span class="b" style="background:#38bdf8"></span>📍 On site — 9 Riverside Ave</div>
-        <div class="app-mini-row"><span class="b" style="background:#4ade80"></span>📸 3 photos uploaded</div>
+        <div class="app-mini-row"><span class="b" style="background:#38bdf8"></span>On site — 9 Riverside Ave</div>
+        <div class="app-mini-row"><span class="b" style="background:#4ade80"></span>3 photos uploaded</div>
       </div>
       <div class="app-go">Open Employee App <span>→</span></div>
     </a>
     <a class="app-card portal" href="portal/">
-      <div class="app-ic">🔑</div>
+      <div class="app-ic"><svg class="ic" style="font-size:20px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg></div>
       <div>
         <div class="app-name">Client Portal</div>
         <div class="app-who">For your clients</div>
       </div>
       <div class="app-desc">Clients see job progress, download certificates and invoices, and raise new requests.</div>
       <div class="app-mini">
-        <div class="app-mini-row"><span class="b" style="background:#f59e0b"></span>📜 EICR Certificate — ready</div>
-        <div class="app-mini-row"><span class="b" style="background:#4ade80"></span>💰 Invoice #1042 — paid</div>
+        <div class="app-mini-row"><span class="b" style="background:#f59e0b"></span>EICR Certificate — ready</div>
+        <div class="app-mini-row"><span class="b" style="background:#4ade80"></span>Invoice #1042 — paid</div>
       </div>
       <div class="app-go">Open Client Portal <span>→</span></div>
     </a>
@@ -516,18 +545,18 @@
   <h2 class="section-title">Built around how compliance work actually happens</h2>
   <div class="marquee-wrap">
     <div class="marquee-track">
-      <span class="mq-chip">⚡ Real-time updates across office, engineers &amp; clients</span>
-      <span class="mq-chip">📅 Automatic cert expiry alerts before anything lapses</span>
-      <span class="mq-chip">📸 Timestamped photo evidence from site</span>
-      <span class="mq-chip">💰 Invoices generated straight from completed jobs</span>
-      <span class="mq-chip">🔒 Row-level secured, role-based access</span>
-      <span class="mq-chip">📍 Live engineer location &amp; job map</span>
-      <span class="mq-chip">⚡ Real-time updates across office, engineers &amp; clients</span>
-      <span class="mq-chip">📅 Automatic cert expiry alerts before anything lapses</span>
-      <span class="mq-chip">📸 Timestamped photo evidence from site</span>
-      <span class="mq-chip">💰 Invoices generated straight from completed jobs</span>
-      <span class="mq-chip">🔒 Row-level secured, role-based access</span>
-      <span class="mq-chip">📍 Live engineer location &amp; job map</span>
+      <span class="mq-chip"><svg class="ic" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Real-time updates across office, engineers &amp; clients</span>
+      <span class="mq-chip"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Automatic cert expiry alerts before anything lapses</span>
+      <span class="mq-chip"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg> Timestamped photo evidence from site</span>
+      <span class="mq-chip"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/></svg> Invoices generated straight from completed jobs</span>
+      <span class="mq-chip"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Row-level secured, role-based access</span>
+      <span class="mq-chip"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg> Live engineer location &amp; job map</span>
+      <span class="mq-chip"><svg class="ic" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Real-time updates across office, engineers &amp; clients</span>
+      <span class="mq-chip"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Automatic cert expiry alerts before anything lapses</span>
+      <span class="mq-chip"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg> Timestamped photo evidence from site</span>
+      <span class="mq-chip"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/></svg> Invoices generated straight from completed jobs</span>
+      <span class="mq-chip"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Row-level secured, role-based access</span>
+      <span class="mq-chip"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg> Live engineer location &amp; job map</span>
     </div>
   </div>
 </section>
@@ -582,7 +611,18 @@
 <footer>
   <div class="foot-grid">
     <div>
-      <div class="foot-brand">DEEPFLOW</div>
+      <div class="foot-brand" style="display:flex;align-items:center;gap:10px">
+        <svg width="26" height="26" viewBox="0 0 34 34" aria-hidden="true">
+          <defs><linearGradient id="logoGradFoot" x1="0" y1="0" x2="34" y2="34" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stop-color="#7dd3fc"/><stop offset="0.35" stop-color="#38bdf8"/>
+            <stop offset="0.65" stop-color="#fde68a"/><stop offset="1" stop-color="#f59e0b"/>
+          </linearGradient></defs>
+          <rect width="34" height="34" rx="9" fill="#0a1628"/>
+          <rect x="1" y="1" width="32" height="32" rx="8" fill="none" stroke="url(#logoGradFoot)" stroke-width="1.3" opacity=".55"/>
+          <text x="17" y="23.5" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-size="16" font-weight="900" fill="url(#logoGradFoot)" letter-spacing="-0.9">DF</text>
+        </svg>
+        DEEPFLOW
+      </div>
       <div class="foot-desc">Smart property compliance suite — jobs, certificates, invoicing and your team, in one place.</div>
     </div>
     <div class="foot-col">
@@ -731,6 +771,9 @@
   var targets = [];
   var mockup = document.getElementById('mockup');
   if (mockup) targets.push({ el: mockup, onIn: function(el){ el.classList.add('in'); } });
+
+  var bento = document.getElementById('bento');
+  if (bento) targets.push({ el: bento, onIn: function(el){ el.classList.add('in'); } });
 
   document.querySelectorAll('.problem-list li').forEach(function(li){
     targets.push({ el: li, onIn: function(el){ el.classList.add('in'); } });
