@@ -3095,7 +3095,16 @@ async function _applyStatusChange(id,status,opts){
   if(queued && !silent) toast('📴 Offline — status change saved, will sync when back online','warn',4000);
   j.status=status;j.modified=Date.now();
   _invalidateJobCache();
-  if(status===STATUS.COMPLETED&&old!==STATUS.COMPLETED) onJobComplete(j);
+  // Completed and Invoiced both mean "the work is done" everywhere else in
+  // this file (missing-invoice detection, dashboards, KPIs — see e.g. line
+  // ~6834) — but this trigger only checked COMPLETED, so a job saved or
+  // status-changed straight to Invoiced (skipping Completed, e.g. backfilling
+  // a historical already-invoiced job) never ran onJobComplete()/autoInvoice()
+  // and silently ended up with no invoice, only surfacing later in the
+  // Missing Invoices report. Treat both as the same "just finished" edge.
+  const _wasDone=old===STATUS.COMPLETED||old===STATUS.INVOICED;
+  const _isDone=status===STATUS.COMPLETED||status===STATUS.INVOICED;
+  if(_isDone&&!_wasDone) onJobComplete(j);
   await logActivity(`Job "${j.address}" → ${status}`,'job');
   logAudit('job_status_change',{jobId:id,jobNum:j.jobNum,address:j.address,oldStatus:old,newStatus:status});
   logStatusRevertIfNeeded({jobId:id,jobNum:j.jobNum,address:j.address,oldStatus:old,newStatus:status,staffName:_appUser?.name||''});
@@ -4290,7 +4299,15 @@ async function saveJob(){
       }catch(e){ console.warn('[DeepFlow] Auto-save directory entry failed',e); }
     })();
 
-    if(j.status===STATUS.COMPLETED&&existingJob?.status!==STATUS.COMPLETED) onJobComplete(j);
+    // Same Completed/Invoiced symmetry fix as _applyStatusChange() above —
+    // a job created or edited straight to Invoiced (no prior Completed step)
+    // must still run onJobComplete()/autoInvoice(), or it silently ends up
+    // with no invoice (only caught later by the Missing Invoices report).
+    {
+      const _wasDoneJ=existingJob?.status===STATUS.COMPLETED||existingJob?.status===STATUS.INVOICED;
+      const _isDoneJ=j.status===STATUS.COMPLETED||j.status===STATUS.INVOICED;
+      if(_isDoneJ&&!_wasDoneJ) onJobComplete(j);
+    }
     try{await logActivity((isNew?'Created':'Updated')+' job: '+j.address+' ('+jobNum+')','job');}catch(_){ /* intentional no-op */ }
     closeModal('mo-job');closeAddrDrop();closeAllAutofillDrops();
     localStorage.removeItem('df_job_draft');
