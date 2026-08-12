@@ -3134,16 +3134,19 @@ async function quickStatus(id,status){
 
 function onJobComplete(j){
   const allCertTypes=S.certTypes||[];
-  const descL=(j.description||'').toLowerCase();
 
-  // ALWAYS start with manually selected cert types on the job
+  // Trust j.certTypes as-is — it's already the fully-resolved set (manual
+  // selection + description-keyword auto-detect) computed by saveJob() when
+  // the job was saved. This used to re-scan j.description for keywords
+  // again here, additively, on top of j.certTypes — but that re-scan has no
+  // way to know which auto-detected types the user explicitly unchecked in
+  // the job form (e.g. "ALARM" in "CO2 ALARM" wrongly matching Fire Alarm),
+  // so it silently recreated exactly the false-positive certificate the
+  // user had just corrected. Same root cause as the saveJob() fix above,
+  // reached through this separate cert-creation path instead — quickStatus/
+  // bulkSetStatus can also land here with no job form ever open, where a
+  // fresh re-scan has even less basis for overriding the saved record.
   const selectedIds=new Set(j.certTypes||[]);
-
-  // ALWAYS ALSO scan description keywords — additive, not either/or
-  allCertTypes.forEach(ct=>{
-    const kws=ct.keywords||[];
-    if(kws.some(kw=>kw.trim()&&descL.includes(kw.trim().toLowerCase()))) selectedIds.add(ct.id||ct.name);
-  });
 
   // Create placeholder certs silently — no modal, no asking — so office has
   // a record that this job owes a certificate. Previously this also guessed
