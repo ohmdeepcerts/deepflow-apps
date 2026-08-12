@@ -7715,9 +7715,20 @@ async function invClientSelected(clientId){
 }
 
 async function fillInvClientDrop(selId){
+  // Used to only list persons (landlords/individuals) — agencies were never
+  // options here even though invClientSelected() below has always looked
+  // them up too (persons first, then agencies). A real office worker could
+  // never select an agency by name for a manually-created invoice; the only
+  // way an agency ever ended up as "the client" was indirectly, via a job
+  // link that carried its own resolved billToName/billToAddress in.
   const ps=await dAll('persons');
+  const agencies=await dAll('agencies');
   const blank=selId?'':'<option value="" selected>— Select client —</option>';
-  document.getElementById('if-client').innerHTML=blank+ps.map(p=>`<option value="${p.id}" ${p.id===selId?'selected':''}>${p.name}</option>`).join('');
+  const personOpts=ps.map(p=>`<option value="${p.id}" ${p.id===selId?'selected':''}>${escHtml(p.name)}</option>`).join('');
+  const agencyOpts=agencies.map(a=>`<option value="${a.id}" ${a.id===selId?'selected':''}>${escHtml(a.name)} (Agency)</option>`).join('');
+  document.getElementById('if-client').innerHTML=blank+
+    (personOpts?`<optgroup label="Landlords / Individuals">${personOpts}</optgroup>`:'')+
+    (agencyOpts?`<optgroup label="Agencies">${agencyOpts}</optgroup>`:'');
   // If a client is pre-selected, auto-fill their email/address
   if(selId) invClientSelected(selId);
 }
@@ -12829,8 +12840,15 @@ async function saveInvWithJobSync(){
   if(!hasAmount){ toast('At least one line item must have an amount greater than £0','error'); return; }
 
   const ps = await dAll('persons');
+  const agencies = await dAll('agencies');
   const cid = document.getElementById('if-client').value;
-  const cl = ps.find(p=>p.id===cid)||{};
+  // The client dropdown now lists agencies too (fillInvClientDrop) — cid may
+  // resolve into either table. This used to only check persons, so picking
+  // an agency saved a clientId agencies.find() would have matched fine on
+  // its own, but clientName/clientEmail/clientWA below all fell back to
+  // blank since cl stayed {}.
+  const selectedAgency = agencies.find(a=>a.id===cid);
+  const cl = ps.find(p=>p.id===cid) || selectedAgency || {};
   const invId = editInvId || uid();
   const existingInv = editInvId ? await dGet('invoices',editInvId) : null;
   if(existingInv?.status==='Paid'){
@@ -12865,17 +12883,27 @@ async function saveInvWithJobSync(){
     created: editInvId ? existingInv.created : Date.now(),
     
     // ═══ COMPLETE INVOICE TYPE DATA ═══
-    invoiceType: invoiceData.invoiceType || 'landlord',
+    // invoiceType previously only ever came from invoiceData (set by a job
+    // link, e.g. createInvFromJob) — a plain "+ New Invoice" with an agency
+    // picked directly from the dropdown had no job link, so this always
+    // defaulted to 'landlord' even for an agency client.
+    invoiceType: invoiceData.invoiceType || (selectedAgency ? 'agency' : 'landlord'),
     billToName: invoiceData.billToName || cl.name || '',
     billToAddress: document.getElementById('if-client-addr')?.value || invoiceData.billToAddress || '',
     jobAddress: document.getElementById('if-job-addr')?.value || invoiceData.jobAddress || '',
     agentName: document.getElementById('if-agent')?.value || invoiceData.agentName || '',
     agentEmail: document.getElementById('if-agent-cc')?.value || invoiceData.agentEmail || '',
-    agencyName: invoiceData.agencyName || '',
+    agencyName: invoiceData.agencyName || (selectedAgency ? selectedAgency.name : ''),
     agencyAddress: invoiceData.agencyAddress || '',
     landlordName: invoiceData.landlordName || '',
     propertyAddress: invoiceData.propertyAddress || '',
-    jobNum: document.getElementById('if-jobref')?.value || invoiceData.jobNum || ''
+    jobNum: document.getElementById('if-jobref')?.value || invoiceData.jobNum || '',
+    // Real FK columns (migration 20260809010000) — auto-invoice already sets
+    // these from the job's own resolved FKs; a manually-picked client here
+    // had no equivalent, leaving clientAgencyId/clientPersonId null even
+    // when a real agency/person was clearly selected.
+    clientAgencyId: selectedAgency ? cid : (invoiceData.clientAgencyId||null),
+    clientPersonId: (!selectedAgency && cl.id) ? cid : (invoiceData.clientPersonId||null)
   };
   
   await dPut('invoices', inv);
