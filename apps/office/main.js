@@ -4280,6 +4280,13 @@ async function saveJob(){
     }
     await dPut('jobs',j);
     _invalidateJobCache();
+    // allProps (address-history autocomplete) is otherwise only refreshed on
+    // app boot or when the Properties/Directory tab is opened — a job saved
+    // with a brand-new address mid-session would never show up as a repeat-
+    // property suggestion for the rest of that session without this, silently
+    // defeating the same agency-link-on-repeat-booking safeguard as the
+    // fuzzyAddr/selectAddr fix above, just via stale data instead of a wrong field.
+    _refreshAllProps();
     if(existingJob&&existingJob.status!==j.status){
       logAudit('job_status_change',{jobId:j.id,jobNum:j.jobNum,address:j.address,oldStatus:existingJob.status,newStatus:j.status});
       logStatusRevertIfNeeded({jobId:j.id,jobNum:j.jobNum,address:j.address,oldStatus:existingJob.status,newStatus:j.status,staffName:_appUser?.name||''});
