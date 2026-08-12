@@ -3371,19 +3371,47 @@ async function _autoInvoiceInner(j){
   // agency-instructed job) matched no client and created none, so autoInvoice
   // silently did nothing with no error explaining why no draft ever appeared.
   const billName=j.agencyName||j.agentName||j.landlordName||j.referrer||'';
-  const persons=await dAll('persons');
-  let client=persons.find(p=>p.name&&p.name===billName);
-  // If no existing person, create one from job data so invoice always generates
-  if(!client && billName){
-    client={
-      id:uid(),
-      name:billName,
-      email:j.landlordEmail||j.agentEmail||j.agencyEmail||'',
-      phone:j.landlordPhone||j.agentPhone||j.agencyPhone||j.contact||'',
-      address:j.address||'',
-      wa:j.landlordWA||''
-    };
-    await dPut('persons',client);
+  const isAgencyJob=!!(j.agencyName||j.agentName);
+  let client;
+  if(isAgencyJob){
+    // Agency/agent-referred jobs must resolve against the agencies table —
+    // matching the real FK (j.clientAgencyId) first, then by name — not the
+    // persons table. Name-matching into persons here used to create a bogus
+    // duplicate "person" shadowing the real agency record, seeded with
+    // whatever job happened to trigger its creation's own property address
+    // (there's no agency-address field on the job form to seed it correctly
+    // from). That garbage address then leaked into every later invoice for
+    // the same agency name via the Create Invoice client picker, since it
+    // matches persons before agencies.
+    const agencies=await dAll('agencies');
+    client=(j.clientAgencyId&&agencies.find(a=>a.id===j.clientAgencyId))
+      ||agencies.find(a=>a.name&&a.name===billName);
+    if(!client && billName){
+      client={
+        id:uid(),
+        name:billName,
+        email:j.agentEmail||j.agencyEmail||'',
+        phone:j.agentPhone||j.agencyPhone||'',
+        address:j.agencyAddr||'',
+        wa:''
+      };
+      await dPut('agencies',client);
+    }
+  }else{
+    const persons=await dAll('persons');
+    client=persons.find(p=>p.name&&p.name===billName);
+    // If no existing person, create one from job data so invoice always generates
+    if(!client && billName){
+      client={
+        id:uid(),
+        name:billName,
+        email:j.landlordEmail||'',
+        phone:j.landlordPhone||j.contact||'',
+        address:j.address||'',
+        wa:j.landlordWA||''
+      };
+      await dPut('persons',client);
+    }
   }
   if(!client){
     // Previously a silent no-op — the cert would auto-create fine (no
