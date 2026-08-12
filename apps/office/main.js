@@ -5614,19 +5614,36 @@ async function createInvFromJob(jobId){
     const propertyAddr = (j.address||'').trim();
     const hasAgency    = !!(agencyName||agentName);
 
+    // Resolve the job's own real client record — matching clientAgencyId/
+    // clientPersonId (set by _resolveAgency/_resolveLandlordPerson when the
+    // job was saved) first, then by name, same pattern as the already-fixed
+    // _autoInvoiceInner(). This used to only search `persons` by
+    // landlordName/referrer — an agency-referred job never matched anything
+    // here, so the Client dropdown below opened on "— Select client —"
+    // with nothing anchoring it to the job's actual agency. A staff member
+    // creating the invoice then had to manually re-pick the client with no
+    // guardrail: leave it blank and the invoice saves with no real
+    // clientAgencyId/clientPersonId link at all (despite the display text
+    // still looking right), or pick a different similarly-named agency by
+    // mistake and the invoice ends up billed to someone the job was never
+    // actually for — the exact loophole the bogus-duplicate-person fix in
+    // _autoInvoiceInner() closed for auto-invoicing, still open here.
+    const agencies=await dAll('agencies');
+    const ps=await dAll('persons');
+    const matchedAgency=hasAgency?((j.clientAgencyId&&agencies.find(a=>a.id===j.clientAgencyId))||agencies.find(a=>a.name===agencyName)):null;
+    const cl=matchedAgency||ps.find(p=>(j.clientPersonId&&p.id===j.clientPersonId)||p.name===landlordName||p.name===j.referrer)||{};
+
     window._newInvoiceData={
       invoiceType:hasAgency?'agency':'landlord',
       billToName:hasAgency?agencyName:landlordName,
-      billToAddress:hasAgency?(j.agencyAddr||''):propertyAddr,
+      billToAddress:hasAgency?(matchedAgency?.address||j.agencyAddr||''):propertyAddr,
       jobAddress:hasAgency?propertyAddr:'',
       agentName:hasAgency?agentName:'',
       agentEmail:hasAgency?agentEmail:'',
-      agencyName,landlordName,propertyAddress:propertyAddr,jobNum:jobNumber
+      agencyName,landlordName,propertyAddress:propertyAddr,jobNum:jobNumber,
+      clientAgencyId:matchedAgency?.id||j.clientAgencyId||null,
+      clientPersonId:!hasAgency?(cl.id||j.clientPersonId||null):null
     };
-
-    // Find client from persons table
-    const ps=await dAll('persons');
-    const cl=ps.find(p=>p.name===landlordName||p.name===j.referrer)||{};
 
     document.getElementById('mo-inv-title').textContent=`◎ Invoice for ${j.jobNum||j.address||'Job'}`;
     document.getElementById('if-date').value=j.date||TODAY();
@@ -5647,7 +5664,7 @@ async function createInvFromJob(jobId){
     const jobAddrEl=document.getElementById('if-job-addr');
     if(hasAgency){
       if(clientAddrLbl)clientAddrLbl.textContent='Agency Address';
-      if(clientAddrEl){clientAddrEl.value=j.agencyAddr||'';clientAddrEl.placeholder='Agency office address';}
+      if(clientAddrEl){clientAddrEl.value=matchedAgency?.address||j.agencyAddr||'';clientAddrEl.placeholder='Agency office address';}
       if(jobAddrWrap)jobAddrWrap.style.display='';
       if(jobAddrEl)jobAddrEl.value=propertyAddr;
     }else{
