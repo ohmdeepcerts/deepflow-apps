@@ -1,42 +1,32 @@
-// Draws the invoice body as real PDF text and vector shapes (jsPDF's
-// native API — the same kind of drawing Zoho/QuickBooks/Xero use), with
-// jsPDF-AutoTable handling the item table's own pagination. Only the
-// masthead (see invoice-template.js) is a rendered image; everything
-// below it is selectable, searchable, and a few KB instead of a few
-// hundred. See the comment at the top of invoice-template.js for why.
+// Draws the ENTIRE invoice — masthead included — as real PDF text and
+// vector shapes (jsPDF's native API, the same kind of drawing
+// Zoho/QuickBooks/Xero use), with jsPDF-AutoTable handling the item
+// table's own pagination. Nothing here is a rendered screenshot: no
+// html2canvas, no embedded photograph of a page full of text. That's
+// what keeps the exported PDF a few KB instead of the 50-100KB+ a
+// rasterised masthead band used to cost on its own.
+//
+// The masthead's dot/line scatter is seeded from the invoice's own id —
+// deterministic, not random — so the same invoice always regenerates the
+// same pattern (download it twice, get pixel-identical results) while a
+// different invoice gets a genuinely different one. Drawn as a handful of
+// tiny vector circles/lines in a very light grey, so it reads as a paper
+// watermark rather than a loud background graphic — and costs bytes, not
+// kilobytes.
 //
 // Deliberately not attempted here: soft box-shadows (no native
-// equivalent — flat fills + thin borders instead), the small
-// person/pin icons on the Ordered By / Site of Works labels (label text
-// alone reads just as clean), and the gradient-clipped "DeepFlow"
-// wordmark (gradient text isn't a thing in vector PDF text — solid
-// brand cyan instead). The navy→gold total band keeps its gradient by
-// the same trick the pre-html2canvas version of this app used: ~60 thin
-// adjacent vector rectangles interpolating between the stops, which
-// looks smooth in print and costs a couple of KB, not a few hundred.
+// equivalent — flat fills + thin borders instead) and true alpha-blended
+// tints (jsPDF vector fills don't composite the same way CSS rgba does —
+// colours here are pre-blended against the paper-white ground each shape
+// actually sits on).
 
-import { buildMastheadHTML } from './invoice-template.js';
+import { esc, seededRandom } from './invoice-template.js';
 
 const MARGIN = 18;
 const PAGE_W = 210;
 const PAGE_H = 297;
 const CONTENT_W = PAGE_W - MARGIN * 2;
-
-const NAVY_STOPS = [
-  [13, 31, 60],   // #0d1f3c
-  [30, 58, 95],   // #1e3a5f
-  [10, 22, 40],   // #0a1628
-];
-function navyGradientColorAt(t) {
-  const seg = t <= 0.5 ? 0 : 1;
-  const localT = seg === 0 ? t / 0.5 : (t - 0.5) / 0.5;
-  const a = NAVY_STOPS[seg], b = NAVY_STOPS[seg + 1];
-  return [
-    Math.round(a[0] + (b[0] - a[0]) * localT),
-    Math.round(a[1] + (b[1] - a[1]) * localT),
-    Math.round(a[2] + (b[2] - a[2]) * localT),
-  ];
-}
+const MAST_H = 34;
 
 const money = (n) => '£' + (Number(n) || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -54,29 +44,69 @@ function drawMixed(doc, x, y, parts) {
   return cx;
 }
 
-const STATUS_COLORS = {
-  Paid: { label: 'Paid', bg: [74, 222, 128, .16], fg: '#86EFAC' },
-  'Awaiting Payment': { label: 'Awaiting Payment', bg: [253, 224, 71, .16], fg: '#FDE68A' },
-  Cancelled: { label: 'Cancelled', bg: [252, 165, 165, .16], fg: '#FCA5A5' },
-  Draft: { label: 'Draft', bg: [203, 213, 225, .16], fg: '#CBD5E1' },
+// Status pill colours tuned for the paper-white masthead (the old set was
+// bright/light-on-dark, meant to pop against navy — wrong direction now
+// the ground is white, so these are muted-on-pale instead).
+const STATUS_LIGHT = {
+  Paid: { label: 'Paid', bg: [238, 242, 238], fg: [58, 90, 79] },
+  'Awaiting Payment': { label: 'Awaiting Payment', bg: [250, 241, 232], fg: [138, 60, 20] },
+  Cancelled: { label: 'Cancelled', bg: [250, 235, 235], fg: [153, 40, 40] },
+  Draft: { label: 'Draft', bg: [240, 240, 238], fg: [107, 114, 113] },
 };
-// Masthead is rendered as real HTML/CSS (rgba works there); the vector
-// status pill below needs flat RGB since jsPDF fills don't do alpha
-// compositing the same way — pre-blended against the navy/white
-// backgrounds each pill actually sits on.
-function pillHtmlColors(status) {
-  const s = STATUS_COLORS[status] || STATUS_COLORS.Draft;
-  return { label: s.label, bg: `rgba(${s.bg[0]},${s.bg[1]},${s.bg[2]},${s.bg[3]})`, fg: s.fg };
+function statusStyle(status) { return STATUS_LIGHT[status] || STATUS_LIGHT.Draft; }
+
+// Downscales an uploaded logo (which can easily be a multi-hundred-KB
+// phone photo of a sign or a large PNG export) to the small size it's
+// actually shown at before embedding — same reasoning as the masthead
+// itself: a full-resolution source image would alone blow the whole
+// invoice's byte budget for a mark that prints at ~9mm.
+function _prepLogoForPdf(dataUri, maxPx = 120) {
+  return new Promise((resolve) => {
+    if (!dataUri) { resolve(null); return; }
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxPx / Math.max(img.naturalWidth, img.naturalHeight));
+      const w = Math.max(1, Math.round(img.naturalWidth * scale));
+      const h = Math.max(1, Math.round(img.naturalHeight * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve({ dataUrl: canvas.toDataURL('image/png'), w, h });
+    };
+    img.onerror = () => resolve(null);
+    img.src = dataUri;
+  });
+}
+
+// A whisper of texture, not a background graphic — a dozen-odd faint dots
+// with thin connecting lines where two happen to land close together,
+// seeded from the invoice id so it's stable per-invoice but different
+// invoice to invoice. Pure vector: a few dozen tiny circle/line ops, not
+// an image.
+function _drawMastWatermark(doc, seed, x0, y0, w, h) {
+  const rnd = seededRandom(seed);
+  const nodes = Array.from({ length: 16 }, () => ({ x: x0 + rnd() * w, y: y0 + rnd() * h }));
+  doc.setDrawColor(225, 227, 220);
+  doc.setLineWidth(0.15);
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i + 1; j < nodes.length; j++) {
+      const n = nodes[i], m = nodes[j];
+      if (Math.hypot(n.x - m.x, n.y - m.y) < w * 0.14) doc.line(n.x, n.y, m.x, m.y);
+    }
+  }
+  doc.setFillColor(210, 213, 204);
+  nodes.forEach(n => doc.circle(n.x, n.y, 0.35, 'F'));
 }
 
 /**
  * Renders one invoice into `doc` starting at the current page. Adds pages
  * as needed if the item list overflows. Returns nothing — mutates doc.
  * @param {import('jspdf').jsPDF} doc
- * @param {(el: HTMLElement, opts: object) => Promise<HTMLCanvasElement>} html2canvas
+ * @param {unknown} _html2canvas - unused; kept so existing call sites
+ *   (Office, Client Portal) don't need to change their call signature.
  * @param {{inv:object, S:object, totals:{grand:number}, vatRate:number}} p
  */
-export async function renderInvoicePDF(doc, html2canvas, { inv, S, totals, vatRate }) {
+export async function renderInvoicePDF(doc, _html2canvas, { inv, S, totals, vatRate }) {
   const isAgency = inv.invoiceType === 'agency';
   const billToName = inv.billToName || inv.clientName || '—';
   const billToAddr = inv.billToAddress || inv.clientAddr || '';
@@ -86,30 +116,62 @@ export async function renderInvoicePDF(doc, html2canvas, { inv, S, totals, vatRa
   const isPaid = inv.status === 'Paid';
   const regBits = [S.invFooter, (S.coVatNum && S.vatEnabled !== false) ? 'VAT ' + S.coVatNum : null].filter(Boolean).join(' · ');
 
-  // ---- 1. Masthead (the one raster image) ----
-  const mastHTML = buildMastheadHTML({ inv, S, status: pillHtmlColors(inv.status) });
-  const holder = document.createElement('div');
-  holder.style.cssText = 'position:fixed;left:-99999px;top:0;';
-  holder.innerHTML = mastHTML;
-  document.body.appendChild(holder);
-  let mastHeightMM;
-  try {
-    // scale 2.5 + quality 0.88 measured out at ~110KB for this image alone
-    // (nearly the whole file) — it's a gradient band with a sparse particle
-    // scatter, not fine text, so it doesn't need retina-plus density. 2.0 +
-    // 0.75 measured at ~54KB with no visible quality loss and keeps the
-    // total PDF in the same ballpark as Zoho/QuickBooks instead of 4x over.
-    const canvas = await html2canvas(holder.firstElementChild, { scale: 2.0, useCORS: true, backgroundColor: null });
-    const imgData = canvas.toDataURL('image/jpeg', 0.75);
-    const pxPerMM = canvas.width / PAGE_W;
-    mastHeightMM = canvas.height / pxPerMM;
-    doc.addImage(imgData, 'JPEG', 0, 0, PAGE_W, mastHeightMM);
-  } finally {
-    holder.remove();
+  // ---- 1. Masthead (all vector — see file header) ----
+  const status = statusStyle(inv.status);
+  const seed = inv.id || inv.number || 'x';
+  _drawMastWatermark(doc, seed, 0, 0, PAGE_W, MAST_H);
+
+  const logo = S.logoData ? await _prepLogoForPdf(S.logoData) : null;
+  const markX = MARGIN, markY = 10, markBoxH = 9;
+  let markW = markBoxH; // column width the wordmark must clear — widened below for a wide logo
+  if (logo) {
+    // Fit within a 9mm-tall, 14mm-wide box, preserving aspect ratio —
+    // height-constrained for a roughly square/wide mark, width-constrained
+    // if it's unusually wide (a horizontal wordmark-style logo upload).
+    let dispH = markBoxH, dispW = dispH * (logo.w / logo.h);
+    if (dispW > 14) { dispW = 14; dispH = dispW * (logo.h / logo.w); }
+    doc.addImage(logo.dataUrl, 'PNG', markX, markY, dispW, dispH);
+    markW = dispW;
+  } else {
+    const initials = (S.coName || 'Co').trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase() || 'CO';
+    doc.setFillColor(20, 24, 28);
+    doc.roundedRect(markX, markY, markBoxH, markBoxH, 2, 2, 'F');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(251, 251, 249);
+    doc.text(initials, markX + markBoxH / 2, markY + markBoxH / 2 + 1.5, { align: 'center' });
   }
 
+  const wordX = markX + markW + 5;
+  doc.setFont('times', 'bold'); doc.setFontSize(15); doc.setTextColor(20, 24, 28);
+  doc.text(esc(S.coName || 'Your Company'), wordX, markY + 5.5);
+  const contactBits = [S.coPhone, S.coEmail, S.coWeb].filter(Boolean).join('   ·   ');
+  if (contactBits) {
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.8); doc.setTextColor(138, 139, 131);
+    doc.text(contactBits, wordX, markY + 10.5);
+  }
+
+  const rightX = PAGE_W - MARGIN;
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(8);
+  const pillLabel = status.label;
+  const pillTextW = doc.getTextWidth(pillLabel);
+  const pillW = pillTextW + 9, pillH = 5.5, pillY = 7;
+  doc.setFillColor(...status.bg);
+  doc.roundedRect(rightX - pillW, pillY, pillW, pillH, pillH / 2, pillH / 2, 'F');
+  doc.setTextColor(...status.fg);
+  doc.text(pillLabel, rightX - pillW / 2, pillY + pillH / 2 + 1.4, { align: 'center' });
+
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor(20, 24, 28);
+  doc.text(esc(inv.number), rightX, pillY + pillH + 6.5, { align: 'right' });
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(6.8); doc.setTextColor(166, 167, 156);
+  doc.text('TAX INVOICE', rightX, pillY + pillH + 11, { align: 'right' });
+
+  doc.setFontSize(7.6); doc.setTextColor(107, 114, 128);
+  doc.text(`Issued ${esc(inv.date || '—')}   ·   Due ${esc(inv.dueDate || '—')}`, rightX, pillY + pillH + 17, { align: 'right' });
+
+  doc.setDrawColor(228, 226, 218); doc.setLineWidth(0.3);
+  doc.line(MARGIN, MAST_H, PAGE_W - MARGIN, MAST_H);
+
   // ---- 2. Ordered By / Site of Works (vector) ----
-  let y = mastHeightMM + 10;
+  let y = MAST_H + 10;
   const colW = (CONTENT_W - 8) / 2;
   const colXs = [MARGIN, MARGIN + colW + 8];
   const colTop = y;
@@ -170,7 +232,7 @@ export async function renderInvoicePDF(doc, html2canvas, { inv, S, totals, vatRa
     },
     didDrawPage(data) {
       if (data.pageNumber > 1) {
-        doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(13, 31, 60);
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(20, 24, 28);
         doc.text(String(inv.number), MARGIN, 12);
         doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(107, 114, 128);
         doc.text(' — continued', MARGIN + doc.getTextWidth(String(inv.number)), 12);
@@ -188,24 +250,11 @@ export async function renderInvoicePDF(doc, html2canvas, { inv, S, totals, vatRa
     y = MARGIN;
   }
 
-  // Clip the gradient strips to a rounded-rect path so the band gets soft
-  // corners like the payref box below it, instead of the strips' own sharp
-  // edges showing through — costs nothing (still pure vector), unlike a
-  // raster shadow/rounding trick would.
-  doc.saveGraphicsState();
-  doc.roundedRect(MARGIN, y, CONTENT_W, totalBandH, 2, 2, null);
-  doc.clip();
-  doc.discardPath();
-  const strips = 60, stripW = CONTENT_W / strips;
-  for (let i = 0; i < strips; i++) {
-    const [r, g, b] = navyGradientColorAt(i / (strips - 1));
-    doc.setFillColor(r, g, b);
-    doc.rect(MARGIN + i * stripW, y, stripW + 0.3, totalBandH, 'F');
-  }
-  doc.restoreGraphicsState();
+  doc.setFillColor(20, 24, 28);
+  doc.roundedRect(MARGIN, y, CONTENT_W, totalBandH, 2, 2, 'F');
   doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(255, 255, 255);
   doc.text((isPaid ? 'TOTAL PAID' : 'TOTAL DUE'), MARGIN + 6, y + totalBandH / 2 + 1.2, { renderingMode: 'fill' });
-  doc.setFontSize(15); doc.setTextColor(242, 193, 78);
+  doc.setFontSize(15); doc.setTextColor(232, 201, 146);
   doc.text(money(totals.grand), MARGIN + CONTENT_W - 6, y + totalBandH / 2 + 1.6, { align: 'right' });
   y += totalBandH + 5;
 
@@ -232,19 +281,14 @@ export async function renderInvoicePDF(doc, html2canvas, { inv, S, totals, vatRa
 
   // ---- 5. Footer — pinned to the bottom of the last page ----
   doc.setPage(doc.internal.getNumberOfPages());
-  let fy = PAGE_H - MARGIN - (showAgent ? 15 : 9);
+  let fy = PAGE_H - MARGIN - (showAgent ? 12 : 6);
   doc.setDrawColor(216, 220, 227); doc.setLineWidth(0.2); doc.line(MARGIN, fy, PAGE_W - MARGIN, fy);
   fy += 4;
   if (showAgent) {
     drawMixed(doc, MARGIN, fy, [['Agent — ', 'normal', [55, 65, 81]], [inv.agentName, 'bold', [25, 28, 34]]]);
-    doc.setFontSize(8.5);
     fy += 6;
     doc.setDrawColor(238, 241, 245); doc.setLineWidth(0.2); doc.line(MARGIN, fy - 2, PAGE_W - MARGIN, fy - 2);
   }
   doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(156, 163, 175);
   doc.text(regBits, MARGIN, fy + 2);
-  doc.setFontSize(6.5); doc.setTextColor(156, 163, 175);
-  doc.text('Invoicing & Job Management', PAGE_W - MARGIN, fy - 1.5, { align: 'right' });
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(14, 165, 233);
-  doc.text('Powered by DeepFlow', PAGE_W - MARGIN, fy + 2.5, { align: 'right' });
 }
