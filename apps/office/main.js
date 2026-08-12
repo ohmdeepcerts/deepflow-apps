@@ -1301,6 +1301,10 @@ let _jRange='default',_jcalMonth=null,_jcalJobDates={};
 let _jPastExtensionDays=0;
 let _calPaneVisible=true,_jUnbookedOnly=false,_jUnconfirmedOnly=false;
 let _pendCertQueue=[],_pendCertJob=null,_jobNumLock=false,_jobCertTypes=[];
+// Cert type ids the user has explicitly unchecked for the job currently
+// open in the New/Edit Job form — see toggleCertChip()/autoDetectCertTypes()
+// below for why this exists.
+let _jobCertTypesExcluded=new Set();
 export function setPendCertJob(v){ _pendCertJob=v; }
 let _dupCheckTimer=null;
 let editInvId=null,invItems=[],curInvId=null;
@@ -3808,6 +3812,7 @@ async function openJobModal(id){
   editJid=id||null;
   _editJobBaselineModified=null;
   _jobCertTypes=[];
+  _jobCertTypesExcluded=new Set();
   // Reset the multi-item-invoice price/description lock every open — this
   // must never carry over from whichever job was last edited in this modal.
   document.getElementById('jf-price').readOnly=false;
@@ -3959,6 +3964,7 @@ async function openJobModal(id){
     f('jf-date').value=jDate;f('jf-status').value='Pending';f('jf-priority').value='Normal';
     f('jf-trade').value='';f('jf-eng').value='';f('jf-access').value='';
     _jobCertTypes=[];
+    _jobCertTypesExcluded=new Set();
     renderCertChips([]);
     document.getElementById('btn-delete-job').style.display='none';
     document.getElementById('jm-photos-panel').style.display='none';
@@ -4056,8 +4062,8 @@ function renderCertChips(preSelected){
 
 function toggleCertChip(id){
   const idx=_jobCertTypes.indexOf(id);
-  if(idx>=0) _jobCertTypes.splice(idx,1);
-  else _jobCertTypes.push(id);
+  if(idx>=0){ _jobCertTypes.splice(idx,1); _jobCertTypesExcluded.add(id); }
+  else{ _jobCertTypes.push(id); _jobCertTypesExcluded.delete(id); }
   renderCertChips();
 }
 
@@ -4070,8 +4076,16 @@ function autoDetectCertTypes(desc){
     if(kws.some(kw=>dl.includes(kw.toLowerCase()))) autoIds.push(ct.id||ct.name);
   });
   if(autoIds.length){
-    // Merge auto-detected into current selection
-    autoIds.forEach(id=>{ if(!_jobCertTypes.includes(id)) _jobCertTypes.push(id); });
+    // Merge auto-detected into current selection — but never re-add a type
+    // the user has explicitly unchecked for this job. saveJob() re-runs
+    // this same auto-detect right before building the job record (as a
+    // safety net for descriptions set programmatically, which skip the
+    // textarea's oninput handler) — without _jobCertTypesExcluded, that
+    // re-scan would silently undo any correction the user made to a false-
+    // positive keyword match (e.g. "ALARM" in "CO2 ALARM" wrongly matching
+    // Fire Alarm's keywords) the instant they unchecked it, since the
+    // triggering keyword is still sitting right there in the description.
+    autoIds.forEach(id=>{ if(!_jobCertTypes.includes(id)&&!_jobCertTypesExcluded.has(id)) _jobCertTypes.push(id); });
     renderCertChips();
   }
 }
@@ -4121,7 +4135,7 @@ function clearJobForm(){
   document.getElementById('jf-date').value=TODAY();
   document.getElementById('jf-eng').value='';
   // Reset cert chips
-  _jobCertTypes=[];renderCertChips();
+  _jobCertTypes=[];_jobCertTypesExcluded=new Set();renderCertChips();
   // Reset title
   document.getElementById('mo-job-title').textContent='+ New Job';
   // Hide CR banner
