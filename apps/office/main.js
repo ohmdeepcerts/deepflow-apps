@@ -4468,16 +4468,31 @@ function _deriveProperties(jobs,manualProps){
     const manual=manualByAddr.get(key);
     const jobsAtAddr=auto?.jobs||[];
     const llMap=new Map();
+    // Agency-referred and landlord-referred jobs are tracked in separate
+    // maps — this used to fold both into one "landlord" name/date map, so
+    // selectAddr() below had no way to tell whether the most recent
+    // referrer on a property was actually an agency (needs the linked
+    // Agency Name field, which resolves to the real agencies-table record
+    // and AGN- invoice series) or a real landlord (needs the free-text
+    // Referrer field). It always treated it as the latter, so re-selecting
+    // an agency-referred property from the address autocomplete silently
+    // dropped the agency link — same failure mode as the bogus-duplicate-
+    // person bug already fixed in _autoInvoiceInner(), reached via this
+    // separate path instead.
+    const agMap=new Map();
     for(const j of jobsAtAddr){
-      const name=j.landlordName||j.agencyName;
-      if(name&&(!llMap.has(name)||(j.date||'')>llMap.get(name))) llMap.set(name,j.date||'');
+      if(j.landlordName&&(!llMap.has(j.landlordName)||(j.date||'')>llMap.get(j.landlordName))) llMap.set(j.landlordName,j.date||'');
+      if(j.agencyName&&(!agMap.has(j.agencyName)||(j.date||'')>agMap.get(j.agencyName))) agMap.set(j.agencyName,j.date||'');
     }
     const landlordHistory=[...llMap.entries()].sort((a,b)=>(b[1]||'').localeCompare(a[1]||'')).map(([n])=>n);
+    const agencyHistory=[...agMap.entries()].sort((a,b)=>(b[1]||'').localeCompare(a[1]||'')).map(([n])=>n);
     return{
       id:manual?.id||('auto_'+key.replace(/[^a-z0-9]/g,'').slice(0,32)),
       address:manual?.address||auto?.address||'',
-      landlord:manual?.landlord||landlordHistory[0]||'',
+      landlord:manual?.landlord||landlordHistory[0]||agencyHistory[0]||'',
       landlordHistory,
+      agency:agencyHistory[0]||'',
+      agencyHistory,
       postcode:manual?.postcode||jobsAtAddr.find(j=>j.postcode)?.postcode||'',
       type:manual?.type||'',beds:manual?.beds||'',notes:manual?.notes||'',
       _jobs:jobsAtAddr,
@@ -4569,13 +4584,38 @@ async function selectAddr(pid){
   const p=allProps.find(x=>x.id===pid);
   if(!p)return;
   document.getElementById('jf-addr').value=p.address;
-  document.getElementById('jf-ref').value=p.landlord||'';
   closeAddrDrop();
-  // Auto-fill landlord details from directories
-  if(p.landlord){
-    await autoFillLandlordByName(p.landlord);
+  // Route the property's most recent referrer to whichever field actually
+  // links it — a real landlord into the free-text Referrer field (with a
+  // Directory auto-fill), an agency into the linked Agency Name field,
+  // resolved to the real agencies-table record the same way manual entry
+  // does (via _resolveAgency at save time). Deliberately read
+  // landlordHistory/agency here rather than the merged `p.landlord`
+  // display fallback, which exists only for the Properties page's generic
+  // "who's associated with this address" label — using it here would
+  // silently reintroduce the same lost-agency-link bug this replaces.
+  const llName=p.landlordHistory?.[0]||'';
+  if(llName){
+    document.getElementById('jf-ref').value=llName;
+    await autoFillLandlordByName(llName);
   }
-  toast(`Auto-filled: ${p.landlord||p.address}`,'success');
+  if(p.agency){
+    document.getElementById('jf-agency').value=p.agency;
+    const agencies=await dAll('agencies');
+    const ag=agencies.find(a=>a.name===p.agency);
+    if(ag){
+      document.getElementById('jf-agency-phone').value=ag.phone||'';
+      document.getElementById('jf-agency-email').value=ag.email||'';
+      const agts=await dAll('agents');
+      const linked=agts.filter(a=>a.agencyId===ag.id);
+      if(linked.length===1){
+        document.getElementById('jf-agent').value=linked[0].name;
+        document.getElementById('jf-agent-phone').value=linked[0].phone||'';
+        document.getElementById('jf-agent-email').value=linked[0].email||'';
+      }
+    }
+  }
+  toast(`Auto-filled: ${p.agency||llName||p.address}`,'success');
 }
 function closeAddrDrop(){const d=document.getElementById('addr-drop');if(d)d.style.display='none'}
 document.addEventListener('click',e=>{if(!e.target.closest('#addr-drop')&&!e.target.closest('#jf-addr'))closeAddrDrop()});
