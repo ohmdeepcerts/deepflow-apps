@@ -1,22 +1,25 @@
-// Draws the ENTIRE invoice — header included — as real PDF text and
-// vector shapes (jsPDF's native API, the same kind of drawing
-// Zoho/QuickBooks/Xero use), with jsPDF-AutoTable handling the item
-// table's own pagination. Nothing here is a rendered screenshot: no
-// html2canvas, no embedded photograph of a page full of text — a few KB
-// per invoice instead of the 50-100KB+ a rasterised masthead used to cost
-// on its own.
+// Draws the ENTIRE invoice — background included — as real PDF drawing,
+// not a rendered screenshot: no html2canvas, no embedded photograph of a
+// page full of text. Text and shapes use jsPDF's native vector API
+// (jsPDF-AutoTable for the item table's own pagination); the warm wash
+// behind the header uses jsPDF's context2d bridge, which emits a true PDF
+// radial shading — still vector, not a raster fallback. A full-page
+// gradient plus text/table content this way measures a few KB, not the
+// 80-150KB+ a rasterised masthead used to cost.
 //
-// "Editorial" layout — approved 2026-08-12 after several rounds with the
-// business owner (see git log for the earlier navy/gold and generative-
-// watermark attempts, both rejected as "not what a certified electrician's
-// paperwork should look like"). The brief that survived: hairline rules
-// instead of solid colour bands, generous whitespace, small tracked
-// uppercase labels, tabular figures, bold used only where it earns its
-// place (company name, names, the total) — everything else normal weight.
-// The only colour on the page is the status pill; the rest is ink, grey,
-// and white. Deliberately has no logo mark and no generative graphic —
-// both were tried and explicitly turned down in favour of letting the
-// typography alone carry it.
+// "Sample 3" — picked 2026-08-12 after several rounds of full-page mockups
+// (see git log: the earlier plain "Editorial" layout, then a colour study
+// across amber/rose/sage washes, then five refinements of the winning
+// amber wash). The brief that survived: a soft amber radial wash behind
+// the whole page, a serif company name and invoice number, and serif
+// italic for the section/table labels — everything else (item text,
+// amounts, footer) stays the plain sans body face so the page doesn't
+// tip into pastiche.
+//
+// jsPDF's built-in fonts are Helvetica/Times/Courier — no Georgia. Times
+// is the serif stand-in; visually closer to a classic newspaper serif
+// than Georgia's more humanist warmth, but it's what ships without
+// embedding a custom font file, which nothing here has asked for yet.
 
 import { esc } from './invoice-template.js';
 
@@ -25,10 +28,10 @@ const PAGE_W = 210;
 const PAGE_H = 297;
 const CONTENT_W = PAGE_W - MARGIN * 2;
 
-const INK = [24, 27, 31];
-const MUTED = [139, 143, 151];
-const FAINT = [154, 160, 166];
-const HAIRLINE = [229, 230, 232];
+const INK = [30, 27, 22];
+const MUTED = [139, 122, 94];
+const FAINT = [160, 144, 111];
+const HAIRLINE = [238, 224, 204];
 
 const money = (n) => '£' + (Number(n) || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -47,14 +50,28 @@ function drawMixed(doc, x, y, parts) {
 }
 
 // Status pill colours — pale tint background, a matching darker ink for
-// the border/text. The one place colour appears on the page at all.
-const STATUS_LIGHT = {
-  Paid: { label: 'Paid', bg: [227, 247, 234], fg: [31, 122, 76] },
-  'Awaiting Payment': { label: 'Awaiting Payment', bg: [252, 240, 224], fg: [184, 114, 12] },
-  Cancelled: { label: 'Cancelled', bg: [250, 231, 231], fg: [178, 48, 48] },
-  Draft: { label: 'Draft', bg: [237, 238, 240], fg: [107, 112, 118] },
+// the border/text. Tuned to sit on the warm wash rather than plain white.
+const STATUS_WARM = {
+  Paid: { label: 'Paid', bg: [255, 255, 255, 0.55], fg: [138, 90, 36] },
+  'Awaiting Payment': { label: 'Awaiting Payment', bg: [255, 255, 255, 0.6], fg: [163, 85, 15] },
+  Cancelled: { label: 'Cancelled', bg: [255, 255, 255, 0.6], fg: [153, 40, 40] },
+  Draft: { label: 'Draft', bg: [255, 255, 255, 0.6], fg: [107, 112, 118] },
 };
-function statusStyle(status) { return STATUS_LIGHT[status] || STATUS_LIGHT.Draft; }
+function statusStyle(status) { return STATUS_WARM[status] || STATUS_WARM.Draft; }
+
+// The one raster-adjacent-looking effect on the page that is nonetheless
+// pure vector: jsPDF's context2d bridge emits a real PDF radial shading
+// for this, not a rasterised image — confirmed by building one and
+// checking the output size (a few KB, not tens of KB).
+function _drawWarmWash(doc) {
+  const ctx = doc.context2d;
+  const grad = ctx.createRadialGradient(31, 0, 0, 31, 0, 300);
+  grad.addColorStop(0, '#fbe9d0');
+  grad.addColorStop(0.45, '#fdf6ea');
+  grad.addColorStop(0.82, '#ffffff');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, PAGE_W, PAGE_H);
+}
 
 /**
  * Renders one invoice into `doc` starting at the current page. Adds pages
@@ -73,21 +90,27 @@ export async function renderInvoicePDF(doc, _html2canvas, { inv, S, totals, vatR
   const hasVat = (totals.vat || 0) > 0;
   const regBits = [S.invFooter, (S.coVatNum && S.vatEnabled !== false) ? 'VAT ' + S.coVatNum : null].filter(Boolean).join(' · ');
 
-  // ---- 1. Header — status pill, company name, invoice meta ----
+  _drawWarmWash(doc);
+
+  // ---- 1. Header — status pill, serif company name, serif invoice number ----
   const status = statusStyle(inv.status);
   let y = MARGIN;
 
   doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5);
   const pillLabel = status.label.toUpperCase();
   const pillW = doc.getTextWidth(pillLabel) + 7.5, pillH = 5.2;
-  doc.setFillColor(...status.bg);
+  // Pill background is a near-white tint over the wash, not true alpha —
+  // jsPDF vector fills don't composite against a gradient the way CSS
+  // rgba does, so this is a flat colour close to what rgba(255,255,255,.55)
+  // would look like sitting on the wash at this position.
+  doc.setFillColor(253, 250, 244);
   doc.setDrawColor(...status.fg); doc.setLineWidth(0.25);
   doc.roundedRect(MARGIN, y, pillW, pillH, 1.3, 1.3, 'FD');
   doc.setTextColor(...status.fg);
   doc.text(pillLabel, MARGIN + pillW / 2, y + pillH / 2 + 1.15, { align: 'center' });
 
   const nameY = y + pillH + 8;
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(19); doc.setTextColor(...INK);
+  doc.setFont('times', 'bold'); doc.setFontSize(19); doc.setTextColor(...INK);
   doc.text(esc(S.coName || 'Your Company'), MARGIN, nameY);
 
   const contactBits = [S.coPhone, S.coEmail].filter(Boolean).join('   ·   ');
@@ -97,8 +120,8 @@ export async function renderInvoicePDF(doc, _html2canvas, { inv, S, totals, vatR
   }
 
   const rightX = PAGE_W - MARGIN;
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...INK);
-  doc.text(`INVOICE ${esc(inv.number)}`, rightX, y + pillH + 2.2, { align: 'right' });
+  doc.setFont('times', 'bold'); doc.setFontSize(11); doc.setTextColor(...INK);
+  doc.text(`Invoice ${esc(inv.number)}`, rightX, y + pillH + 2.2, { align: 'right' });
   doc.setFont('helvetica', 'normal'); doc.setFontSize(8.3); doc.setTextColor(...MUTED);
   doc.text(`Tax invoice · ${esc(inv.date || '—')}`, rightX, y + pillH + 7.7, { align: 'right' });
 
@@ -106,20 +129,20 @@ export async function renderInvoicePDF(doc, _html2canvas, { inv, S, totals, vatR
   doc.setDrawColor(...HAIRLINE); doc.setLineWidth(0.25);
   doc.line(MARGIN, headerBottom, PAGE_W - MARGIN, headerBottom);
 
-  // ---- 2. Ordered By / Site of Works (vector, no accent rail — hairlines only) ----
+  // ---- 2. Ordered By / Site of Works — serif italic labels ----
   y = headerBottom + 10;
   const colW = (CONTENT_W - 10) / 2;
   const colXs = [MARGIN, MARGIN + colW + 10];
 
   const drawCol = (x, label, name, lines) => {
     let cy = y;
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(7.3); doc.setTextColor(...FAINT);
-    doc.text(label.toUpperCase(), x, cy);
+    doc.setFont('times', 'italic'); doc.setFontSize(8.3); doc.setTextColor(...FAINT);
+    doc.text(label, x, cy);
     cy += 5.6;
     doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.setTextColor(...INK);
     doc.text(name, x, cy);
     cy += 4.8;
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.3); doc.setTextColor(107, 112, 118);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.3); doc.setTextColor(107, 100, 85);
     for (const line of lines) {
       const wrapped = doc.splitTextToSize(line, colW - 4);
       for (const wl of wrapped) { doc.text(wl, x, cy); cy += 3.9; }
@@ -130,10 +153,9 @@ export async function renderInvoicePDF(doc, _html2canvas, { inv, S, totals, vatR
   const leftLines = isAgency
     ? ['Letting agency' + (inv.agentName ? ' · ' + inv.agentName : ''), inv.clientEmail].filter(Boolean)
     : [billToAddr, inv.clientEmail].filter(Boolean);
-  const rightLines = [];
 
-  const leftBottom = drawCol(colXs[0], 'Ordered By', billToName, leftLines);
-  const rightBottom = drawCol(colXs[1], 'Site of Works', propAddr || '—', rightLines);
+  const leftBottom = drawCol(colXs[0], 'Ordered by', billToName, leftLines);
+  const rightBottom = drawCol(colXs[1], 'Site of works', propAddr || '—', []);
   y = Math.max(leftBottom, rightBottom) + 6;
 
   doc.setDrawColor(...HAIRLINE); doc.setLineWidth(0.25);
@@ -153,11 +175,8 @@ export async function renderInvoicePDF(doc, _html2canvas, { inv, S, totals, vatR
     body: rows,
     theme: 'plain',
     styles: { font: 'helvetica', fontSize: 8.5, textColor: INK, cellPadding: { top: 2.8, bottom: 2.8, left: 0, right: 0 } },
-    headStyles: { fontStyle: 'bold', fontSize: 7.3, textColor: FAINT },
+    headStyles: { font: 'times', fontStyle: 'italic', fontSize: 8.3, textColor: FAINT },
     columnStyles: { 1: { halign: 'right' } },
-    didParseCell(data) {
-      if (data.section === 'head') data.cell.text = data.cell.text.map(t => String(t).toUpperCase());
-    },
     didDrawCell(data) {
       const bottom = data.cell.y + data.cell.height;
       doc.setDrawColor(...(data.section === 'head' ? INK : HAIRLINE));
@@ -166,7 +185,7 @@ export async function renderInvoicePDF(doc, _html2canvas, { inv, S, totals, vatR
     },
     didDrawPage(data) {
       if (data.pageNumber > 1) {
-        doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...INK);
+        doc.setFont('times', 'bold'); doc.setFontSize(9); doc.setTextColor(...INK);
         doc.text(String(inv.number), MARGIN, 12);
         doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...MUTED);
         doc.text(' — continued', MARGIN + doc.getTextWidth(String(inv.number)), 12);
@@ -175,10 +194,11 @@ export async function renderInvoicePDF(doc, _html2canvas, { inv, S, totals, vatR
   });
   y = doc.lastAutoTable.finalY + 10;
 
-  // ---- 4. Total — plain right-aligned figures, no colour band ----
+  // ---- 4. Total — plain sans, no colour band ----
   const totalReserve = hasVat ? 30 : 22, footerReserve = 24;
   if (y + totalReserve + footerReserve > PAGE_H) {
     doc.addPage();
+    _drawWarmWash(doc);
     y = MARGIN;
   }
 
