@@ -1505,8 +1505,16 @@ async function submitAddJob(){
     // Create job in Supabase
     const jobId=`job-eng-${Date.now()}-${Math.random().toString(36).slice(2,6)}`;
     const today=localDateStr();
+    // Was a self-invented `ENG-123456` from Date.now() — a different,
+    // non-configurable format from every office-created job, and no
+    // collision-check against Office's own counter. next_job_num() is the
+    // same atomic sequence Office itself uses (apps/office/main.js's
+    // createJob); 'JOB-' matches Office's own fallback when S.jobPrefix
+    // isn't set, since this app doesn't load Settings to read a custom one.
+    const n=await sb('rpc/next_job_num',{method:'POST',body:{}}).catch(()=>null);
+    const jobnum=typeof n==='number'?`JOB-${String(n).padStart(4,'0')}`:`JOB-${Date.now().toString().slice(-4)}`;
     await sb('jobs',{method:'POST',body:{
-      id:jobId,jobnum:`ENG-${Date.now().toString().slice(-6)}`,
+      id:jobId,jobnum,
       date:today,address,trade,description:desc,
       priority,status:'Pending',engineer:currentUser.name,
       notes:`Reported by engineer: ${currentUser.name}`,

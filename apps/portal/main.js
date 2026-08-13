@@ -6,7 +6,7 @@
 import { SB_URL, SB_KEY, restFetch } from '@core';
 import { escText as e, escAttr as ea, initNetworkCanvas } from '@ui';
 import { FROM_DB } from '@data';
-import { calcLineItemsTotal, portalVatRate, STATUS } from '@business';
+import { calcLineItemsTotal, portalVatRate, STATUS, daysDiff } from '@business';
 import './hero-canvas.js';
 import { vRequest, toggleReqDetail, handleFiles, submitReq, setRenewalData } from './request-wizard.js';
 import { previewInv, downloadCurrentInv, closeModal, payInvoice } from './invoice-pdf.js';
@@ -46,7 +46,14 @@ function _fix(j){
   const r={};for(const[k,v]of Object.entries(j))r[_fixMap[k]||k]=v;return r;
 }
 
-export function dd(d){return d?Math.ceil((new Date(d)-new Date())/86400000):null}
+// Was a local Math.ceil(UTC-parsed date minus now) calc — could disagree
+// with Office's own "days left"/"expired" number by a day depending on
+// time of day during BST, since Office computes this via the shared
+// daysDiff() (local-midnight-to-local-midnight, DST-safe). Now a thin
+// wrapper so every expiry status shown to a client matches Office's
+// dashboard exactly; keeps the null-for-no-date contract every call site
+// here already relies on (daysDiff returns NaN, not null, for that case).
+export function dd(d){ const r=daysDiff(d); return Number.isNaN(r)?null:r; }
 export function fd(d){return d?new Date(d+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):''}
 function fgbp(n){return'£'+(n||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}
 // Thin wrappers — now in @business as portalVatRate()/calcLineItemsTotal(),
