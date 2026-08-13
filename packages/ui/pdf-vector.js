@@ -2,9 +2,12 @@
 // not a rendered screenshot: no html2canvas, no embedded photograph of a
 // page full of text. Text and shapes use jsPDF's native vector API
 // (jsPDF-AutoTable for the item table's own pagination); the warm wash
-// behind the header uses jsPDF's context2d bridge, which emits a true PDF
-// radial shading — still vector, not a raster fallback. A full-page
-// gradient plus text/table content this way measures a few KB, not the
+// behind the header is built from many concentric flat-colour circles
+// (see _drawWarmWash) rather than a real PDF shading — jsPDF 2.5.1's
+// context2d.createRadialGradient/createLinearGradient are both stubs that
+// only remember the first colour stop, so a context2d gradient fill
+// silently renders as one flat colour with no error. A full-page wash
+// plus text/table content this way still measures a few KB, not the
 // 80-150KB+ a rasterised masthead used to cost.
 //
 // "Sample 3" — picked 2026-08-12 after several rounds of full-page mockups
@@ -59,18 +62,41 @@ const STATUS_WARM = {
 };
 function statusStyle(status) { return STATUS_WARM[status] || STATUS_WARM.Draft; }
 
-// The one raster-adjacent-looking effect on the page that is nonetheless
-// pure vector: jsPDF's context2d bridge emits a real PDF radial shading
-// for this, not a rasterised image — confirmed by building one and
-// checking the output size (a few KB, not tens of KB).
+// Radial colour stops for the warm wash, centred just above the top-left
+// corner. Same palette/positions as the original context2d attempt.
+const WASH_STOPS = [
+  { t: 0, rgb: [251, 233, 208] },   // #fbe9d0
+  { t: 0.45, rgb: [253, 246, 234] }, // #fdf6ea
+  { t: 0.82, rgb: [255, 255, 255] }, // #ffffff
+  { t: 1, rgb: [255, 255, 255] },
+];
+function _washColorAt(t) {
+  for (let i = 1; i < WASH_STOPS.length; i++) {
+    const a = WASH_STOPS[i - 1], b = WASH_STOPS[i];
+    if (t <= b.t) {
+      const f = (t - a.t) / (b.t - a.t || 1);
+      return [0, 1, 2].map((k) => Math.round(a.rgb[k] + (b.rgb[k] - a.rgb[k]) * f));
+    }
+  }
+  return WASH_STOPS[WASH_STOPS.length - 1].rgb;
+}
+
+// A true radial gradient, drawn as real vector shapes rather than a PDF
+// shading dictionary: jsPDF 2.5.1's context2d.createRadialGradient is a
+// stub (see file header) that always degrades to one flat colour, so this
+// approximates the fade with ~50 concentric filled circles, largest/
+// palest first, smallest/warmest last, painted centre at (31, 0). At this
+// step count the bands are imperceptible while staying genuine vector
+// drawing (small file size, no embedded raster).
 function _drawWarmWash(doc) {
-  const ctx = doc.context2d;
-  const grad = ctx.createRadialGradient(31, 0, 0, 31, 0, 300);
-  grad.addColorStop(0, '#fbe9d0');
-  grad.addColorStop(0.45, '#fdf6ea');
-  grad.addColorStop(0.82, '#ffffff');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, PAGE_W, PAGE_H);
+  const cx = 31, cy = 0, rMax = 300, STEPS = 50;
+  doc.setDrawColor(255, 255, 255);
+  for (let i = STEPS; i >= 0; i--) {
+    const t = i / STEPS;
+    const [r, g, b] = _washColorAt(t);
+    doc.setFillColor(r, g, b);
+    doc.circle(cx, cy, t * rMax, 'F');
+  }
 }
 
 /**
