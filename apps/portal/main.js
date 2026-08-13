@@ -526,15 +526,22 @@ async function init(){
       // jobIds passed as a plain array to the RPCs below — replaces the old
       // hand-built `"id1","id2"` string used for a raw `jobid=in.(...)` filter.
       const jobIds=jobs.map(j=>j.id);
-      const [ra,rc,ri,rr]=await Promise.all([
+      const [ra,rc,ri,rr,rp]=await Promise.all([
         sb(`rpc/portal_get_attachments`,{method:'POST',body:{p_job_ids:jobIds}}).catch(()=>[]),
         sb(`rpc/portal_get_certs`,{method:'POST',body:{p_job_ids:jobIds}}).catch(()=>[]),
         fetchInvoices(ptype,token),
         Promise.resolve([]), // no `ratings` table exists in the live database — this call always failed before; removed rather than left silently broken
+        // Per-invoice payment sums only — never the underlying payment rows
+        // (method/ref/notes stay office-only). Same identity resolution as
+        // portal_get_invoices, so this doesn't expose anything the client
+        // couldn't already infer invoice-by-invoice from PAID/OUTSTANDING.
+        sb(`rpc/portal_get_payment_totals`,{method:'POST',body:{p_type:ptype,p_id:token}}).catch(()=>[]),
       ]);
       attachments=(ra||[]).map(_fix);
       certs=(rc||[]).map(_fix);
       invoices=ri||[];
+      const paidTotals=new Map((rp||[]).map(r=>[String(r.inv_id),Number(r.amount_paid)||0]));
+      invoices.forEach(inv=>{ if(inv.id&&paidTotals.has(String(inv.id))) inv.amountPaid=paidTotals.get(String(inv.id)); });
       await _resolveFileUrls(ptype,token,attachments,certs,invoices);
       // Ratings: no `ratings` table exists in the live database (rr is always
       // []), so the outer `ratings` variable simply stays at its initial `[]`.
@@ -1067,23 +1074,28 @@ function vInvoices(d){
     // items yet (job price not set at completion time) — showing "£0.00" to
     // the client reads as an error, not a work-in-progress state.
     const pending=inv.status==='Draft'&&t.grand===0;
+    // Partial: some but not all of the total recorded via office payments
+    // (portal_get_payment_totals) — same "something paid, less than the
+    // total" test the PDF stamp itself uses.
+    const partial=!paid&&!can&&!pending&&(inv.amountPaid||0)>0&&(inv.amountPaid||0)<t.grand-0.01;
     const ds=inv.createdAt?fd(inv.createdAt.slice(0,10)):fd(inv.date);
     if(inv.id)_INV_STORE.set(inv.id,inv);
     return`<div class="ic">
-      <div class="ic-ic" style="background:${paid?'var(--success-light)':can?'var(--border-subtle)':pending?'var(--border-subtle)':'var(--info-light)'};color:${paid?'var(--success)':can?'var(--text-tertiary)':pending?'var(--text-tertiary)':'var(--info)'}">
+      <div class="ic-ic" style="background:${paid?'var(--success-light)':can?'var(--border-subtle)':pending?'var(--border-subtle)':partial?'var(--warning-light)':'var(--info-light)'};color:${paid?'var(--success)':can?'var(--text-tertiary)':pending?'var(--text-tertiary)':partial?'var(--warning)':'var(--info)'}">
         <i data-lucide="receipt" style="width:20px;height:20px"></i>
       </div>
       <div class="ic-body">
         <div class="ic-num">${e(inv.number||inv.id?.slice(0,8)||'—')}</div>
-        <div class="ic-desc">${ds} · <span class="pill ${paid?'p-ok':can?'p-n':pending?'p-n':'p-s'}" style="font-size:10px">${paid?'Paid':can?'Cancelled':pending?'Preparing':'Awaiting'}</span>
+        <div class="ic-desc">${ds} · <span class="pill ${paid?'p-ok':can?'p-n':pending?'p-n':partial?'p-s':'p-s'}" style="font-size:10px">${paid?'Paid':can?'Cancelled':pending?'Preparing':partial?'Partially paid':'Awaiting'}</span>
         ${inv.dueDate&&!paid&&!pending?` · Due ${fd(inv.dueDate)}`:''}
         </div>
+        ${partial?`<div style="font-size:11px;color:var(--text-secondary);margin-top:2px">${fgbp(inv.amountPaid)} of ${fgbp(t.grand)} paid</div>`:''}
       </div>
       <div class="ic-r">
         ${pending
           ?`<div class="ic-amt" style="color:var(--text-tertiary);font-size:13px">Invoicing in progress</div>`
-          :`<div class="ic-amt" style="color:${paid?'var(--success)':can?'var(--text-tertiary)':'var(--danger)'}">${fgbp(t.grand)}</div>
-        <div class="ic-lbl">${paid?'PAID':can?'VOID':'OUTSTANDING'}</div>`}
+          :`<div class="ic-amt" style="color:${paid?'var(--success)':can?'var(--text-tertiary)':partial?'var(--warning)':'var(--danger)'}">${fgbp(partial?t.grand-inv.amountPaid:t.grand)}</div>
+        <div class="ic-lbl">${paid?'PAID':can?'VOID':partial?'REMAINING':'OUTSTANDING'}</div>`}
         <div style="display:flex;gap:6px;margin-top:6px">
           ${pending?'':`<button class="dl sm" data-action="preview-inv" data-id="${ea(inv.id||'')}">Preview</button>`}
           ${!paid&&!can&&!pending&&inv.url?`<a href="${ea(inv.url)}" target="_blank" class="dl sm" style="background:var(--success)">Pay</a>`:''}

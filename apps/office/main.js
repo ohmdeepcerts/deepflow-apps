@@ -12663,6 +12663,11 @@ async function savePayment(){
     } else {
       toast(`Payment of £${amount.toFixed(2)} recorded. Outstanding: £${(t.grand-totalPaid).toFixed(2)}`,'success');
     }
+    // Both branches: the stored PDF (what the Client Portal shows — it
+    // never renders its own copy) carries a Paid/Partial/Unpaid stamp, so
+    // it goes stale the moment a payment changes which of those is true,
+    // not just when it flips to fully Paid.
+    generateAndStoreInvoicePDF(invId).catch(e=>console.warn('[DeepFlow] PDF regen after payment failed',e));
     await logActivity(`Payment £${amount.toFixed(2)} recorded for ${inv.number}`,'invoice');
     closeModal('mo-payment');
     renderInvList();
