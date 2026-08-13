@@ -26,8 +26,34 @@
 // read in another.
 
 import { escText as e, escAttr as ea } from '@ui';
-import { _d, dd, empty, go } from './main.js';
+import { _d, dd, empty, go, ptype } from './main.js';
 import { setRenewalData } from './request-wizard.js';
+import { payInvoice } from './invoice-pdf.js';
+
+// A cert is locked until every invoice linked to its job is Paid — same
+// test Office's own _isJobPaid (apps/office/certs.js) uses to decide
+// whether to watermark a PAT cert or send the "pay to unlock" email. No
+// job link at all means no invoice to gate on, so it's never locked; a
+// job link with no invoice raised yet counts as locked (nothing paid).
+// Takes `d` explicitly (same object certCard already reads d.jobs from)
+// rather than closing over the module-level _d, so this stays a plain
+// function of its inputs — _d is only null before the app finishes
+// loading, and certCard is never called before then anyway, but there's
+// no reason for this to depend on that timing when the caller already
+// has d in hand.
+function _certInvoices(c,d){
+  if(!c.jobId) return [];
+  return (d.invoices||[]).filter(i=>i.jobId===c.jobId||i.linkedJobId===c.jobId);
+}
+function _isCertLocked(c,d){
+  if(!c.jobId) return false;
+  const invs=_certInvoices(c,d);
+  return !invs.length || !invs.every(i=>i.status==='Paid');
+}
+function _lockedInvoiceForCert(c,d){
+  const invs=_certInvoices(c,d);
+  return invs.find(i=>i.status!=='Paid')||invs[0]||null;
+}
 
 let _cs='expiry', _cd='asc', _certView='list';
 
@@ -117,12 +143,26 @@ export function certCard(c,d){
     </div>`;
   }else{ringHTML=`<div class="expiry-ring"><div class="val" style="font-size:10px;color:var(--text-tertiary)">N/A</div></div>`;}
   const pdfUrl=c.pdf_url||c.url;
+  const locked=_isCertLocked(c,d);
+  // The signed pdf_url/pdf_path/url is a working download link — while
+  // locked, it must never end up in the page source at all, not just
+  // unlinked. JSON.stringify(c) is used below for two different onclick
+  // payloads (renew, the lock popup); a locked cert uses this stripped
+  // copy for both so the URL can't be pulled straight out of the HTML,
+  // e.g. via view-source, even though nothing renders it as a link.
+  const cSafe=locked?(()=>{const{pdf_url,pdf_path,url,...rest}=c;return rest;})():c;
   // Renew, the expiry ring, and the actions button live together in one
   // tightly-packed .cc-meta group (see .cc in index.html) — renew comes
   // FIRST so when it's absent there's no dead reserved gap before the ring,
   // and since the group is right-aligned as a whole, "View Certificate"
   // still lines up consistently across rows either way.
-  const renewBtn=(isS||isE)?`<button class="dl g cc-renew" onclick="preFillRenewal(${ea(JSON.stringify(c))})" title="Renew Request"><i data-lucide="refresh-cw" style="width:14px;height:14px"></i></button>`:'';
+  const renewBtn=(isS||isE)?`<button class="dl g cc-renew" onclick="preFillRenewal(${ea(JSON.stringify(cSafe))})" title="Renew Request"><i data-lucide="refresh-cw" style="width:14px;height:14px"></i></button>`:'';
+  // Locked: never a working preview/download link, regardless of pdfUrl —
+  // type and expiry date above still show (that's the "just the expiry
+  // date" the popup explains), only the document itself is withheld.
+  const actionBtn=locked
+    ? `<button class="dl g" onclick="showCertLockedPopup(${ea(JSON.stringify(cSafe))})" title="Pay the linked invoice to unlock"><i data-lucide="lock" style="width:12px;height:12px"></i> Locked</button>`
+    : (pdfUrl?`<button class="dl" onclick="previewCertPdf(${ea(JSON.stringify(pdfUrl))},${ea(JSON.stringify(c))})">View Certificate</button>`:`<span class="dl g" style="cursor:default;opacity:.5;font-size:11px">No PDF</span>`);
   return`<div class="cc">
     <div class="cc-ic" style="background:${col}22;color:${col};border-color:${col}44"><i data-lucide="${ic}" style="width:20px;height:20px"></i></div>
     <div class="cc-body">
@@ -137,11 +177,35 @@ export function certCard(c,d){
     <div class="cc-meta">
       ${renewBtn}
       ${ringHTML}
-      <div class="cc-actions">
-        ${pdfUrl?`<button class="dl" onclick="previewCertPdf(${ea(JSON.stringify(pdfUrl))},${ea(JSON.stringify(c))})">View Certificate</button>`:`<span class="dl g" style="cursor:default;opacity:.5;font-size:11px">No PDF</span>`}
-      </div>
+      <div class="cc-actions">${actionBtn}</div>
     </div>
   </div>`;
+}
+
+// "Pay to unlock" — shown instead of the real document until the linked
+// invoice is paid, same rule apply to the emailed copy (see
+// _maybeEmailCertReady/_certLockedEmailHtml in office/certs.js). Only
+// landlord/agency portals can pay (matches _payable in invoice-pdf.js —
+// agents don't hold the invoice's money), so an agent view gets a plain
+// message instead of a Pay button.
+export function showCertLockedPopup(c){
+  const inv=_lockedInvoiceForCert(c,_d);
+  const canPay=inv&&(ptype==='landlord'||ptype==='agency');
+  document.getElementById('cert-lock-bd').innerHTML=`
+    <div style="text-align:center;padding:6px 4px 2px">
+      <i data-lucide="lock" style="width:34px;height:34px;color:var(--warning)"></i>
+      <div style="font-size:14px;color:var(--text);line-height:1.55;margin:14px 0 18px">
+        This ${e(c.type||'certificate')} is ready but held until the linked invoice is paid.
+      </div>
+      ${canPay
+        ?`<button class="dl" style="width:100%;justify-content:center;background:var(--success,#16a34a)" onclick="closeCertLockModal();payInvoice(${ea(JSON.stringify(inv.id))})">Pay Invoice to Unlock</button>`
+        :`<div style="font-size:12px;color:var(--text-secondary)">Please ask your landlord/agency to settle the outstanding invoice.</div>`}
+    </div>`;
+  document.getElementById('cert-lock-overlay').classList.add('show');
+}
+export function closeCertLockModal(ev){
+  if(ev&&ev.target!==document.getElementById('cert-lock-overlay'))return;
+  document.getElementById('cert-lock-overlay').classList.remove('show');
 }
 
 let _previewCert=null;

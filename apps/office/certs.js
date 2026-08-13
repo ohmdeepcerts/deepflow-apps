@@ -21,7 +21,7 @@ import {
   S, dAll, dGet, dPut, dDel, toast, confirm2, uid, TODAY, logActivity,
   updateBadges, nav, closeModal, openModal, _getJWT, setJDate, _sb,
   saveCertExpiry, skipCertExpiry, setPendCertJob, _sendEmail, _certReadyEmailHtml, _blobToBase64,
-  resolveCompanyProfile, saveAllSettings, signedUrl,
+  resolveCompanyProfile, saveAllSettings, signedUrl, _certLockedEmailHtml, _jobPortalLink,
 } from './main.js';
 
 // Emailed/shared links need to keep working long after this browser
@@ -1582,26 +1582,30 @@ export async function generateCertPdf(){
 }
 
 // Called from main.js once an invoice flips to Paid (savePayment,
-// markInvPaid) — regenerates every PAT-style cert linked to that
-// invoice's job without the payment-pending watermark/redaction, and
-// re-stores each at the same pdf_path. The Client Portal never generates
-// its own copy of anything (see apps/portal/invoice-pdf.js for the same
-// rule already enforced on invoices) — it only ever shows whatever's
-// currently stored, so overwriting the file here is the entire "release"
-// mechanism, no portal-side change needed. Certs without appliances
-// (uploaded-only types — Gas Safety, EICR, EPC etc) are untouched:
-// there's no renderer for those, nothing to regenerate. Respects
-// S.certAutoEmail like every other cert-ready email (see
-// _maybeEmailCertReady) rather than bypassing that preference for this
-// one flow.
+// markInvPaid) — releases every cert linked to that invoice's job that
+// has a stored PDF. Two different jobs depending on cert type:
+//  - PAT-style (has appliances): regenerated without the watermark/
+//    redaction and re-stored at the same pdf_path, so the Client Portal
+//    (which never generates its own copy — same rule already enforced
+//    on invoices) picks up the clean file automatically.
+//  - Uploaded-only (Gas Safety/EICR/EPC etc): the stored file was never
+//    touched in the first place — there's no renderer to regenerate it
+//    with — so there's nothing to re-store. What changes is that
+//    _isJobPaid now resolves true, so re-running the ready-email below
+//    sends the real file/link instead of the "pay to unlock" notice.
+// Either way, _maybeEmailCertReady still respects S.certAutoEmail like
+// every other cert-ready email, rather than bypassing that preference
+// for this one flow.
 export async function regenerateCertsForPaidJob(jobId){
-  if(!jobId||!window.jspdf||!window.html2canvas) return;
+  if(!jobId) return;
   const allCerts=await dAll('certs');
-  const linked=allCerts.filter(c=>c.jobId===jobId&&(c.appliances||[]).length);
+  const linked=allCerts.filter(c=>c.jobId===jobId&&c.pdfPath);
   for(const cert of linked){
     try{
-      await _buildAndStoreCertPdf(cert,true);
-      logActivity(`Certificate PDF re-released without watermark for ${cert.address||'certificate'} (invoice paid)`,'cert');
+      if((cert.appliances||[]).length && window.jspdf && window.html2canvas){
+        await _buildAndStoreCertPdf(cert,true);
+        logActivity(`Certificate PDF re-released without watermark for ${cert.address||'certificate'} (invoice paid)`,'cert');
+      }
       _maybeEmailCertReady(cert.id).catch(e=>console.warn('[DeepFlow] Certificate release email failed for',cert.id,e));
     }catch(e){ console.warn('[DeepFlow] Cert regeneration after payment failed for',cert.id,e); }
   }
@@ -1660,11 +1664,33 @@ async function _maybeEmailCertReady(certId, {manual=false}={}){
   if(!c) return {sent:false,reason:'not-found'};
   if(!c.pdfPath) return {sent:false,reason:'no-pdf'};
   let email=c.email;
-  if(!email && c.jobId){
-    const job=await dGet('jobs',c.jobId);
-    email=job?.landlordEmail||job?.agencyEmail||null;
-  }
+  let job=null;
+  if(c.jobId) job=await dGet('jobs',c.jobId);
+  if(!email) email=job?.landlordEmail||job?.agencyEmail||null;
   if(!email) return {sent:false,reason:'no-email'};
+
+  // Locked applies to every cert type, not just the appliance-based ones
+  // _buildAndStoreCertPdf/regenerateCertsForPaidJob can watermark — an
+  // uploaded Gas Safety/EICR/EPC scan gets exactly the same "no file at
+  // all until paid" treatment here, just without a watermarked preview to
+  // fall back to (nothing in this codebase can watermark an arbitrary
+  // uploaded PDF — see _isJobPaid above for the shared paid/unpaid test).
+  const paid=await _isJobPaid(c.jobId);
+  if(!paid){
+    const portalUrl=_jobPortalLink(job);
+    const result=await _sendEmail({
+      to: email,
+      subject: `${c.type||'Compliance'} Certificate — payment required — ${c.address||''}`,
+      html: _certLockedEmailHtml(c, portalUrl),
+    });
+    if(result.ok){
+      logActivity(`Locked-certificate notice emailed to ${email} for ${c.address||'certificate'} (invoice unpaid)`,'cert');
+      return {sent:true};
+    }
+    logActivity(`Locked-certificate email FAILED for ${c.address||'certificate'} (${email}): ${(result.error||'unknown error').slice(0,120)}`,'cert');
+    return {sent:false,reason:'send-failed',error:result.error};
+  }
+
   // Long-lived: this link is going in an email, which might be opened
   // years from now for a compliance record — a short in-app preview
   // expiry would break it.

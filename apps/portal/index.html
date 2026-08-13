@@ -542,6 +542,14 @@ select.fi{cursor:pointer}
   </div>
 </div>
 
+<!-- Certificate Locked (linked invoice unpaid) -->
+<div class="modal-overlay" id="cert-lock-overlay" onclick="closeCertLockModal(event)">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:380px">
+    <div class="modal-hd"><h3>Certificate Locked</h3><button class="hbtn-icon" onclick="closeCertLockModal()"><i data-lucide="x" style="width:18px;height:18px"></i></button></div>
+    <div class="modal-bd" id="cert-lock-bd"></div>
+  </div>
+</div>
+
 <!-- Contact Us -->
 <div class="modal-overlay" id="contact-overlay" onclick="closeContactModal(event)">
   <div class="modal" onclick="event.stopPropagation()" style="max-width:380px">

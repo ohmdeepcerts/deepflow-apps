@@ -561,11 +561,25 @@ export function _portalBaseUrl() {
   return window.location.origin + dir.replace(/office\/$/, 'portal/');
 }
 
-function _buildPortalUrl(id, type, name) {
+export function _buildPortalUrl(id, type, name) {
   const base = `${_portalBaseUrl()}?id=${encodeURIComponent(id)}&type=${type}`;
   // Agent portals need name in URL — agents table has no anon RLS policy
   // so the portal can't look up the agent by ID. Name is the lookup key.
   return name ? base + `&name=${encodeURIComponent(name)}` : base;
+}
+
+// For the "certificate locked, pay to unlock" email — a job links to
+// exactly the same landlord/agency identity an invoice for it would, so
+// this reuses that pairing rather than needing its own lookup. Agent-only
+// jobs (no clientPersonId/clientAgencyId) are skipped: agent portal links
+// need a name-based lookup (see _buildPortalUrl's comment) that a bare
+// job record doesn't cleanly carry, so _certLockedEmailHtml just falls
+// back to its no-link wording for those rather than risk a wrong URL.
+export function _jobPortalLink(job){
+  if(!job) return null;
+  if(job.clientAgencyId) return _buildPortalUrl(job.clientAgencyId,'agency');
+  if(job.clientPersonId) return _buildPortalUrl(job.clientPersonId,'landlord');
+  return null;
 }
 
 function shareClientPortal(id, name, type, agentName) {
@@ -6403,6 +6417,22 @@ export function _certReadyEmailHtml(cert, pdfUrl){
       <a href="${pdfUrl}" style="display:inline-block;background:#0d1f3c;color:#fff;font-size:13px;font-weight:700;padding:12px 28px;border-radius:8px;text-decoration:none">📥 Download Certificate</a>
     </div>
     ${cert.expiryDate?`<div style="font-size:12px;color:#64748b;margin-top:16px;text-align:center">Valid until ${escHtml(formatDateUK(cert.expiryDate))}</div>`:''}
+  `);
+}
+
+// Sent instead of _certReadyEmailHtml when the linked invoice isn't paid
+// yet — no PDF link/attachment at all (nothing to download until paid,
+// same rule the Client Portal now enforces on its own cert cards), just
+// a CTA into the Portal where the same locked state + Pay Now button
+// live. portalUrl is null for jobs with no clean landlord/agency link to
+// build one from (see _jobPortalLink) — falls back to a plain message.
+export function _certLockedEmailHtml(cert, portalUrl){
+  return _brandedEmailShell(`
+    ${_emailBadge('🔒 Certificate Ready — Payment Required','#fff7ed','#c2410c')}
+    <div style="font-size:15px;color:#1e293b;margin-top:16px;line-height:1.55">Dear ${escHtml(cert.landlord||'Client')},<br><br>Your ${escHtml(cert.type||'compliance')} certificate for <b>${escHtml(cert.address||'')}</b> is ready, but held until the linked invoice is paid.</div>
+    ${portalUrl?`<div style="text-align:center;margin-top:20px">
+      <a href="${portalUrl}" style="display:inline-block;background:#c2410c;color:#fff;font-size:13px;font-weight:700;padding:12px 28px;border-radius:8px;text-decoration:none">🔓 Pay Invoice to Unlock</a>
+    </div>`:`<div style="font-size:13px;color:#64748b;margin-top:16px">Please contact us to settle the outstanding invoice and receive your certificate.</div>`}
   `);
 }
 

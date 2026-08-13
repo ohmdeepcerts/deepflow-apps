@@ -11,7 +11,7 @@ import './hero-canvas.js';
 import { vRequest, toggleReqDetail, handleFiles, submitReq, setRenewalData } from './request-wizard.js';
 import { previewInv, downloadCurrentInv, closeModal, payInvoice } from './invoice-pdf.js';
 import { vProperties, setPropSearch, setPropSort } from './properties.js';
-import { vCerts, certCard, previewCertPdf, closeCertPdfPreview, preFillRenewal, getPreviewCert, setCertView, setCertSort, setCertDir } from './certs.js';
+import { vCerts, certCard, previewCertPdf, closeCertPdfPreview, preFillRenewal, getPreviewCert, setCertView, setCertSort, setCertDir, showCertLockedPopup, closeCertLockModal } from './certs.js';
 
 export async function sb(path,opts={}){
   const r=await restFetch(path,opts,SB_KEY);
@@ -38,6 +38,12 @@ const _fixMap = {
   clientname: FROM_DB.invoices.clientname, duedate: FROM_DB.invoices.duedate, invoicetype: FROM_DB.invoices.invoicetype,
   billtoname: FROM_DB.invoices.billtoname, billtoaddress: FROM_DB.invoices.billtoaddress,
   jobaddress: FROM_DB.invoices.jobaddress, propertyaddress: FROM_DB.invoices.propertyaddress,
+  // Was missing — invoices.linkedjobid passed straight through unmapped,
+  // so any job→invoice match that only had linkedJobId (not the primary
+  // jobId) set would silently miss. Needed now that cert-lock status
+  // (certs.js) matches a job's invoices the same way Office's own
+  // _isJobPaid does: i.jobId===jobId||i.linkedJobId===jobId.
+  linkedjobid: FROM_DB.invoices.linkedjobid,
   bankname: FROM_DB.persons.bankname, bankacc: FROM_DB.persons.bankacc,
   banksort: FROM_DB.persons.banksort, bankref: FROM_DB.persons.bankref,
 };
@@ -1292,11 +1298,11 @@ init();
 // actual top-level declarations) — preserving the exact global availability
 // every one of these already had before this migration, no more and no less.
 Object.assign(window, {
-  _pinSubmitEntry, _pinSubmitSetup, closeCertPdfPreview, closeContactModal,
+  _pinSubmitEntry, _pinSubmitSetup, closeCertLockModal, closeCertPdfPreview, closeContactModal,
   closeHelpModal, closeLb, closeModal, closeSearch, copyToClipboard,
   downloadCurrentInv, enablePushNotifications, exportCSV, go, handleFiles,
   openContactModal, openSearch, payInvoice, performSearch, preFillRenewal,
   previewCertPdf, setCertDir, setCertSort, setCertView, setPropSearch,
-  setPropSort, shareCert, shareCurrentPreviewCert, submitReq, toast,
+  setPropSort, shareCert, shareCurrentPreviewCert, showCertLockedPopup, submitReq, toast,
   toggleAgentFilter, toggleNotif, toggleReqDetail, toggleTheme,
 });
