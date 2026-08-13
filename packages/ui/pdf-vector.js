@@ -54,6 +54,8 @@ function drawMixed(doc, x, y, parts) {
 
 // Status pill colours — pale tint background, a matching darker ink for
 // the border/text. Tuned to sit on the warm wash rather than plain white.
+// Only Draft/Cancelled still use this pill — Paid/Unpaid/Partial get the
+// bigger stamp below instead (see _drawStatusStamp).
 const STATUS_WARM = {
   Paid: { label: 'Paid', bg: [255, 255, 255, 0.55], fg: [138, 90, 36] },
   'Awaiting Payment': { label: 'Awaiting Payment', bg: [255, 255, 255, 0.6], fg: [163, 85, 15] },
@@ -61,6 +63,67 @@ const STATUS_WARM = {
   Draft: { label: 'Draft', bg: [255, 255, 255, 0.6], fg: [107, 112, 118] },
 };
 function statusStyle(status) { return STATUS_WARM[status] || STATUS_WARM.Draft; }
+
+// Status stamp — picked 2026-08-13 after a run of mockups (see git log):
+// two slightly offset ring strokes (a "hand-stamped twice" look) plus a
+// faint bolt watermark behind the word, sat lower-right near the total.
+// Real vector throughout: doc.circle() for the rings, doc.GState opacity
+// for the fade, doc.lines() for the bolt polygon — no raster, no context2d
+// (whose gradients are the broken stub documented at the top of this file;
+// GState opacity is a separate, working core jsPDF feature).
+const STAMP_STYLES = {
+  paid: { word: 'Paid', color: [28, 122, 70] },
+  unpaid: { word: 'Unpaid', color: [178, 59, 46] },
+  partial: { word: 'Partial', color: [196, 142, 23] },
+};
+
+// Lightning-bolt outline (fraction of its own w×h box) reused as the
+// stamp's watermark — a nod to "GB Electrical" rather than a generic tick.
+const BOLT_POINTS = [[0.35, 0], [0.65, 0], [0.45, 0.38], [0.72, 0.38], [0.32, 1], [0.42, 0.54], [0.14, 0.54]];
+function _boltPath(w, h) {
+  const pts = BOLT_POINTS.map(([px, py]) => [px * w, py * h]);
+  const deltas = pts.slice(1).map((p, i) => [p[0] - pts[i][0], p[1] - pts[i][1]]);
+  return { start: pts[0], deltas };
+}
+
+// Shrinks fontSize (from maxSize) only as far as needed to keep `text` under
+// maxWidthMm — the stamp word is user-editable-length ("Paid" vs "Unpaid"
+// vs "Partial"), so a fixed size risks overflowing the ring for the longer
+// ones instead of being derived from actual measured text width.
+function _fitStampFont(doc, text, maxWidthMm, maxSize) {
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(maxSize);
+  const w = doc.getTextWidth(text);
+  return w > maxWidthMm ? maxSize * (maxWidthMm / w) : maxSize;
+}
+
+function _drawStatusStamp(doc, kind) {
+  const style = STAMP_STYLES[kind];
+  if (!style) return;
+  const cx = PAGE_W * 0.78, cy = PAGE_H * 0.66, d = PAGE_W * 0.30, r = d / 2;
+  const [cr, cg, cb] = style.color;
+
+  doc.setLineWidth(d * 0.0143);
+  doc.setDrawColor(cr, cg, cb);
+  doc.setGState(new doc.GState({ opacity: 0.5 }));
+  doc.circle(cx - 1.47, cy + 1.73, r, 'S');
+  doc.setGState(new doc.GState({ opacity: 0.9 }));
+  doc.circle(cx + 1.40, cy - 1.10, r, 'S');
+  doc.setGState(new doc.GState({ opacity: 1 }));
+
+  const boltW = d * 0.58, boltH = boltW / 0.55;
+  const boltOriginX = cx - boltW / 2, boltOriginY = cy - d * 0.03 - boltH / 2;
+  const { start, deltas } = _boltPath(boltW, boltH);
+  doc.setFillColor(cr, cg, cb);
+  doc.setGState(new doc.GState({ opacity: 0.16 }));
+  doc.lines(deltas, boltOriginX + start[0], boltOriginY + start[1], [1, 1], 'F', true);
+  doc.setGState(new doc.GState({ opacity: 1 }));
+
+  const word = style.word.toUpperCase();
+  const size = _fitStampFont(doc, word, d * 0.62, 30);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(size);
+  doc.setTextColor(cr, cg, cb);
+  doc.text(word, cx, cy, { align: 'center', baseline: 'middle', angle: -7 });
+}
 
 // Radial colour stops for the warm wash, centred just above the top-left
 // corner. Same palette/positions as the original context2d attempt.
@@ -105,35 +168,46 @@ function _drawWarmWash(doc) {
  * @param {import('jspdf').jsPDF} doc
  * @param {unknown} _html2canvas - unused; kept so existing call sites
  *   (Office, Client Portal) don't need to change their call signature.
- * @param {{inv:object, S:object, totals:{sub:number,vat:number,grand:number}, vatRate:number}} p
+ * @param {{inv:object, S:object, totals:{sub:number,vat:number,grand:number}, vatRate:number, amountPaid?:number}} p
+ *   amountPaid, if given, is the sum of recorded payments against this
+ *   invoice — used only to detect "partially paid" (something paid, less
+ *   than the total). Omit it and a non-Paid invoice just renders as
+ *   Unpaid, same as before this existed.
  */
-export async function renderInvoicePDF(doc, _html2canvas, { inv, S, totals, vatRate }) {
+export async function renderInvoicePDF(doc, _html2canvas, { inv, S, totals, vatRate, amountPaid }) {
   const isAgency = inv.invoiceType === 'agency';
   const billToName = inv.billToName || inv.clientName || '—';
   const billToAddr = inv.billToAddress || inv.clientAddr || '';
   const propAddr = inv.propertyAddress || inv.jobAddress || inv.jobAddr || '';
   const isPaid = inv.status === 'Paid';
+  const isPartial = !isPaid && (amountPaid || 0) > 0 && (amountPaid || 0) < totals.grand - 0.01;
+  const stampKind = isPaid ? 'paid' : isPartial ? 'partial' : (inv.status === 'Awaiting Payment' ? 'unpaid' : null);
   const hasVat = (totals.vat || 0) > 0;
   const regBits = [S.invFooter, (S.coVatNum && S.vatEnabled !== false) ? 'VAT ' + S.coVatNum : null].filter(Boolean).join(' · ');
 
   _drawWarmWash(doc);
 
-  // ---- 1. Header — status pill, serif company name, serif invoice number ----
+  // ---- 1. Header — status pill (Draft/Cancelled only; Paid/Unpaid/Partial
+  // get the bigger stamp near the total instead), serif company name,
+  // serif invoice number ----
   const status = statusStyle(inv.status);
   let y = MARGIN;
+  const pillH = 5.2;
 
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5);
-  const pillLabel = status.label.toUpperCase();
-  const pillW = doc.getTextWidth(pillLabel) + 7.5, pillH = 5.2;
-  // Pill background is a near-white tint over the wash, not true alpha —
-  // jsPDF vector fills don't composite against a gradient the way CSS
-  // rgba does, so this is a flat colour close to what rgba(255,255,255,.55)
-  // would look like sitting on the wash at this position.
-  doc.setFillColor(253, 250, 244);
-  doc.setDrawColor(...status.fg); doc.setLineWidth(0.25);
-  doc.roundedRect(MARGIN, y, pillW, pillH, 1.3, 1.3, 'FD');
-  doc.setTextColor(...status.fg);
-  doc.text(pillLabel, MARGIN + pillW / 2, y + pillH / 2 + 1.15, { align: 'center' });
+  if (!stampKind) {
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5);
+    const pillLabel = status.label.toUpperCase();
+    const pillW = doc.getTextWidth(pillLabel) + 7.5;
+    // Pill background is a near-white tint over the wash, not true alpha —
+    // jsPDF vector fills don't composite against a gradient the way CSS
+    // rgba does, so this is a flat colour close to what rgba(255,255,255,.55)
+    // would look like sitting on the wash at this position.
+    doc.setFillColor(253, 250, 244);
+    doc.setDrawColor(...status.fg); doc.setLineWidth(0.25);
+    doc.roundedRect(MARGIN, y, pillW, pillH, 1.3, 1.3, 'FD');
+    doc.setTextColor(...status.fg);
+    doc.text(pillLabel, MARGIN + pillW / 2, y + pillH / 2 + 1.15, { align: 'center' });
+  }
 
   const nameY = y + pillH + 8;
   doc.setFont('times', 'bold'); doc.setFontSize(19); doc.setTextColor(...INK);
@@ -265,6 +339,7 @@ export async function renderInvoicePDF(doc, _html2canvas, { inv, S, totals, vatR
 
   // ---- 5. Footer — pinned to the bottom of the last page ----
   doc.setPage(doc.internal.getNumberOfPages());
+  if (stampKind) _drawStatusStamp(doc, stampKind);
   const fy = PAGE_H - MARGIN - 6;
   doc.setDrawColor(...HAIRLINE); doc.setLineWidth(0.2); doc.line(MARGIN, fy, PAGE_W - MARGIN, fy);
   doc.setFont('helvetica', 'normal'); doc.setFontSize(7.3); doc.setTextColor(...FAINT);

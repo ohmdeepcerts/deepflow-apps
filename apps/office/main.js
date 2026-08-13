@@ -7556,12 +7556,14 @@ async function _buildInvoicePDFDoc(inv){
   const {jsPDF}=window.jspdf;
   const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4',floatPrecision:2});
 
-  // Only the masthead is a rendered image (real CSS gradient + particle
-  // scatter, matching the login screen exactly); everything else is real
-  // PDF text and vector shapes via jsPDF/jsPDF-AutoTable, which is what
-  // keeps the file a few tens of KB instead of the few hundred a
-  // full-page screenshot cost. See packages/ui/pdf-vector.js.
-  await renderInvoicePDF(doc,window.html2canvas,{inv,S,totals:t,vatRate:vr});
+  // Same totalPaid lookup savePayment() already does — lets the PDF show
+  // the "Partial" stamp instead of "Unpaid" when some but not all of the
+  // invoice has been paid. Everything else is real PDF text and vector
+  // shapes via jsPDF/jsPDF-AutoTable, no rendered image anywhere on the
+  // page. See packages/ui/pdf-vector.js.
+  const allPmts=await dAll('payments');
+  const amountPaid=allPmts.filter(p=>p.invId===inv.id).reduce((s,p)=>s+(p.amount||0),0);
+  await renderInvoicePDF(doc,window.html2canvas,{inv,S,totals:t,vatRate:vr,amountPaid});
 
   return doc;
 }
