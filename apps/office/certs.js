@@ -1511,11 +1511,53 @@ export function renderCertPdfSection(certId,path){
   }
 }
 
+// True once every invoice linked to this job is Paid — the same "before
+// the invoice is paid" test the watermark itself gates on (see
+// packages/ui/pat-template.js). No job link at all (a manually-added
+// cert, never tied to a job/invoice) counts as paid: there's no invoice
+// to gate on, so watermarking one would just permanently withhold it.
+// A job link with no invoice raised yet, or an invoice not yet Paid,
+// counts as unpaid.
+async function _isJobPaid(jobId){
+  if(!jobId) return true;
+  const invs=await dAll('invoices');
+  const linked=invs.filter(i=>i.jobId===jobId||i.linkedJobId===jobId);
+  if(!linked.length) return false;
+  return linked.every(i=>i.status==='Paid');
+}
+
+// The build+store half of PDF generation, shared by the manual "Generate
+// PDF" button below and regenerateCertsForPaidJob() (called automatically
+// once the linked invoice is paid) — one place that builds via
+// renderPatCertificatePDF and stores through the same path/PATCH a
+// manual "Upload PDF" does, so the cert list, Client Portal, and expiry
+// reminders can't tell generated and uploaded apart afterwards.
+async function _buildAndStoreCertPdf(cert,paid){
+  const profile=resolveCompanyProfile(cert.type);
+  // Job-linked certs (auto-created on job completion) pull the engineer
+  // from the job; a manually-added cert has no job to pull from, so
+  // falls back to whatever was typed into the form's own Engineer field
+  // (cert.engineer) — previously there was no fallback at all, leaving
+  // the PDF's Engineer box blank for every manually-added PAT cert.
+  let engineerName=cert.engineer||'';
+  if(cert.jobId){ const job=await dGet('jobs',cert.jobId); engineerName=job?.engineer||engineerName; }
+  const doc=await renderPatCertificatePDF(window.jspdf.jsPDF,window.html2canvas,{cert,profile,engineerName,paid});
+  const blob=doc.output('blob');
+  const path=`certs/${cert.id}/${_certFilename(cert)}`;
+  await sbStorage(path,blob);
+  // pdf_url is no longer written — the bucket is private, so a stored
+  // public-style URL wouldn't work as a direct link anyway. pdf_path is
+  // the one source of truth now; every viewer resolves a fresh signed
+  // URL from it on demand (previewCertPdf, _maybeEmailCertReady, Portal's
+  // portal-sign-url Edge Function).
+  await _sb(`certs?id=eq.${encodeURIComponent(cert.id)}`,{method:'PATCH',body:{pdf_path:path},prefer:'return=minimal'});
+  return path;
+}
+
 // Generates a PAT-style certificate PDF from the cert's own appliance log
 // (see packages/ui/pat-template.js — ported from the standalone PAT-TEST
-// app) and stores it through the exact same upload path/PATCH a manual
-// "Upload PDF" does, so the cert list, Client Portal, and expiry reminders
-// can't tell the two apart afterwards.
+// app). Watermarked and redacted automatically if the linked invoice
+// isn't paid yet — see _isJobPaid/_buildAndStoreCertPdf above.
 export async function generateCertPdf(){
   const certId=window._editCertModalId;
   if(!certId){ toast('Save the certificate first, then generate the PDF','warn'); return; }
@@ -1526,32 +1568,42 @@ export async function generateCertPdf(){
   const wraps=['cf2-pdf-wrap'].map(id=>document.getElementById(id)).filter(Boolean);
   wraps.forEach(wrap=>wrap.innerHTML=`<span style="color:var(--txt3);font-size:12px">Generating PDF…</span>`);
   try{
-    const profile=resolveCompanyProfile(cert.type);
-    // Job-linked certs (auto-created on job completion) pull the engineer
-    // from the job; a manually-added cert has no job to pull from, so
-    // falls back to whatever was typed into the form's own Engineer field
-    // (cert.engineer) — previously there was no fallback at all, leaving
-    // the PDF's Engineer box blank for every manually-added PAT cert.
-    let engineerName=cert.engineer||'';
-    if(cert.jobId){ const job=await dGet('jobs',cert.jobId); engineerName=job?.engineer||engineerName; }
-    const doc=await renderPatCertificatePDF(window.jspdf.jsPDF,window.html2canvas,{cert,profile,engineerName});
-    const blob=doc.output('blob');
-    const path=`certs/${certId}/${_certFilename(cert)}`;
-    await sbStorage(path,blob);
-    // pdf_url is no longer written — the bucket is private, so a stored
-    // public-style URL wouldn't work as a direct link anyway. pdf_path is
-    // the one source of truth now; every viewer resolves a fresh signed
-    // URL from it on demand (previewCertPdf, _maybeEmailCertReady, Portal's
-    // portal-sign-url Edge Function).
-    await _sb(`certs?id=eq.${encodeURIComponent(certId)}`,{method:'PATCH',body:{pdf_path:path},prefer:'return=minimal'});
+    const paid=await _isJobPaid(cert.jobId);
+    const path=await _buildAndStoreCertPdf(cert,paid);
     renderCertPdfSection(certId,path);
-    toast('✅ Certificate PDF generated','success');
-    logActivity(`Certificate PDF generated for ${cert.address||'certificate'}`,'cert');
+    toast(paid?'✅ Certificate PDF generated':'✅ Certificate PDF generated — watermarked, invoice not yet paid','success');
+    logActivity(`Certificate PDF generated for ${cert.address||'certificate'}${paid?'':' (watermarked, payment pending)'}`,'cert');
     _maybeEmailCertReady(certId).catch(e=>console.warn('[DeepFlow] Cert-ready email failed',e));
   }catch(e){
     console.error('[DeepFlow] PDF generation failed',e);
     toast('❌ PDF generation failed: '+(e.message||'').slice(0,80),'error');
     renderCertPdfSection(certId,cert.pdfPath||null);
+  }
+}
+
+// Called from main.js once an invoice flips to Paid (savePayment,
+// markInvPaid) — regenerates every PAT-style cert linked to that
+// invoice's job without the payment-pending watermark/redaction, and
+// re-stores each at the same pdf_path. The Client Portal never generates
+// its own copy of anything (see apps/portal/invoice-pdf.js for the same
+// rule already enforced on invoices) — it only ever shows whatever's
+// currently stored, so overwriting the file here is the entire "release"
+// mechanism, no portal-side change needed. Certs without appliances
+// (uploaded-only types — Gas Safety, EICR, EPC etc) are untouched:
+// there's no renderer for those, nothing to regenerate. Respects
+// S.certAutoEmail like every other cert-ready email (see
+// _maybeEmailCertReady) rather than bypassing that preference for this
+// one flow.
+export async function regenerateCertsForPaidJob(jobId){
+  if(!jobId||!window.jspdf||!window.html2canvas) return;
+  const allCerts=await dAll('certs');
+  const linked=allCerts.filter(c=>c.jobId===jobId&&(c.appliances||[]).length);
+  for(const cert of linked){
+    try{
+      await _buildAndStoreCertPdf(cert,true);
+      logActivity(`Certificate PDF re-released without watermark for ${cert.address||'certificate'} (invoice paid)`,'cert');
+      _maybeEmailCertReady(cert.id).catch(e=>console.warn('[DeepFlow] Certificate release email failed for',cert.id,e));
+    }catch(e){ console.warn('[DeepFlow] Cert regeneration after payment failed for',cert.id,e); }
   }
 }
 

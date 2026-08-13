@@ -66,6 +66,10 @@ const CSS = `
 .pat-cert-root .cbadge.fail{background:#fee2e2;color:#991b1b}
 .pat-cert-root .a4-foot{margin-top:auto;border-top:1px solid #e2e8f0;padding-top:8px;display:flex;justify-content:space-between;align-items:center;font-size:.7rem;color:#64748b}
 .pat-cert-root .a4-fcontact{display:flex;gap:12px;flex-wrap:wrap}
+.pat-cert-root .a4-wm{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:5}
+.pat-cert-root .a4-wm span{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(-32deg);white-space:nowrap;font-size:52px;font-weight:800;letter-spacing:4px;color:rgba(180,40,30,.16);font-family:'DM Sans',Arial,sans-serif}
+.pat-cert-root .a4-redact{background:repeating-linear-gradient(135deg,#e2e8f0,#e2e8f0 4px,#cbd5e1 4px,#cbd5e1 8px);color:transparent!important;border-radius:2px;user-select:none}
+.pat-cert-root .a4-redact-note{font-size:.62rem;font-weight:700;color:#94a3b8;letter-spacing:.4px}
 `;
 
 // Fixed styling constants the source app ships with (header colour, row
@@ -88,9 +92,14 @@ const DEFAULTS = {
  * @param {object} cert - a certs table row: {address, certNum, issueDate, landlord, agent, appliances:[{assetId,description,testInstrument,date,retestPeriod,nextTest,result}]}
  * @param {{name?:string,address?:string,email?:string,phone?:string,vatNum?:string,regNum?:string,website?:string,logoUrl?:string}} profile - resolved issuing company identity (see resolveCompanyProfile in apps/office/main.js)
  * @param {string} [engineerName]
+ * @param {boolean} [paid] - false watermarks every page and redacts each
+ *   appliance's description/result until the linked invoice is paid.
+ *   Defaults true (unwatermarked) so any caller that doesn't know about
+ *   this concept keeps its prior behaviour rather than certs unexpectedly
+ *   starting to render as withheld.
  * @returns {string[]}
  */
-export function buildPatCertificatePages(cert, profile, engineerName) {
+export function buildPatCertificatePages(cert, profile, engineerName, paid = true) {
   const ref = cert.certNum || '';
   const testDate = fmtUK(cert.issueDate);
   const landlord = (cert.landlord || '').trim();
@@ -150,15 +159,22 @@ export function buildPatCertificatePages(cert, profile, engineerName) {
     // a little visual headroom without wasting most of a sheet.
     const realRows = pg.items.reduce((s, a) => s + a._c, 0);
     const empty = pi === 0 ? (pg.cap - realRows) : Math.min(pg.cap - realRows, 3);
-    let rows = pg.items.map((app, i) => `<tr style="background:${i % 2 === 0 ? rowBg : ''}"><td style="height:${app._c * 28}px;vertical-align:middle">${esc(app.assetId)}</td><td style="height:${app._c * 28}px;vertical-align:middle;white-space:pre-wrap;word-break:break-word">${esc(app._d)}</td><td>${esc(app.testInstrument)}</td><td>${fmtUK(app.date)}</td><td>${app.retestPeriod}</td><td>${fmtUK(app.nextTest)}</td><td><span class="cbadge ${app.result === 'Pass' ? 'pass' : 'fail'}">${app.result}</span></td></tr>`).join('');
+    // Redacted before payment: the description (what was actually tested)
+    // and the result (the certified pass/fail verdict) — the substantive
+    // certified content. Asset ID/instrument/dates stay visible so the
+    // page still reads as a real, structured certificate rather than a
+    // blank form, just without the outcome itself.
+    let rows = pg.items.map((app, i) => `<tr style="background:${i % 2 === 0 ? rowBg : ''}"><td style="height:${app._c * 28}px;vertical-align:middle">${esc(app.assetId)}</td><td style="height:${app._c * 28}px;vertical-align:middle;white-space:pre-wrap;word-break:break-word">${paid ? esc(app._d) : `<span class="a4-redact">${esc(app._d)}</span>`}</td><td>${esc(app.testInstrument)}</td><td>${fmtUK(app.date)}</td><td>${app.retestPeriod}</td><td>${fmtUK(app.nextTest)}</td><td>${paid ? `<span class="cbadge ${app.result === 'Pass' ? 'pass' : 'fail'}">${app.result}</span>` : `<span class="cbadge a4-redact">${app.result}</span>`}</td></tr>`).join('');
     for (let i = 0; i < empty; i++) rows += `<tr style="background:${(pg.items.length + i) % 2 === 0 ? rowBg : ''}"><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>`;
-    return `<div class="a4">${hdr}`
+    const watermark = paid ? '' : `<div class="a4-wm"><span>PAYMENT PENDING</span></div>`;
+    const redactNote = paid ? '' : `<div class="a4-redact-note" style="margin-top:3px">Full test descriptions and results are released once the related invoice is paid.</div>`;
+    return `<div class="a4">${watermark}${hdr}`
       + `<div style="flex-grow:1"><table class="a4t"><thead><tr>`
       + `<th style="background:${hc};color:${htc}">Asset ID</th><th style="background:${hc};color:${htc}">Description</th>`
       + `<th style="background:${hc};color:${htc}">Instrument</th><th style="background:${hc};color:${htc}">Test Date</th>`
       + `<th style="background:${hc};color:${htc}">Period</th><th style="background:${hc};color:${htc}">Next Due</th>`
       + `<th style="background:${hc};color:${htc}">Result</th>`
-      + `</tr></thead><tbody>${rows}</tbody></table></div>`
+      + `</tr></thead><tbody>${rows}</tbody></table>${redactNote}</div>`
       + `<div class="a4-foot"><div></div>`
       + `<div class="a4-fcontact"><span>📞 ${esc(profile.phone || '')}</span><span>✉ ${esc(profile.email || '')}</span>`
       + (profile.website ? `<span>🌐 ${esc(profile.website)}</span>` : '')
@@ -176,11 +192,11 @@ export function buildPatCertificatePages(cert, profile, engineerName) {
  * masthead, just for every page here instead of one band.
  * @param {typeof import('jspdf').jsPDF} jsPDF
  * @param {(el:HTMLElement, opts:object) => Promise<HTMLCanvasElement>} html2canvas
- * @param {{cert:object, profile:object, engineerName?:string}} p
+ * @param {{cert:object, profile:object, engineerName?:string, paid?:boolean}} p
  * @returns {Promise<import('jspdf').jsPDF>}
  */
-export async function renderPatCertificatePDF(jsPDF, html2canvas, { cert, profile, engineerName }) {
-  const pageHtmls = buildPatCertificatePages(cert, profile, engineerName);
+export async function renderPatCertificatePDF(jsPDF, html2canvas, { cert, profile, engineerName, paid = true }) {
+  const pageHtmls = buildPatCertificatePages(cert, profile, engineerName, paid);
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
   doc.setProperties({
     title: 'PAT Certificate ' + (cert.certNum || ''),

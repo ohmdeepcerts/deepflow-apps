@@ -13,7 +13,7 @@ import {
   renderCertMissing, setMissingFilter, renderExpiringPanel, clearExpiringFilters,
   toggleApplianceSection, addApplianceRow, updateApplianceField, removeApplianceRow,
   openBulkApplianceModal, submitBulkAppliances, generateCertPdf, extractAppliancesFromPhoto,
-  openRenewCertModal, submitRenewCert, sendCertToClient,
+  openRenewCertModal, submitRenewCert, sendCertToClient, regenerateCertsForPaidJob,
 } from './certs.js';
 import {
   getCurDirSection, switchDirSection, renderDir, renderDirSection, updateDirTabBadges,
@@ -7694,6 +7694,8 @@ async function markInvPaid(id){
   toast('Invoice marked as Paid','success');
   renderInvList();viewInv(id);updateBadges();
   generateAndStoreInvoicePDF(id).catch(e=>console.warn('[DeepFlow] PDF regen after markInvPaid failed',e));
+  const invJobId=inv.jobId||inv.linkedJobId;
+  if(invJobId) regenerateCertsForPaidJob(invJobId).catch(e=>console.warn('[DeepFlow] Cert release after markInvPaid failed',e));
 }
 async function markInvSent(id){
   const inv=await dGet('invoices',id);
@@ -12660,6 +12662,8 @@ async function savePayment(){
       await dPut('invoices',inv);
       _maybeSendPaymentReceipt(inv, totalPaid);
       toast('Invoice fully paid! Status updated.','success');
+      const invJobId=inv.jobId||inv.linkedJobId;
+      if(invJobId) regenerateCertsForPaidJob(invJobId).catch(e=>console.warn('[DeepFlow] Cert release after payment failed',e));
     } else {
       toast(`Payment of £${amount.toFixed(2)} recorded. Outstanding: £${(t.grand-totalPaid).toFixed(2)}`,'success');
     }
