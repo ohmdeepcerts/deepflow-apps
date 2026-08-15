@@ -26,7 +26,7 @@
 // read in another.
 
 import { escText as e, escAttr as ea } from '@ui';
-import { _d, dd, empty, go, ptype } from './main.js';
+import { _d, dd, empty, go, ptype, _blobUrlFor, toast } from './main.js';
 import { setRenewalData } from './request-wizard.js';
 import { payInvoice } from './invoice-pdf.js';
 
@@ -160,9 +160,14 @@ export function certCard(c,d){
   // Locked: never a working preview/download link, regardless of pdfUrl —
   // type and expiry date above still show (that's the "just the expiry
   // date" the popup explains), only the document itself is withheld.
+  // Passes only the cert id — previewCertPdf looks the record (and its
+  // signed pdf_url) up from _d itself, so the real storage link never
+  // gets written into this onclick attribute's HTML source at all, not
+  // just left unlinked. Same reasoning as cSafe above, applied to the
+  // unlocked case too.
   const actionBtn=locked
     ? `<button class="dl g" onclick="showCertLockedPopup(${ea(JSON.stringify(cSafe))})" title="Pay the linked invoice to unlock"><i data-lucide="lock" style="width:12px;height:12px"></i> Locked</button>`
-    : (pdfUrl?`<button class="dl" onclick="previewCertPdf(${ea(JSON.stringify(pdfUrl))},${ea(JSON.stringify(c))})">View Certificate</button>`:`<span class="dl g" style="cursor:default;opacity:.5;font-size:11px">No PDF</span>`);
+    : (pdfUrl?`<button class="dl" onclick="previewCertPdf(${ea(JSON.stringify(c.id))})">View Certificate</button>`:`<span class="dl g" style="cursor:default;opacity:.5;font-size:11px">No PDF</span>`);
   return`<div class="cc">
     <div class="cc-ic" style="background:${col}22;color:${col};border-color:${col}44"><i data-lucide="${ic}" style="width:20px;height:20px"></i></div>
     <div class="cc-body">
@@ -211,19 +216,42 @@ export function closeCertLockModal(ev){
 let _previewCert=null;
 export function getPreviewCert(){ return _previewCert; }
 
-export function previewCertPdf(url,certJson){
-  _previewCert=certJson||null;
+// Blob URL for whatever's currently open in the preview modal — revoked
+// on close and before loading the next one, so nothing outlives the view
+// it was created for. See _blobUrlFor in main.js for why this exists.
+let _previewBlobUrl=null;
+
+export async function previewCertPdf(certId){
+  const cert=(_d.certs||[]).find(c=>c.id===certId);
+  if(!cert||!cert.pdf_url){ toast('No PDF on file for this certificate'); return; }
+  _previewCert=cert;
   const shareBtn=document.getElementById('cp-pdf-share');
-  if(shareBtn) shareBtn.style.display=_previewCert?'inline-flex':'none';
-  document.getElementById('cp-pdf-frame').src=url;
-  document.getElementById('cp-pdf-open').href=url;
-  document.getElementById('cp-pdf-download').href=url;
+  if(shareBtn) shareBtn.style.display='inline-flex';
+  const frame=document.getElementById('cp-pdf-frame');
+  const openBtn=document.getElementById('cp-pdf-open');
+  const dlBtn=document.getElementById('cp-pdf-download');
+  frame.srcdoc='<body style="display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font:13px system-ui;color:#888">Loading…</body>';
+  openBtn.removeAttribute('href');
+  dlBtn.removeAttribute('href');
   document.getElementById('cp-pdf-overlay').classList.add('show');
+  if(_previewBlobUrl){ URL.revokeObjectURL(_previewBlobUrl); _previewBlobUrl=null; }
+  try{
+    const blobUrl=await _blobUrlFor(cert.pdf_url);
+    _previewBlobUrl=blobUrl;
+    frame.removeAttribute('srcdoc');
+    frame.src=blobUrl;
+    openBtn.href=blobUrl;
+    dlBtn.href=blobUrl;
+    dlBtn.setAttribute('download',(cert.certNum||cert.type||'certificate')+'.pdf');
+  }catch(err){
+    frame.srcdoc='<body style="display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font:13px system-ui;color:#c00">Could not load this certificate — please try again</body>';
+  }
 }
 export function closeCertPdfPreview(ev){
   if(ev&&ev.target!==document.getElementById('cp-pdf-overlay'))return;
   document.getElementById('cp-pdf-overlay').classList.remove('show');
   document.getElementById('cp-pdf-frame').src='';
+  if(_previewBlobUrl){ URL.revokeObjectURL(_previewBlobUrl); _previewBlobUrl=null; }
 }
 
 export function preFillRenewal(c){

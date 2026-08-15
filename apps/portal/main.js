@@ -61,6 +61,21 @@ function _fix(j){
 // here already relies on (daysDiff returns NaN, not null, for that case).
 export function dd(d){ const r=daysDiff(d); return Number.isNaN(r)?null:r; }
 export function fd(d){return d?new Date(d+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):''}
+
+// Certs and invoices (certs.js/invoice-pdf.js) preview/download PDFs by
+// fetching the signed storage URL and handing back a same-origin blob:
+// URL instead of using the real one directly — so the actual
+// supabase.co/storage/... link never appears in an iframe's src, a
+// download link's href, or a new-tab navigation the client could copy or
+// share. The blob is scoped to this tab and revoked once the viewer is
+// done with it, so there's nothing durable left to copy even by someone
+// digging through devtools mid-view.
+export async function _blobUrlFor(realUrl){
+  const res=await fetch(realUrl);
+  if(!res.ok) throw new Error('fetch failed: '+res.status);
+  const blob=await res.blob();
+  return URL.createObjectURL(blob);
+}
 function fgbp(n){return'£'+(n||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}
 // Thin wrappers — now in @business as portalVatRate()/calcLineItemsTotal(),
 // shared with the Office App's calcInvTotal(). Kept as their original

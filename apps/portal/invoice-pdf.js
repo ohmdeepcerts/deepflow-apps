@@ -13,9 +13,13 @@
 
 import { escText as e } from '@ui';
 import { SB_URL, SB_KEY } from '@core';
-import { _INV_STORE, toast, calcTotal, ptype, token } from './main.js';
+import { _INV_STORE, toast, calcTotal, ptype, token, _blobUrlFor } from './main.js';
 
 let _CURRENT_INV_ID=null;
+// Blob URL backing the currently-open preview iframe — revoked on close
+// and before loading the next one. See _blobUrlFor in main.js for why
+// the iframe never points at the real signed storage URL directly.
+let _previewBlobUrl=null;
 
 // Only landlord/agency portals can pay — matches create-checkout-session's
 // own authorization, which checks client_person_id/client_agency_id and
@@ -42,7 +46,7 @@ export async function payInvoice(id){
   }
 }
 
-export function previewInv(id){
+export async function previewInv(id){
   const inv=_INV_STORE.get(id);
   if(!inv){toast('Invoice not found');return;}
   _CURRENT_INV_ID=id;
@@ -61,14 +65,28 @@ export function previewInv(id){
   if(inv.pdf_url){
     bd.innerHTML=`
       ${_payable(inv)?`<div style="display:flex;justify-content:flex-end;margin-bottom:10px"><button id="pay-now-btn" class="dl" onclick="payInvoice('${id}')" style="background:var(--success,#16a34a)">Pay Now — £${calcTotal(inv).grand.toFixed(2)}</button></div>`:''}
-      <iframe src="${e(inv.pdf_url)}" style="width:100%;height:70vh;border:0;border-radius:var(--radius)" title="Invoice ${e(inv.number||'')}"></iframe>`;
+      <iframe id="inv-pdf-frame" src="" style="width:100%;height:70vh;border:0;border-radius:var(--radius)" title="Invoice ${e(inv.number||'')}"></iframe>`;
+    document.getElementById('pdf-modal').classList.add('show');
+    // Fetched and served as a blob: URL rather than pointed straight at
+    // the real signed storage link — see _blobUrlFor in main.js.
+    const frame=document.getElementById('inv-pdf-frame');
+    frame.srcdoc='<body style="display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font:13px system-ui;color:#888">Loading…</body>';
+    if(_previewBlobUrl){ URL.revokeObjectURL(_previewBlobUrl); _previewBlobUrl=null; }
+    try{
+      const blobUrl=await _blobUrlFor(inv.pdf_url);
+      _previewBlobUrl=blobUrl;
+      frame.removeAttribute('srcdoc');
+      frame.src=blobUrl;
+    }catch(err){
+      frame.srcdoc='<body style="display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font:13px system-ui;color:#c00">Could not load this invoice — please try again</body>';
+    }
   } else {
     bd.innerHTML=`<div style="text-align:center;padding:48px 20px;color:var(--text-secondary)">
       <div style="font-size:14px;font-weight:600;margin-bottom:6px;color:var(--text)">This invoice's PDF isn't ready yet</div>
       <div style="font-size:13px">Check back shortly, or contact your service provider if this doesn't update.</div>
     </div>`;
+    document.getElementById('pdf-modal').classList.add('show');
   }
-  document.getElementById('pdf-modal').classList.add('show');
 }
 
 export function downloadCurrentInv(){if(_CURRENT_INV_ID)downloadInvPDF(_CURRENT_INV_ID);}
@@ -77,6 +95,7 @@ export function closeModal(ev){
   if(ev&&ev.target!==ev.currentTarget)return;
   document.getElementById('pdf-modal').classList.remove('show');
   _CURRENT_INV_ID=null;
+  if(_previewBlobUrl){ URL.revokeObjectURL(_previewBlobUrl); _previewBlobUrl=null; }
 }
 
 export async function downloadInvPDF(id){
@@ -85,7 +104,16 @@ export async function downloadInvPDF(id){
   // Only ever the stored, office-generated PDF — see the comment in
   // previewInv for why there's no client-side fallback anymore.
   if(!inv.pdf_url){toast("This invoice's PDF isn't ready yet — please check back shortly");return;}
-  const a=document.createElement('a');
-  a.href=inv.pdf_url; a.target='_blank'; a.rel='noopener'; a.download=(inv.number||'invoice')+'.pdf';
-  document.body.appendChild(a); a.click(); a.remove();
+  // Downloaded via a fetched blob rather than a direct link to the real
+  // signed storage URL, so a download never navigates to (and can't leak)
+  // the actual supabase.co/storage/... link — see _blobUrlFor in main.js.
+  try{
+    const blobUrl=await _blobUrlFor(inv.pdf_url);
+    const a=document.createElement('a');
+    a.href=blobUrl; a.download=(inv.number||'invoice')+'.pdf';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(blobUrl),1500);
+  }catch(err){
+    toast('Could not download this invoice — please try again');
+  }
 }
