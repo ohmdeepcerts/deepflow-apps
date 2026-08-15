@@ -59,11 +59,32 @@ export function toDb(store, obj) {
   return o;
 }
 
+// Postgres `numeric` columns come back from PostgREST as JSON *strings*
+// (to preserve precision beyond what a JS float can hold safely) — fromDb()
+// otherwise only renames keys, so these arrive here still as strings.
+// Left uncoerced, summing them with `+` doesn't add — `+` only performs
+// numeric addition when BOTH sides are already numbers; with either side
+// a string it concatenates instead, so `0 + "30.00" + "30.00"` produces
+// the string "030.0030.00", and Number() of that is NaN. A single payment
+// happens to "work" by accident (`0 + "30.00"` parses fine as a lone
+// string), which is exactly why this went unnoticed until an invoice had
+// a second payment recorded against it — every totalPaid/amountPaid
+// calculation in the app (savePayment, markInvPaid, the invoice PDF's
+// Paid/Partial stamp, dashboard revenue, XLSX export) reduces over this
+// same field, so one fix here covers all of them instead of patching
+// each call site — and any future call site inherits the fix for free.
+const NUMERIC_FIELDS = {
+  payments: ['amount'],
+  invoices: ['vatAmount'],
+};
+
 export function fromDb(store, obj) {
   if (!obj) return obj;
-  const map = FROM_DB[store];
-  if (!map) return obj;
+  const map = FROM_DB[store] || {};
   const o = {};
   for (const [k, v] of Object.entries(obj)) o[map[k] || k] = v;
+  for (const f of NUMERIC_FIELDS[store] || []) {
+    if (typeof o[f] === 'string' && o[f] !== '') o[f] = Number(o[f]);
+  }
   return o;
 }
