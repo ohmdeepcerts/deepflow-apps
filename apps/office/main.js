@@ -8308,7 +8308,7 @@ async function renderDash(){
   const typeIco={job:'⊞',invoice:'◎',cert:'◈',person:'◉',info:'ℹ'};
   actEl.innerHTML=recent.length?recent.map(a=>`<div class="act-item">
     <span class="act-dot" style="background:var(--acc)"></span>
-    <span class="act-text">${a.msg}</span>
+    <span class="act-text">${escHtml(a.msg)}</span>
     <span class="act-time">${new Date(a.ts).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</span>
   </div>`).join(''):'<div style="color:var(--txt3);font-size:12px;padding:10px 0">No recent activity</div>';
 
@@ -12301,12 +12301,12 @@ async function showJobAudit(jobId){
     <div class="audit-item">
       <div class="audit-dot" style="background:${a.type==='warn'?'var(--red)':a.type==='sync'?'var(--acc)':a.type==='payment'?'var(--green)':'var(--acc)'}"></div>
       <div class="audit-msg">
-        <div>${typeIcon[a.type]||'•'} ${a.msg}</div>
+        <div>${typeIcon[a.type]||'•'} ${escHtml(a.msg)}</div>
         ${(a.oldVal||a.newVal)?`<div style="font-size:10px;color:var(--txt3);margin-top:2px">
-          ${a.oldVal?`<span style="color:var(--red)">"${String(a.oldVal).slice(0,50)}"</span>`:''}
-          ${a.newVal?`<span style="color:var(--green)"> → "${String(a.newVal).slice(0,50)}"</span>`:''}
+          ${a.oldVal?`<span style="color:var(--red)">"${escHtml(String(a.oldVal).slice(0,50))}"</span>`:''}
+          ${a.newVal?`<span style="color:var(--green)"> → "${escHtml(String(a.newVal).slice(0,50))}"</span>`:''}
         </div>`:''}
-        ${a.invNum?`<div style="font-size:10px;color:var(--acc);margin-top:1px">Invoice: ${a.invNum}</div>`:''}
+        ${a.invNum?`<div style="font-size:10px;color:var(--acc);margin-top:1px">Invoice: ${escHtml(a.invNum)}</div>`:''}
       </div>
       <div class="audit-ts">${new Date(a.ts).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
     </div>

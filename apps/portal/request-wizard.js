@@ -243,7 +243,15 @@ export async function submitReq(){
     sb('activity',{method:'POST',body:{
       id:'req-'+Date.now()+'-'+Math.random().toString(36).slice(2,6),
       msg:`Portal Request [${ref}] from ${_d.name}\n${detail}`,
-      type:'request',ts:Date.now()
+      // Must match the activity_client_requests RLS policy's WITH CHECK
+      // exactly (type = 'client_request') — anon can only insert into
+      // activity through this one policy. This was 'request', which that
+      // policy always rejected, so every portal-submitted job request
+      // silently never appeared in Office's Recent Activity feed at all
+      // (the primary write to engineer_requests, which Office's inbox
+      // actually reads, succeeded fine — only this secondary log entry
+      // was failing, caught nowhere since it's a fire-and-forget .catch).
+      type:'client_request',ts:Date.now()
     },prefer:'return=minimal'}).catch(()=>{});
 
     _renewalData=null;
