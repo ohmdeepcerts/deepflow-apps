@@ -1520,7 +1520,12 @@ async function doLogin(){
     }
 
     if(!profile){
-      _loginMsg('⚠️ Your account exists but has no profile. Ask your Admin to set up your profile in Settings → Users.');
+      // Genuinely no profile row, and a deactivated one, look identical
+      // from here — RLS (is_office() requires active=true) hides an
+      // inactive profile from this exact query, returning empty either
+      // way, with nothing left in the response to tell them apart. Wording
+      // covers both honestly instead of confidently naming the wrong one.
+      _loginMsg("⚠️ This account doesn't have access yet. If you're new, ask your Admin to set up your profile in Settings → Users. If you previously had access, it may have been removed — contact your Admin.");
       await _supaAuth.auth.signOut();
       return;
     }
@@ -13247,6 +13252,7 @@ const _patchCmdSearch = ()=>{
 // ── Entry point: check Supabase Auth session, then run init() ──
 (async function bootstrap(){
   const overlay=document.getElementById('pin-overlay');
+  let _noProfileOnRestore=false;
 
   // Password-reset link landing — checked before anything else touches
   // _supaAuth, since both cases below need to preempt the normal
@@ -13326,13 +13332,27 @@ const _patchCmdSearch = ()=>{
         },800);
         return;
       } else {
+        // No profile row visible to this account (RLS hides an inactive
+        // one identically to a genuinely-missing one, so which it is
+        // can't be told apart here — see the matching comment on the
+        // fresh-login path's version of this same message). Previously
+        // this branch just signed out silently with nothing shown at all,
+        // which is worse than the fresh-login path's confusing message:
+        // someone whose access was revoked, resetting their password and
+        // landing back here via session-restore, saw no explanation
+        // whatsoever for why they're suddenly looking at a blank login
+        // screen again.
         await _supaAuth.auth.signOut();
+        _noProfileOnRestore=true;
       }
     }
   }catch(e){console.warn('Session restore failed:',e);}
 
   // No session — show login screen with animation
   if(overlay)overlay.style.display='flex';
+  if(_noProfileOnRestore){
+    _loginMsg("⚠️ This account doesn't have access yet. If you're new, ask your Admin to set up your profile in Settings → Users. If you previously had access, it may have been removed — contact your Admin.");
+  }
   setTimeout(()=>{
     if(window._loginCanvasStart) window._loginCanvasStart();
     const f=document.getElementById('login-email');if(f)f.focus();
