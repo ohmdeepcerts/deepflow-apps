@@ -33,6 +33,14 @@ const _LONG_SIGNED_URL_SECONDS = 10*365*24*60*60;
 let _certTab='dash';
 let _ctPage=1,_ctblHidden=[];
 let _editCertId=null,_selCertTypes=new Set();
+// The manual form has no job-picker field, so jobId/jobNum travel through
+// as form-level state (same pattern as _editCertId) rather than a visible
+// input — set from `existing` in openCertForm, read back in saveCertForm.
+// Without this, renewCert()'s "new test cycle" draft (which goes through
+// this exact same form) had no way to carry the original cert's job link
+// forward at all, so every renewed certificate silently lost its jobId/
+// jobNum/engineer — see renewCert's own comment for the concrete trigger.
+let _formJobId=null,_formJobNum='';
 let _cremMode='email',_cremEmailLink='';
 // Working copy of the currently-open cert's appliance test log (asset ID,
 // description, instrument, date, retest period, calculated next-test date,
@@ -404,6 +412,8 @@ export async function editCertRecord(id){
 
 export function openCertForm(existing){
   _editCertId=existing?.id||null;
+  _formJobId=existing?.jobId||null;
+  _formJobNum=existing?.jobNum||'';
   _selCertTypes=new Set(existing?.type?[existing.type]:[]);
   _certAppliances=(existing?.appliances||[]).map(a=>({...a}));
   // Update title
@@ -490,6 +500,12 @@ export async function saveCertForm(){
     const c={
       id,
       address:addr, type,
+      // Carried through from openCertForm's `existing` (see _formJobId's
+      // own comment) rather than left for dPut's merge-duplicates upsert
+      // to implicitly preserve on an edit — renewCert's fresh-draft save
+      // is an INSERT, not an edit, so there's no existing row for that to
+      // fall back on; this is the one place these actually need setting.
+      jobId:_formJobId, jobNum:_formJobNum,
       issueDate:g('cf2-issue'), expiryDate:g('cf2-expiry'),
       certNum, landlord:g('cf2-landlord'),
       email:g('cf2-email'), phone:g('cf2-phone'),
@@ -1983,6 +1999,15 @@ export async function renewCert(certId,newStartAssetId){
   openCertForm({
     type:c.type, address:c.address, landlord:c.landlord, email:c.email, phone:c.phone,
     agent:c.agent, notes:c.notes,
+    // Previously omitted — a renewed cert is a fresh INSERT (see
+    // _formJobId's comment), not an edit of the original, so leaving
+    // these out meant every renewed certificate silently lost its job
+    // link and engineer, even though the cert it was renewed from had
+    // both. engineer flows through the normal cf2-engineer form field
+    // (openCertForm already populates that from `existing.engineer`);
+    // jobId/jobNum have no visible field, so they need the explicit
+    // _formJobId/_formJobNum path instead.
+    jobId:c.jobId, jobNum:c.jobNum, engineer:c.engineer,
     issueDate:today, expiryDate:localDateStr(expDate),
     appliances,
   });
