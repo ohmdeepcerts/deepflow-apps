@@ -73,9 +73,29 @@ export function toDb(store, obj) {
 // Paid/Partial stamp, dashboard revenue, XLSX export) reduces over this
 // same field, so one fix here covers all of them instead of patching
 // each call site — and any future call site inherits the fix for free.
+// Every `numeric` column any app actually reads back through this
+// repository — not just the two that had already been caught live.
+// Checked directly against the schema (`information_schema.columns`,
+// `data_type in ('numeric','decimal')`) rather than waiting for the next
+// one to surface as a bug report: jobs.price and expenses.cost had the
+// exact same unguarded `.reduce((s,x)=>s+x.price,0)` /
+// `s+e.cost` pattern as payments.amount did (apps/office/main.js's
+// dashboard revenue chart, apps/office/expenses.js's total-cost sum) —
+// both silently wrong on any day/list with more than one item, for the
+// identical reason. invoices.subtotal/total/paid_amount and
+// persons.hourly_rate/rate are real numeric columns too but are never
+// read through fromDb() anywhere in the app (subtotal/vat/total are
+// deliberately never sent or read back — see the comment at
+// apps/office/main.js's invoice-save call — always recomputed
+// client-side instead); overtime.hours/engineer_requests.hours are read,
+// but every existing call site already wraps them in Number(), so they
+// were never actually exposed to this bug. Left out rather than coerced
+// blind, since a column nothing reads can't have this bug regardless.
 const NUMERIC_FIELDS = {
   payments: ['amount'],
   invoices: ['vatAmount'],
+  jobs: ['price'],
+  expenses: ['cost'],
 };
 
 export function fromDb(store, obj) {
