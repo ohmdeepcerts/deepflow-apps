@@ -21,6 +21,19 @@ const corsHeaders = {
 // dropped, never signed.
 const EXPIRES_IN = 21600; // 6 hours — long enough for one portal visit, short enough that a copied link goes stale
 
+// A cert is locked until every invoice linked to its job is Paid — the same
+// rule apps/portal/certs.js's own _isCertLocked applies client-side to decide
+// whether to render a "Locked" button. That client-side check alone isn't
+// real enforcement (previewCertPdf is reachable directly from devtools,
+// bypassing whichever button rendered), so this is the actual gate: while
+// locked, the real signed URL is never handed to the browser in the first
+// place, here, regardless of which function the client calls afterward.
+function isCertLocked(cert: any, invoices: any[]): boolean {
+  if (!cert.jobid) return false;
+  const linked = invoices.filter((i) => i.jobid === cert.jobid || i.linkedjobid === cert.jobid);
+  return linked.length === 0 || !linked.every((i) => i.status === 'Paid');
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
@@ -36,20 +49,25 @@ Deno.serve(async (req) => {
 
     const { data: jobs } = await supabase.rpc('portal_get_jobs', { p_type: type, p_id: id });
     const jobIds = (jobs || []).map((j: any) => j.id);
+    const { data: invoices } = await supabase.rpc('portal_get_invoices', { p_type: type, p_id: id });
 
     const allowedPaths = new Set<string>();
+    const lockedPaths = new Set<string>();
     if (jobIds.length) {
       const { data: certs } = await supabase.rpc('portal_get_certs', { p_job_ids: jobIds });
-      for (const c of certs || []) if (c.pdf_path) allowedPaths.add(c.pdf_path);
+      for (const c of certs || []) {
+        if (!c.pdf_path) continue;
+        if (isCertLocked(c, invoices || [])) lockedPaths.add(c.pdf_path);
+        else allowedPaths.add(c.pdf_path);
+      }
       const { data: atts } = await supabase.rpc('portal_get_attachments', { p_job_ids: jobIds });
       for (const a of atts || []) if (a.storage_path) allowedPaths.add(a.storage_path);
     }
-    const { data: invoices } = await supabase.rpc('portal_get_invoices', { p_type: type, p_id: id });
     for (const inv of invoices || []) if (inv.pdf_path) allowedPaths.add(inv.pdf_path);
 
     const urls: Record<string, string | null> = {};
     for (const path of paths) {
-      if (typeof path !== 'string' || !allowedPaths.has(path)) { urls[path] = null; continue; }
+      if (typeof path !== 'string' || lockedPaths.has(path) || !allowedPaths.has(path)) { urls[path] = null; continue; }
       const { data, error } = await supabase.storage.from('deepflow').createSignedUrl(path, EXPIRES_IN);
       urls[path] = error ? null : data.signedUrl;
     }

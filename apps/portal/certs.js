@@ -223,7 +223,20 @@ let _previewBlobUrl=null;
 
 export async function previewCertPdf(certId){
   const cert=(_d.certs||[]).find(c=>c.id===certId);
-  if(!cert||!cert.pdf_url){ toast('No PDF on file for this certificate'); return; }
+  if(!cert){ toast('No PDF on file for this certificate'); return; }
+  // certCard() already hides this behind a "Locked" button when unpaid,
+  // but previewCertPdf is exposed on window (see main.js's Object.assign)
+  // like every other inline-onclick handler, so it's directly callable
+  // from devtools with any cert id — this re-checks the same lock state
+  // certCard used to decide which button to render, so calling it that
+  // way lands on the same locked popup instead of quietly fetching the
+  // real PDF. Checked BEFORE the pdf_url check below: the actual
+  // enforcement is server-side (portal-sign-url now refuses to sign an
+  // unpaid cert's path at all, so a locked cert's pdf_url is genuinely
+  // absent, not just unlinked) — if this ran after, a locked cert would
+  // hit the generic "No PDF on file" message instead of the real reason.
+  if(_isCertLocked(cert,_d)){ showCertLockedPopup(cert); return; }
+  if(!cert.pdf_url){ toast('No PDF on file for this certificate'); return; }
   _previewCert=cert;
   const shareBtn=document.getElementById('cp-pdf-share');
   if(shareBtn) shareBtn.style.display='inline-flex';
