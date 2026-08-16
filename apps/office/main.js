@@ -5092,13 +5092,26 @@ async function _resolveLandlordPerson(name, phone, email, addr, wa, notes){
   if(existing){
     const phoneConflict = phone && existing.phone && existing.phone.replace(/\s/g,'')!==phone.replace(/\s/g,'');
     const emailConflict = email && existing.email && existing.email.toLowerCase()!==email.toLowerCase();
-    if(phoneConflict || emailConflict){
+    // Matched by phone fallback (existing.name !== name is exactly how that
+    // path is reached — an exact name match would have matched on line
+    // 5089 already), so this is always a real name mismatch worth asking
+    // about, not just when it happens to accompany a phone/email conflict.
+    // Previously this fell through unconfirmed to the blind `existing.name
+    // = name` overwrite below — meaning simply reopening and resaving any
+    // job still holding a landlord's pre-rename name (its own snapshot,
+    // never updated by a Directory rename — renaming doesn't cascade to
+    // jobs at all, see savePerson) silently reverted a deliberate rename
+    // the moment that old job was saved for any unrelated reason, with no
+    // warning. A genuine rename should only ever happen through the
+    // Directory's own edit form, not as a side effect of saving a job.
+    const nameConflict = name && existing.name.toLowerCase()!==name.toLowerCase();
+    if(phoneConflict || emailConflict || nameConflict){
       let resolved=false;
       const choice = await new Promise(resolve=>{
         const finish=v=>{ if(resolved)return; resolved=true; resolve(v); };
         confirm2(
           'Same landlord, or someone new?',
-          `"${existing.name}" is already in your Directory${existing.phone?` — phone ${existing.phone}`:''}${existing.email?` — email ${existing.email}`:''}.\n\nThis job has different contact details on it${phone?` (phone ${phone})`:''}${email?` (email ${email})`:''}.\n\nIs this the same landlord (their number/email just changed), a different person who happens to share the name, or was it a typo?`,
+          `"${existing.name}" is already in your Directory${existing.phone?` — phone ${existing.phone}`:''}${existing.email?` — email ${existing.email}`:''}.\n\nThis job has different contact details on it${nameConflict?` (name "${name}")`:''}${phone?` (phone ${phone})`:''}${email?` (email ${email})`:''}.\n\nIs this the same landlord (their details just changed), a different person, or was it a typo on the job?`,
           ()=>finish('update'),
           ()=>setTimeout(()=>finish('cancel'),80),
           {okText:'Same person — update Directory', altText:'Different person — save as new', altAction:()=>finish('create')}
