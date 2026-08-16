@@ -424,6 +424,12 @@ export function openCertForm(existing){
   toggleApplianceSection();
   // Fill fields
   const s=id=>document.getElementById(id);
+  if(s('cf2-job')){
+    s('cf2-job').value=_formJobId?`${_formJobNum||''} — ${existing?.address||''}`:'';
+    if(s('cf2-job-sugg'))s('cf2-job-sugg').style.display='none';
+  }
+  if(s('cf2-job-linked'))s('cf2-job-linked').style.display=_formJobId?'block':'none';
+  if(s('cf2-job-linked-txt')&&_formJobId)s('cf2-job-linked-txt').textContent=`✓ Linked to Job ${_formJobNum||_formJobId}`;
   if(s('cf2-addr'))   s('cf2-addr').value=existing?.address||'';
   if(s('cf2-issue'))  s('cf2-issue').value=existing?.issueDate||TODAY();
   if(s('cf2-expiry')) s('cf2-expiry').value=existing?.expiryDate||'';
@@ -546,6 +552,67 @@ export async function saveCertForm(){
 }
 
 export function cancelCertForm(){switchCertTab('list');}
+
+// Job link — the only place a manually-added cert can get real auto-fill
+// from a job. Previously the "+ Add Cert" form had no way to reference a
+// job at all: its only "auto-fill" was suggesting values already typed
+// into OTHER past certs (updateCertAddrSugg/certContactSugg below), so
+// correcting or backfilling a cert for a specific job meant retyping
+// everything by hand, and the resulting cert had no jobId — unlike the
+// fully-automatic onJobComplete→createCertEntry path, which always links
+// (see main.js). Selecting a job here sets _formJobId/_formJobNum (read
+// by saveCertForm) and fills every field that path already auto-fills.
+export async function updateCertJobSugg(){
+  const inp=document.getElementById('cf2-job'); if(!inp)return;
+  const val=inp.value.toLowerCase(); const drop=document.getElementById('cf2-job-sugg'); if(!drop)return;
+  if(val.length<2){drop.style.display='none';return;}
+  const jobs=await dAll('jobs');
+  const matches=jobs.filter(j=>
+    (j.address||'').toLowerCase().includes(val) ||
+    (j.jobNum||'').toLowerCase().includes(val) ||
+    (j.landlordName||'').toLowerCase().includes(val) ||
+    (j.referrer||'').toLowerCase().includes(val)
+  ).sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,8);
+  if(!matches.length){
+    drop.innerHTML='<li style="padding:8px 12px;font-size:12px;color:var(--txt3)">No matching jobs</li>';
+    drop.style.display='block';
+    return;
+  }
+  drop.innerHTML=matches.map(j=>`<li onclick="certLinkJob('${j.id}')" style="padding:8px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border)">
+    <strong>${escHtml(j.jobNum||'—')}</strong> — ${escHtml(j.address||'')}
+    <div style="font-size:10px;color:var(--txt3)">${escHtml(j.landlordName||j.referrer||'')}${j.date?' · '+escHtml(j.date):''}</div>
+  </li>`).join('');
+  drop.style.display='block';
+}
+
+export async function certLinkJob(jobId){
+  const job=await dGet('jobs',jobId);
+  if(!job)return;
+  _formJobId=job.id;
+  _formJobNum=job.jobNum||'';
+  const s=id=>document.getElementById(id);
+  if(s('cf2-job'))s('cf2-job').value=`${job.jobNum||''} — ${job.address||''}`;
+  if(s('cf2-job-sugg'))s('cf2-job-sugg').style.display='none';
+  if(s('cf2-addr'))s('cf2-addr').value=job.address||'';
+  if(s('cf2-landlord'))s('cf2-landlord').value=job.referrer||job.landlordName||'';
+  // Same landlord→agency→agent precedence createCertEntry uses (main.js).
+  if(s('cf2-email'))s('cf2-email').value=job.landlordEmail||job.agencyEmail||job.agentEmail||'';
+  if(s('cf2-phone'))s('cf2-phone').value=job.landlordPhone||job.agencyPhone||job.agentPhone||'';
+  if(s('cf2-agent'))s('cf2-agent').value=job.agentName||'';
+  if(s('cf2-engineer'))s('cf2-engineer').value=job.engineer||'';
+  const linkedEl=s('cf2-job-linked'), linkedTxt=s('cf2-job-linked-txt');
+  if(linkedEl)linkedEl.style.display='block';
+  if(linkedTxt)linkedTxt.textContent=`✓ Linked to Job ${job.jobNum||job.id} — fields below auto-filled`;
+  toast('Details auto-filled from job','success');
+}
+
+export function certUnlinkJob(){
+  _formJobId=null; _formJobNum='';
+  const s=id=>document.getElementById(id);
+  if(s('cf2-job'))s('cf2-job').value='';
+  const linkedEl=s('cf2-job-linked');
+  if(linkedEl)linkedEl.style.display='none';
+}
 
 // Address autofill
 export async function updateCertAddrSugg(){

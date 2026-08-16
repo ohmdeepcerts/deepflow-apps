@@ -2864,6 +2864,14 @@ body.density-relaxed .jtable td{font-size:15px}
             <div class="cform-section">
               <div class="cform-section-title">📍 Property &amp; Dates</div>
               <div class="fg" style="position:relative;margin-bottom:10px">
+                <label class="fl">Link to Job (optional) <span style="font-weight:400;text-transform:none;font-size:10px;color:var(--acc)">auto-fills everything below</span></label>
+                <input type="text" id="cf2-job" class="fi" placeholder="Search by job #, address, or landlord…" oninput="updateCertJobSugg()" autocomplete="off">
+                <ul id="cf2-job-sugg" style="position:absolute;top:100%;left:0;right:0;background:var(--s1);border:1px solid var(--border);border-radius:0 0 8px 8px;z-index:100;list-style:none;padding:0;margin:0;display:none;max-height:200px;overflow-y:auto"></ul>
+                <div id="cf2-job-linked" style="display:none;margin-top:5px;font-size:11px;color:var(--green)">
+                  <span id="cf2-job-linked-txt"></span> <a href="#" onclick="event.preventDefault();certUnlinkJob()" style="color:var(--txt3);text-decoration:underline;margin-left:6px">unlink</a>
+                </div>
+              </div>
+              <div class="fg" style="position:relative;margin-bottom:10px">
                 <label class="fl">Property Address</label>
                 <input type="text" id="cf2-addr" class="fi" placeholder="Start typing…" oninput="updateCertAddrSugg()" autocomplete="off">
                 <ul id="cf2-addr-sugg" style="position:absolute;top:100%;left:0;right:0;background:var(--s1);border:1px solid var(--border);border-radius:0 0 8px 8px;z-index:100;list-style:none;padding:0;margin:0;display:none;max-height:160px;overflow-y:auto"></ul>
