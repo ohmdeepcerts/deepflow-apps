@@ -13986,6 +13986,250 @@ async function executeMerge(){
   }
 }
 
+// ── Agency / Agent Merge (separate from the persons merge above) ──
+// The persons merge picks its 2-3 records via card checkboxes
+// (togglePersonSelect/toggleBulkSelectMode), which only exist for the
+// Landlords/Subcontractors/All sections — Agency and Agent cards have no
+// bulk-select UI at all. Rather than build that out for two more
+// sections just for this, these use a plain two-dropdown picker instead:
+// duplicate agencies/agents are comparatively rare, so picking 2 by name
+// from a list is simpler than adding card-level multi-select everywhere.
+// Own state (window._entityMerge*) so this never touches window._merge*,
+// which the persons flow above still owns entirely, unchanged.
+const _ENTITY_MERGE_FIELDS = {
+  agencies: [
+    {key:'name',label:'Name'},{key:'phone',label:'Phone'},
+    {key:'email',label:'Email'},{key:'notes',label:'Notes'},
+  ],
+  agents: [
+    {key:'name',label:'Name'},{key:'phone',label:'Phone'},{key:'email',label:'Email'},
+  ],
+};
+
+async function openAgencyMergePicker(){
+  const all=await dAll('agencies');
+  if(all.length<2){toast('Need at least 2 agencies to merge','warn');return;}
+  _openEntityMergePicker('agencies',all,'Agency');
+}
+async function openAgentMergePicker(){
+  const all=await dAll('agents');
+  if(all.length<2){toast('Need at least 2 agents to merge','warn');return;}
+  _openEntityMergePicker('agents',all,'Agent');
+}
+
+function _openEntityMergePicker(store,all,label){
+  const existing=document.getElementById('merge-picker-overlay');
+  if(existing) existing.remove();
+  const opts=all.map(a=>`<option value="${escAttr(a.id)}">${escHtml(a.name||'Unnamed')}</option>`).join('');
+  const div=document.createElement('div');
+  div.id='merge-picker-overlay';
+  div.className='merge-overlay';
+  div.innerHTML=`
+    <div class="merge-modal" style="max-width:420px">
+      <div class="merge-modal-hd">
+        <h3>🔀 Merge ${label}s</h3>
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('merge-picker-overlay').remove()">✕ Cancel</button>
+      </div>
+      <div class="merge-modal-body">
+        <p style="font-size:12px;color:var(--txt2);margin:0 0 14px">Pick the two duplicate ${label.toLowerCase()} records to merge.</p>
+        <div class="fg" style="margin-bottom:10px"><label class="fl">First ${label}</label>
+          <select class="fs" id="merge-pick-a" style="width:100%">${opts}</select>
+        </div>
+        <div class="fg"><label class="fl">Second ${label}</label>
+          <select class="fs" id="merge-pick-b" style="width:100%">${opts}</select>
+        </div>
+      </div>
+      <div style="padding:16px 24px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end">
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('merge-picker-overlay').remove()">Cancel</button>
+        <button class="btn btn-warn btn-sm" onclick="confirmEntityMergePick('${store}')">Next →</button>
+      </div>
+    </div>`;
+  div.addEventListener('click',e=>{if(e.target===div)div.remove();});
+  document.body.appendChild(div);
+  // Default the second dropdown to a different record than the first,
+  // so "Next" works without the user having to change anything if they
+  // just want the two records already sitting first/second in the list.
+  const bSel=div.querySelector('#merge-pick-b');
+  if(bSel&&all.length>1) bSel.value=all[1].id;
+}
+
+async function confirmEntityMergePick(store){
+  const idA=document.getElementById('merge-pick-a')?.value;
+  const idB=document.getElementById('merge-pick-b')?.value;
+  if(!idA||!idB||idA===idB){toast('Pick two different records','warn');return;}
+  document.getElementById('merge-picker-overlay')?.remove();
+  const all=await dAll(store);
+  const people=[idA,idB].map(id=>all.find(x=>x.id===id)).filter(Boolean);
+  if(people.length<2){toast('Could not load selected records','error');return;}
+  _renderEntityMergeModal(store,people);
+}
+
+function _renderEntityMergeModal(store,people){
+  const existing=document.getElementById('entity-merge-overlay');
+  if(existing) existing.remove();
+  window._entityMergeStore=store;
+  window._entityMergePeople=people;
+  window._entityMergeSelections={};
+  const fields=_ENTITY_MERGE_FIELDS[store];
+  const label=store==='agencies'?'Agency':'Agent';
+
+  fields.forEach(f=>{
+    const bestIdx=people.map((p,i)=>({i,len:(p[f.key]||'').length})).sort((a,b)=>b.len-a.len)[0];
+    if(bestIdx&&bestIdx.len>0) window._entityMergeSelections[f.key]=bestIdx.i;
+  });
+
+  const div=document.createElement('div');
+  div.id='entity-merge-overlay';
+  div.className='merge-overlay';
+  div.innerHTML=`
+    <div class="merge-modal">
+      <div class="merge-modal-hd">
+        <h3>🔀 Merge 2 ${label}s</h3>
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('entity-merge-overlay').remove()">✕ Cancel</button>
+      </div>
+      <div class="merge-modal-body">
+        <p style="font-size:12px;color:var(--txt2);margin:0 0 14px">Pick the best value for each field. All jobs${store==='agencies'?', invoices':''} referencing either ${label.toLowerCase()} will move to the merged record.</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+          ${people.map((p,i)=>`
+            <div class="merge-person-col ${i===0?'master':''}">
+              <div style="font-family:var(--fh);font-weight:800;font-size:14px;margin-bottom:2px;color:var(--txt)">${escHtml(p.name||'Unnamed')}</div>
+              ${i===0?'<div style="font-size:9px;color:var(--acc);font-weight:700;margin-top:4px">★ MASTER (keep this ID)</div>':''}
+            </div>
+          `).join('')}
+        </div>
+        <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden">
+          ${fields.map(f=>`
+            <div class="merge-field-row">
+              <div class="merge-field-label">${f.label}</div>
+              ${people.map((p,i)=>`
+                <div class="merge-field-val ${window._entityMergeSelections[f.key]===i?'selected':''} ${!p[f.key]?'empty':''}"
+                     onclick="resolveEntityMergeField('${f.key}',${i})"
+                     data-field="${f.key}" data-idx="${i}">
+                  ${escHtml(p[f.key]||'(empty)')}
+                  <span class="pick-tag">PICKED</span>
+                </div>
+              `).join('')}
+            </div>
+          `).join('')}
+        </div>
+        <div class="merge-preview">
+          <div style="font-family:var(--fh);font-weight:800;font-size:13px;margin-bottom:8px;color:var(--green)">✓ Preview of merged record</div>
+          <div id="entity-merge-preview-body" style="font-size:12px;color:var(--txt);line-height:1.8"></div>
+        </div>
+      </div>
+      <div style="padding:16px 24px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;flex-shrink:0">
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('entity-merge-overlay').remove()">Cancel</button>
+        <button class="btn btn-warn btn-sm" onclick="executeEntityMerge()">🔀 Execute Merge</button>
+      </div>
+    </div>`;
+  div.addEventListener('click',e=>{if(e.target===div)div.remove();});
+  document.body.appendChild(div);
+  _updateEntityMergePreview();
+}
+
+function resolveEntityMergeField(fieldName,personIndex){
+  window._entityMergeSelections[fieldName]=personIndex;
+  document.querySelectorAll(`#entity-merge-overlay .merge-field-val[data-field="${fieldName}"]`).forEach(el=>{
+    el.classList.toggle('selected',parseInt(el.dataset.idx)===personIndex);
+  });
+  _updateEntityMergePreview();
+}
+
+function _updateEntityMergePreview(){
+  const store=window._entityMergeStore;
+  const people=window._entityMergePeople||[];
+  const sel=window._entityMergeSelections;
+  const body=document.getElementById('entity-merge-preview-body');
+  if(!body||!people.length||!store)return;
+  const fields=_ENTITY_MERGE_FIELDS[store];
+  const lines=fields.map(f=>{
+    const idx=sel[f.key];
+    const v=(idx!==undefined&&people[idx])?people[idx][f.key]:null;
+    return v?`<strong>${escHtml(f.label)}:</strong> ${escHtml(v)}`:null;
+  }).filter(Boolean);
+  body.innerHTML=lines.join('<br>');
+}
+
+async function executeEntityMerge(){
+  const store=window._entityMergeStore;
+  const people=window._entityMergePeople;
+  const sel=window._entityMergeSelections;
+  if(!store||!people||people.length<2)return;
+  const label=store==='agencies'?'Agency':'Agent';
+  const master=people[0];
+  const loserId=people[1].id;
+  const fields=_ENTITY_MERGE_FIELDS[store];
+
+  const mergedData={...master};
+  fields.forEach(f=>{
+    const idx=sel[f.key];
+    if(idx!==undefined&&people[idx]&&people[idx][f.key]) mergedData[f.key]=people[idx][f.key];
+  });
+  const chosenName=mergedData.name||master.name;
+  const chosenPhone=mergedData.phone||master.phone;
+  const chosenEmail=mergedData.email||master.email;
+
+  if(!confirm(`Merge these 2 ${label.toLowerCase()}s into "${chosenName}"?\n\nThis will:\n• Move all jobs${store==='agencies'?'/invoices':''} referencing either one to "${chosenName}"\n• Delete the other record\n\nThis cannot be undone.`)) return;
+
+  try{
+    toast('Merging records…','info',8000);
+    await dPut(store,mergedData);
+
+    const allNames=people.map(p=>p.name).filter((n,i,arr)=>n&&arr.indexOf(n)===i);
+    const [allJobs,allInvs]=await Promise.all([dAll('jobs'),dAll('invoices')]);
+
+    // Neither agencies nor agents have a jobs/invoices FK column the way
+    // persons does (clientId/clientAgencyId cover landlords and agencies
+    // booked directly, but there's no agentId anywhere in the schema —
+    // agent references are name/phone/email strings only) — matching
+    // exactly what the persons merge above already does for its own
+    // non-FK fields (referrer, landlordPhone, landlordEmail, ...), not a
+    // new limitation introduced here.
+    const jobsToUpdate=[];
+    for(const j of allJobs){
+      let changed=false;
+      if(store==='agencies'){
+        if(allNames.includes(j.agencyName)){ j.agencyName=chosenName; changed=true; }
+        if(j.clientAgencyId===loserId){ j.clientAgencyId=master.id; changed=true; }
+        if(j.agencyPhone&&people.some(p=>p.phone&&j.agencyPhone===p.phone)){ j.agencyPhone=chosenPhone; changed=true; }
+        if(j.agencyEmail&&people.some(p=>p.email&&j.agencyEmail===p.email)){ j.agencyEmail=chosenEmail; changed=true; }
+      } else {
+        if(allNames.includes(j.agentName)){ j.agentName=chosenName; changed=true; }
+        if(j.agentPhone&&people.some(p=>p.phone&&j.agentPhone===p.phone)){ j.agentPhone=chosenPhone; changed=true; }
+        if(j.agentEmail&&people.some(p=>p.email&&j.agentEmail===p.email)){ j.agentEmail=chosenEmail; changed=true; }
+      }
+      if(changed) jobsToUpdate.push(j);
+    }
+    await _concurrentEach(jobsToUpdate,j=>dPut('jobs',j));
+
+    const invsToUpdate=[];
+    for(const inv of allInvs){
+      let changed=false;
+      if(store==='agencies'){
+        if(inv.clientAgencyId===loserId){ inv.clientAgencyId=master.id; inv.agencyName=chosenName; changed=true; }
+        if(allNames.includes(inv.agencyName)){ inv.agencyName=chosenName; changed=true; }
+      } else {
+        if(allNames.includes(inv.agentName)){ inv.agentName=chosenName; changed=true; }
+        if(inv.agentEmail&&people.some(p=>p.email&&inv.agentEmail===p.email)){ inv.agentEmail=chosenEmail; changed=true; }
+      }
+      if(changed) invsToUpdate.push(inv);
+    }
+    await _concurrentEach(invsToUpdate,inv=>dPut('invoices',inv));
+
+    await dDel(store,loserId);
+
+    const overlay=document.getElementById('entity-merge-overlay');
+    if(overlay) overlay.remove();
+    renderDirSection(getCurDirSection());
+    updateDirTabBadges();
+    await logActivity(`Merged 2 ${label.toLowerCase()}s into "${chosenName}"`,'person',{masterId:master.id,jobs:jobsToUpdate.length,invs:invsToUpdate.length});
+    toast(`✅ Merged into "${chosenName}"\nJobs: ${jobsToUpdate.length} · Invoices: ${invsToUpdate.length} updated`,'success',6000);
+  }catch(e){
+    console.error('[DeepFlow] Entity merge failed:',e);
+    toast('Merge failed: '+e.message,'error',5000);
+  }
+}
+
 // ── Portal Invite Modal (v4 — compact "visiting card" matching the app's
 //    own navy lock-screen background, left = DeepFlow advertisement,
 //    right = the client's personal invitation) ──
@@ -14791,6 +15035,7 @@ function escCsv(str){ return String(str||'').replace(/"/g,'""'); }
 // here). Preserves exactly the global availability each already had.
 Object.assign(window, {
   df, showAddEngineerModal, closeAddEngineerModal, submitAddEngineer,
+  openAgencyMergePicker, openAgentMergePicker, confirmEntityMergePick, resolveEntityMergeField, executeEntityMerge,
   enablePhoneLogin, submitEnablePhoneLogin, engineerResetPin, engineerForceLogout, engineerGrantAccess, engineerRevokeAccess,
   engineerChangePhone, submitEngineerChangePhone, _reactivateEngineer, _confirmNewDespiteCollision, _reactivateInCollision,
   _addLiveItem, _copyJobDesc, _copyPortalLink, _editEngFromDeep, _emailPortalShare, _moveJobOrder, _removeLiveItem, _renderEngDeepJobsList,
