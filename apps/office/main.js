@@ -3229,6 +3229,15 @@ async function createCertEntry(ct,expiry,certNum,issueDate,noExpiry){
     address:_pendCertJob.address,
     type:ct.name,
     landlord:_pendCertJob.referrer||_pendCertJob.landlordName||'',
+    // Same landlord→agency precedence _maybeEmailCertReady already falls
+    // back through when a cert's own email is blank — applied here too so
+    // the cert record itself carries it, instead of relying on that
+    // fallback every time. Previously left blank even though the job
+    // always has this, forcing office to retype contact details that were
+    // already on file the moment the cert appeared in the list.
+    email:_pendCertJob.landlordEmail||_pendCertJob.agencyEmail||_pendCertJob.agentEmail||'',
+    phone:_pendCertJob.landlordPhone||_pendCertJob.agencyPhone||_pendCertJob.agentPhone||'',
+    agent:_pendCertJob.agentName||'',
     issueDate:issueDate||TODAY(),
     expiryDate:expiry||'',
     certNum:autoNum,
