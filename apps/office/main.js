@@ -449,13 +449,11 @@ async function loadSettings(){
       const localUsers=JSON.parse(localStorage.getItem('df_setting_users')||'[]');
       // Managers cannot see Admin accounts
     const visibleUsers = (_appUser?.role==='Manager')
-      ? sbOffice.filter(su=>su.role!=='admin' && !PROTECTED_ADMINS.includes((su.email||'').toLowerCase()))
+      ? sbOffice.filter(su=>su.role!=='admin')
       : sbOffice;
     S.users=visibleUsers.map(su=>{
         const local=localUsers.find(u=>u._sbId===su.id||u.name===su.name)||{};
-        const isProtected=PROTECTED_ADMINS.includes((su.email||'').toLowerCase());
-        // Protected admins are ALWAYS Admin regardless of what's in DB or local cache
-        const role=isProtected?'Admin':su.role==='admin'?'Admin':su.role==='manager'?'Manager':su.role==='viewer'?'Viewer':su.role==='engineer'?'Engineer':'Staff';
+        const role=su.role==='admin'?'Admin':su.role==='manager'?'Manager':su.role==='viewer'?'Viewer':su.role==='engineer'?'Engineer':'Staff';
         const isAdmin=role==='Admin'||role==='Manager';
         return {
           id:su.id, _sbId:su.id, name:su.name, email:su.email||'', pin:su.pin||'', role,
@@ -1503,9 +1501,6 @@ async function doLogin(){
     const authUser = authData.user;
     if(!authUser){_loginMsg('❌ Login failed — no user returned');return;}
 
-    // EMERGENCY ADMINS defined globally above
-    const isEmergencyAdmin = EMERGENCY_ADMINS.includes(email);
-
     // Step 2: Load profile from our users table using auth UID
     let profile = null;
     try{
@@ -1521,43 +1516,6 @@ async function doLogin(){
           _sb(`users?id=eq.${profile.id}`,{method:'PATCH',body:{auth_id:authUser.id},prefer:'return=minimal'}).catch(()=>{});
         }
       }catch(e){ console.warn('[DeepFlow]', e); }
-    }
-
-    // EMERGENCY FALLBACK — if no profile found but email is a protected admin
-    // create a temporary in-memory admin profile and log them in
-    let emergencyMode = false;
-    if(!profile && isEmergencyAdmin){
-      emergencyMode = true;
-      profile = {
-        id: authUser.id,
-        auth_id: authUser.id,
-        name: 'Mandeep',
-        email: email,
-        role: 'admin',
-        active: true,
-        can_edit: true, can_delete: true, can_invoice: true, can_finance: true,
-        see_landlord: true, see_landlord_phone: true, see_agent: true,
-        see_contact: true, see_price: true
-      };
-      // Try to restore the profile row in Supabase automatically
-      _sb('users',{method:'POST',body:{
-        auth_id: authUser.id,
-        name: 'Mandeep',
-        email: email,
-        role: 'admin',
-        active: true,
-        can_edit: true, can_delete: true, can_invoice: true, can_finance: true,
-        see_landlord: true, see_landlord_phone: true, see_agent: true,
-        see_contact: true, see_price: true
-      },prefer:'return=minimal'}).catch(()=>{});
-    }
-
-    // If profile found but role was changed — force admin for protected emails
-    if(profile && isEmergencyAdmin && profile.role !== 'admin'){
-      emergencyMode = true;
-      profile.role = 'admin';
-      // Restore correct role in Supabase
-      _sb(`users?email=eq.${encodeURIComponent(email)}`,{method:'PATCH',body:{role:'admin',active:true},prefer:'return=minimal'}).catch(()=>{});
     }
 
     if(!profile){
@@ -1605,11 +1563,7 @@ async function doLogin(){
     if(window._loginCanvasStop)window._loginCanvasStop();
     applyUserPermissions();
     _refreshAdminNavVisibility(); // Show/hide admin-only nav items
-    if(emergencyMode){
-      setTimeout(()=>toast('⚠️ Emergency admin access used — profile auto-restored. Check Settings → Team.','warn',8000),1000);
-    } else {
-      toast(`👋 Welcome, ${_appUser.name}!`,'success');
-    }
+    toast(`👋 Welcome, ${_appUser.name}!`,'success');
     // NOW reload settings from Supabase — user is authenticated, RLS passes
     // This makes every computer always get the latest settings on login
     _loadSettingsFromDb().then(loaded=>{
@@ -8516,8 +8470,7 @@ function renderSettings(){
     const isManager=u.role==='Manager';
     const roleColors={Admin:'rgba(245,166,35,.06)',Manager:'rgba(79,143,255,.06)',Staff:'',Viewer:'rgba(168,85,247,.06)'};
     const roleIcons={Admin:'👑',Manager:'🏢',Staff:'📋',Viewer:'👁'};
-    const isProtectedAdmin = PROTECTED_ADMINS.includes((u.email||'').toLowerCase());
-    const canDelete=isCurrentAdmin&&!isProtectedAdmin&&!(u.name===(_appUser?.name));
+    const canDelete=isCurrentAdmin&&!(u.name===(_appUser?.name));
     return `<tr style="background:${roleColors[u.role]||''}">
     <td>
       <div style="display:flex;align-items:center;gap:6px">
@@ -8527,7 +8480,7 @@ function renderSettings(){
     </td>
     <td><input class="fi" type="password" value="${u.pin||''}" style="padding:4px 6px;width:80px" placeholder="••••" maxlength="6" onchange="S.users[${i}].pin=this.value"></td>
     <td>
-      <select class="fs" style="padding:4px 6px;font-size:12px" onchange="changeUserRole(${i},this.value)" ${!isCurrentAdmin||isProtectedAdmin?'disabled title="'+(isProtectedAdmin?'Protected admin — cannot be changed':'Only Admins can change roles')+'"':u.name===_appUser?.name&&u.role==='Admin'?'disabled title="Cannot change your own admin role"':''}>
+      <select class="fs" style="padding:4px 6px;font-size:12px" onchange="changeUserRole(${i},this.value)" ${!isCurrentAdmin?'disabled title="Only Admins can change roles"':u.name===_appUser?.name&&u.role==='Admin'?'disabled title="Cannot change your own admin role"':''}>
         <option ${u.role==='Admin'?'selected':''} value="Admin">👑 Admin</option>
         <option ${u.role==='Manager'?'selected':''} value="Manager">🏢 Manager</option>
         <option ${u.role==='Finance'?'selected':''} value="Finance">💰 Finance</option>
@@ -8535,7 +8488,6 @@ function renderSettings(){
         <option ${u.role==='Viewer'?'selected':''} value="Viewer">👁 Viewer</option>
         <option ${u.role==='Engineer'?'selected':''} value="Engineer">🔧 Engineer</option>
       </select>
-      ${isProtectedAdmin?'<span style="font-size:9px;color:var(--acc);font-weight:700;margin-left:4px">🔐</span>':''}
     </td>
     ${isAdmin
       ? `<td colspan="10" style="text-align:center;font-size:11px;padding:4px 12px"><span style="color:var(--acc);font-weight:700">👑 Admin — Full access including Settings, Users, all data. Cannot be changed by Managers.</span></td>`
@@ -9273,10 +9225,6 @@ function addPropRow(){S.properties=S.properties||[];S.properties.push({id:uid(),
 
 // Write all S.users to Supabase users table so every device sees them on next load
 // Immediately delete a user from Supabase and S.users
-// Protected admin emails — these can NEVER be removed or demoted
-const PROTECTED_ADMINS = ['mandeep@gbelectricals.co.uk', 'mandeepdynamics@gmail.com'];
-const EMERGENCY_ADMINS = ['mandeepdynamics@gmail.com', 'mandeep@gbelectricals.co.uk'];
-
 async function changeUserRole(i, newRole){
   if(_appUser?.role !== 'Admin' && _appUser?.role !== 'Manager'){
     toast('❌ Only Admins or Managers can change roles','error');
@@ -9284,12 +9232,6 @@ async function changeUserRole(i, newRole){
   }
   const u = S.users[i];
   if(!u) return;
-
-  // Block demotion of protected admins
-  if(PROTECTED_ADMINS.includes((u.email||'').toLowerCase()) && newRole !== 'Admin'){
-    toast('❌ This admin account is permanently protected and cannot be demoted','error');
-    renderSettings(); return;
-  }
 
   // Prevent self-demotion
   if(u.name === _appUser?.name && newRole !== 'Admin'){
@@ -9322,10 +9264,6 @@ async function deleteUser(i){
   }
   const u=S.users[i];
   if(!u) return;
-  if(PROTECTED_ADMINS.includes((u.email||'').toLowerCase())){
-    toast('❌ This account is permanently protected and cannot be removed','error');
-    return;
-  }
   if(u.name===_appUser?.name){ toast('❌ You cannot delete your own account','error'); return; }
   if(!confirm(`Remove user "${u.name}" (${u.role})?\n\nThis will immediately delete them from Supabase. They will not be able to log in.`)) return;
   const statusEl=document.getElementById('user-sync-status');
@@ -13320,7 +13258,6 @@ const _patchCmdSearch = ()=>{
     const {data:{session}} = await _supaAuth.auth.getSession();
     if(session?.user){
       const email=(session.user.email||'').toLowerCase();
-      const isEmergencyAdmin=EMERGENCY_ADMINS.includes(email);
 
       // Load profile — no active filter (was blocking valid users)
       let profile=null;
@@ -13332,17 +13269,6 @@ const _patchCmdSearch = ()=>{
         if(profile){
           _sb(`users?id=eq.${profile.id}`,{method:'PATCH',body:{auth_id:session.user.id},prefer:'return=minimal'}).catch(()=>{});
         }
-      }
-
-      // Emergency admin fallback — always get in even if profile missing
-      if(!profile && isEmergencyAdmin){
-        profile={id:session.user.id,auth_id:session.user.id,name:'Mandeep',email,role:'admin',active:true,can_edit:true,can_delete:true,can_invoice:true,can_finance:true,see_landlord:true,see_landlord_phone:true,see_agent:true,see_contact:true,see_price:true};
-        _sb('users',{method:'POST',body:{auth_id:session.user.id,name:'Mandeep',email,role:'admin',active:true,can_edit:true,can_delete:true,can_invoice:true,can_finance:true,see_landlord:true,see_landlord_phone:true,see_agent:true,see_contact:true,see_price:true},prefer:'return=minimal'}).catch(()=>{});
-      }
-      // Force correct role for protected admins
-      if(profile && isEmergencyAdmin && profile.role!=='admin'){
-        profile.role='admin';
-        _sb(`users?email=eq.${encodeURIComponent(email)}`,{method:'PATCH',body:{role:'admin',active:true},prefer:'return=minimal'}).catch(()=>{});
       }
 
       if(profile){
