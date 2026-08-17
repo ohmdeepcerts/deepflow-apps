@@ -4160,6 +4160,67 @@ function extractPostcode(address){
   return m ? m[1].toUpperCase().replace(/\s+/g,' ').trim() : '';
 }
 
+// ── Duplicate-property warning ──
+// Not silent auto-merging (too risky — could wrongly fold two genuinely
+// different buildings into one) and not a hard block (a real new property
+// that happens to score high against an old one must still be saveable) —
+// a confirm showing the existing property's most recent job and cert status
+// so office staff can actually tell, instead of the app just dumbly
+// creating a second property for a typo. Postcode (already extracted into
+// jobs.postcode on every save via extractPostcode) is the primary signal
+// since it's far more reliable than the free-text address string; fuzzyScore
+// — the same scorer the address autocomplete already uses — is the
+// fallback when postcode isn't available on one side, with postcode
+// mismatch (when both sides have one) used to suppress false positives
+// between two different streets that just happen to read similarly.
+async function _checkDuplicateProperty(addr){
+  const key=_normAddr(addr);
+  const postcode=extractPostcode(addr);
+  await _refreshAllProps();
+  if(allProps.some(p=>_normAddr(p.address)===key)) return{proceed:true}; // already the same property, nothing to ask
+  // Score on the normalized strings, not the raw ones — fuzzyScore's greedy
+  // single-pass subsequence match is direction-sensitive to WHERE punctuation
+  // falls (a comma right after the house number derails it far more than one
+  // later in the string), so comparing raw strings can score a real duplicate
+  // very differently depending on which address happened to be typed first
+  // vs already on file. Comparing the punctuation-stripped forms fixes that.
+  let candidate=null;
+  if(postcode) candidate=allProps.find(p=>p.postcode&&p.postcode===postcode&&fuzzyScore(key,_normAddr(p.address))>0.4);
+  if(!candidate){
+    const scored=allProps
+      .map(p=>({p,s:fuzzyScore(key,_normAddr(p.address))}))
+      .filter(r=>r.s>0.6&&(!postcode||!r.p.postcode||r.p.postcode===postcode))
+      .sort((a,b)=>b.s-a.s);
+    candidate=scored[0]?.p||null;
+  }
+  if(!candidate) return{proceed:true};
+  const jobsHere=[...(candidate._jobs||[])].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const recent=jobsHere[0];
+  const allCerts=await dAll('certs');
+  const certsHere=allCerts.filter(c=>_normAddr(c.address||'')===_normAddr(candidate.address));
+  let msg=`A similar property already exists:\n"${candidate.address}"\n`;
+  if(recent){
+    msg+=`\nLast job: ${recent.date||'—'} · ${recent.trade||'—'} · ${recent.status||'—'}`;
+    if(recent.description) msg+=`\nNotes: ${recent.description.slice(0,140)}`;
+  }
+  if(certsHere.length){
+    msg+='\n\nCertificates on file:\n'+certsHere.map(c=>{
+      const st=calcCertStatus(c);
+      return`• ${c.type||'—'}: ${st.label}${c.expiryDate?' ('+c.expiryDate+')':''}`;
+    }).join('\n');
+  }
+  msg+='\n\nIs this the SAME property (just typed a bit differently), or a genuinely different one?';
+  return new Promise(resolve=>{
+    confirm2(
+      '⚠️ Possible duplicate property',
+      msg,
+      ()=>resolve({proceed:true,useExisting:true,existingAddress:candidate.address}),
+      ()=>resolve({proceed:false}),
+      {okText:'Same property — use existing',altText:'Different property — continue',altAction:()=>resolve({proceed:true,useExisting:false})}
+    );
+  });
+}
+
 // Module-level lock, not the button-disable at line ~3963 -- that only
 // fires after two awaits (dGet for the existing job, nextJobNum for a new
 // one), so a fast double-click could re-enter and race past both before
@@ -4170,7 +4231,7 @@ async function saveJob(){
   if(_jobSaving){ toast('Already saving, please wait…','info',1500); return; }
   _jobSaving=true;
   try{
-  const addr=document.getElementById('jf-addr').value.trim();
+  let addr=document.getElementById('jf-addr').value.trim();
   if(!addr){toast('Address is required','error');return;}
   const desc=document.getElementById('jf-desc').value.trim();
   autoDetectCertTypes(desc);
@@ -4180,6 +4241,21 @@ async function saveJob(){
     if(ct) tradeVal=ct.name;
   }
   const isNew=!editJid;
+  // Only for brand-new jobs — editing an existing job's own address isn't
+  // a duplicate of itself, and duplicateJob() (deliberate "copy to today")
+  // goes through dPut() directly, bypassing this on purpose.
+  if(isNew){
+    const _dup=await _checkDuplicateProperty(addr);
+    if(!_dup.proceed){
+      const btn0=document.querySelector('#mo-job .modal-actions .btn-acc');
+      if(btn0){btn0.disabled=false;btn0.textContent='Save Job';}
+      return;
+    }
+    if(_dup.useExisting){
+      addr=_dup.existingAddress;
+      document.getElementById('jf-addr').value=addr;
+    }
+  }
   const existingJob=editJid?await dGet('jobs',editJid):null;
   // If this job is linked to a multi-item invoice, the invoice is the single
   // source of truth for price/description (openJobModal locks these fields
@@ -4455,7 +4531,14 @@ async function deleteCurrentJob(){
 // This derives the real list from distinct job addresses and merges in any
 // manual entries by normalized address, so type/beds/notes overrides still
 // work — a manual entry with no matching job still shows too.
-function _normAddr(a){ return (a||'').trim().toLowerCase().replace(/\s+/g,' '); }
+// Strips commas/periods too, not just whitespace — "130 Woodlands Road,
+// Ilford, IG1 1JP" and "130 Woodlands Road Ilford IG1 1JP" are the same
+// property typed two different ways and must collapse to one property key,
+// not silently create a second. Deliberately doesn't try to handle missing
+// words (e.g. a dropped county name) — that's not a punctuation difference,
+// it needs the fuzzy duplicate-property check in saveJob() instead, not a
+// stricter exact-match key that risks merging two genuinely different streets.
+function _normAddr(a){ return (a||'').trim().toLowerCase().replace(/[,.]/g,' ').replace(/\s+/g,' ').trim(); }
 
 function _deriveProperties(jobs,manualProps){
   const byAddr=new Map();
