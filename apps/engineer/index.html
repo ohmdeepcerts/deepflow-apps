@@ -561,6 +561,50 @@ input:checked + .mcb-slider:before{transform:translateX(23px);background:#f5a623
     </div>
   </div>
 
+  <!-- MORE MENU SHEET -->
+  <div id="more-menu-sheet" style="display:none;position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.6)" onclick="if(event.target===this)closeMoreMenu()">
+    <div style="position:absolute;bottom:0;left:0;right:0;background:var(--s1);border-radius:20px 20px 0 0;padding:20px 20px 40px;box-shadow:0 -8px 40px rgba(0,0,0,.4)">
+      <div style="width:36px;height:4px;background:var(--border2);border-radius:2px;margin:0 auto 20px"></div>
+      <div style="font-size:17px;font-weight:800;margin-bottom:16px">More</div>
+      <div onclick="goMoreTab('requests')" style="display:flex;align-items:center;gap:14px;padding:14px 4px;cursor:pointer;border-bottom:1px solid var(--border)">
+        <span style="font-size:22px">📆</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:14px;font-weight:700">My Requests</div>
+          <div style="font-size:11px;color:var(--txt3)">Overtime &amp; time-off — submit and track</div>
+        </div>
+        <span class="nav-badge" id="badge-requests-menu" style="display:none;position:static"></span>
+      </div>
+      <div onclick="goMoreTab('map')" style="display:flex;align-items:center;gap:14px;padding:14px 4px;cursor:pointer;border-bottom:1px solid var(--border)">
+        <span style="font-size:22px">🗺</span>
+        <div>
+          <div style="font-size:14px;font-weight:700">Job Map</div>
+          <div style="font-size:11px;color:var(--txt3)">Today's jobs, your route, all jobs</div>
+        </div>
+      </div>
+      <div onclick="goMoreTab('dash')" style="display:flex;align-items:center;gap:14px;padding:14px 4px;cursor:pointer;border-bottom:1px solid var(--border)">
+        <span style="font-size:22px">📊</span>
+        <div>
+          <div style="font-size:14px;font-weight:700">My Stats</div>
+          <div style="font-size:11px;color:var(--txt3)">Jobs done, areas covered, certificates</div>
+        </div>
+      </div>
+      <div onclick="goMoreTab('tools')" style="display:flex;align-items:center;gap:14px;padding:14px 4px;cursor:pointer;border-bottom:1px solid var(--border)">
+        <span style="font-size:22px">🔧</span>
+        <div>
+          <div style="font-size:14px;font-weight:700">Tools</div>
+          <div style="font-size:11px;color:var(--txt3)">Calculators &amp; On My Way messages</div>
+        </div>
+      </div>
+      <div onclick="goMoreTab('guide')" style="display:flex;align-items:center;gap:14px;padding:14px 4px;cursor:pointer;margin-top:4px">
+        <span style="font-size:22px">📖</span>
+        <div>
+          <div style="font-size:14px;font-weight:700">Help &amp; Guide</div>
+          <div style="font-size:11px;color:var(--txt3)">How to use DeepFlow</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- TODAY -->
   <div class="page active" id="page-today">
     <div style="padding:6px 14px 0;display:flex;align-items:center;justify-content:space-between">
@@ -797,7 +841,7 @@ input:checked + .mcb-slider:before{transform:translateX(23px);background:#f5a623
     <div class="nav-item" onclick="switchTab('done')" id="nav-done">
       <span class="nav-icon">✅</span>Done
     </div>
-    <div class="nav-item" onclick="switchTab('tools')" id="nav-tools">
+    <div class="nav-item" onclick="openMoreMenu()" id="nav-tools">
       <span class="nav-icon">⚙️</span>More
       <span class="nav-badge" id="badge-requests" style="display:none"></span>
     </div>

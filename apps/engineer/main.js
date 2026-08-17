@@ -657,6 +657,26 @@ function closeUserMenu(){
   if(s)s.style.display='none';
 }
 
+function openMoreMenu(){
+  const sheet=document.getElementById('more-menu-sheet');
+  if(!sheet)return;
+  // Mirror the bottom-nav badge (set by loadRequests()) onto the menu row —
+  // reads the existing badge rather than recomputing, so this stays in sync
+  // with zero changes to the request-loading logic.
+  const src=document.getElementById('badge-requests');
+  const dst=document.getElementById('badge-requests-menu');
+  if(src&&dst){dst.textContent=src.textContent;dst.style.display=src.style.display;}
+  sheet.style.display='block';
+}
+function closeMoreMenu(){
+  const s=document.getElementById('more-menu-sheet');
+  if(s)s.style.display='none';
+}
+function goMoreTab(tab){
+  closeMoreMenu();
+  switchTab(tab);
+}
+
 // ══ OFFICE CONNECTION STATUS ══
 // Green = Supabase reachable (connected to office system)
 // Red   = No internet / Supabase unreachable
@@ -1771,6 +1791,10 @@ async function _onGPS(pos){
 // ══════════════════════════════════════════════════════════════
 const TABS=['today','upcoming','done','map','dash','requests','guide','tools'];
 const FAB_TABS=new Set(['today','upcoming']);
+// These all live behind the "More" nav item now (see openMoreMenu()), so the
+// bottom nav has no nav-map/nav-dash/nav-requests/nav-guide element of its
+// own — highlight nav-tools instead whenever one of them is showing.
+const MORE_TABS=new Set(['map','dash','requests','guide','tools']);
 
 function switchTab(tab){
   currentTab=tab;
@@ -1778,6 +1802,7 @@ function switchTab(tab){
     document.getElementById(`nav-${t}`)?.classList.toggle('active',t===tab);
     document.getElementById(`page-${t}`)?.classList.toggle('active',t===tab);
   });
+  document.getElementById('nav-tools')?.classList.toggle('active',MORE_TABS.has(tab));
   const fab=document.getElementById('fab-add');
   if(fab)fab.classList.toggle('hidden',!FAB_TABS.has(tab));
   if(tab==='dash')loadDash();
@@ -1922,9 +1947,9 @@ export function _clearDraft(id){
 Object.assign(window, {
   _deleteBAPhoto, _handleBAUpload, _setPhotoMode, _switchQNTab, _toggleQN,
   _triggerBAUpload, _waShareNotes, addWire, applyQN, calcVD, calcZs,
-  checkOfficeConnection, clearConduit, closeModal, closeQN, closeUserMenu, dismissAlert,
-  doLogout, doPinLogin, doPinSetup, handleUpload, openAddJobModal, openJob,
-  openLeaveForm, openOvertimeForm, openQN, openUserMenu, quickStatusUpdate,
+  checkOfficeConnection, clearConduit, closeModal, closeMoreMenu, closeQN, closeUserMenu, dismissAlert,
+  doLogout, doPinLogin, doPinSetup, goMoreTab, handleUpload, openAddJobModal, openJob,
+  openLeaveForm, openMoreMenu, openOvertimeForm, openQN, openUserMenu, quickStatusUpdate,
   refreshAll, rewriteAddJobDesc, rewriteJobNotes, saveNotes, sendOmwClient, sendOmwOffice, setMapView,
   setQuality, showTool, submitAddJob, submitLeaveRequest,
   submitOvertimeRequest, switchTab, toggleGuide, toggleSort, toggleTheme,
