@@ -1,0 +1,23 @@
+{
+  "swarms": {
+    "swarm-1786911273821-dzirqu": {
+      "swarmId": "swarm-1786911273821-dzirqu",
+      "topology": "hierarchical",
+      "maxAgents": 15,
+      "status": "running",
+      "agents": [],
+      "tasks": [],
+      "config": {
+        "topology": "hierarchical",
+        "maxAgents": 15,
+        "strategy": "specialized",
+        "communicationProtocol": "message-bus",
+        "autoScaling": true,
+        "consensusMechanism": "majority"
+      },
+      "createdAt": "2026-08-16T20:14:33.821Z",
+      "updatedAt": "2026-08-16T20:14:33.821Z"
+    }
+  },
+  "version": "3.0.0"
+}

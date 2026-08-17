@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-08-17T07:27:33.533Z",
+  "projectRoot": "D:\\DEEPFLOW",
+  "structure": {
+    "hasPackageJson": true,
+    "hasTsConfig": false,
+    "hasClaudeConfig": true,
+    "hasClaudeFlow": true
+  },
+  "scannedAt": 1786951653533
+}
