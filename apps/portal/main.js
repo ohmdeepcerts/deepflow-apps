@@ -140,6 +140,99 @@ function _computeChangesSinceLastVisit(jobs, certs, invoices, token){
 }
 export const token=P.get('id'), ptype=P.get('type')||'landlord';
 
+// ── LIVE UPDATES (poll) ──────────────────────────────────────────────────────
+// The Portal has no session/JWT at all (see docs/architecture/08-
+// authentication-and-roles.md) — access is resolved server-side purely from
+// (type, id) via SECURITY DEFINER RPCs (portal_get_jobs etc.), specifically
+// so an anonymous visitor can never get direct RLS-filtered table access —
+// that's the exact wildcard-enumeration gap the Production Readiness Audit's
+// C-2 finding fixed. Supabase Realtime subscriptions are filtered through
+// RLS the same way a direct SELECT is, so wiring one up here would mean
+// either reopening that same gap (granting anon RLS access to jobs/certs/
+// invoices) or a much larger identity-and-channel-security redesign —
+// neither is a "next" for what was asked (live updates), so this polls
+// through the exact same safe RPC path already used for the initial load
+// instead. Same interval/visibility-pause shape as this file's own PIN
+// watchdog below (_startPinWatchdog) and the Engineer app's job poll
+// (apps/engineer/main.js).
+const _POLL_INTERVAL_MS=45000;
+let _pollInFlight=false;
+
+// Mirrors the job/cert/invoice/payment-totals fetch block inside init()
+// exactly (same RPCs, same paid/invoiced derivation) so a poll tick can
+// never see a different shape of data than the first load did — but kept
+// as its own function rather than factored out of init() itself, so the
+// already-verified initial-load path isn't touched by this at all.
+async function _fetchPortalJobData(entity){
+  const jobType=ptype==='agency'?'agency':ptype==='agent'?'agent':'landlord';
+  const jobs=await fetchJobs(jobType,entity.id);
+  let attachments=[],certs=[],invoices=[];
+  if(jobs.length){
+    const jobIds=jobs.map(j=>j.id);
+    const [ra,rc,ri,rp]=await Promise.all([
+      sb(`rpc/portal_get_attachments`,{method:'POST',body:{p_job_ids:jobIds}}).catch(()=>[]),
+      sb(`rpc/portal_get_certs`,{method:'POST',body:{p_job_ids:jobIds}}).catch(()=>[]),
+      fetchInvoices(ptype,token),
+      sb(`rpc/portal_get_payment_totals`,{method:'POST',body:{p_type:ptype,p_id:token}}).catch(()=>[]),
+    ]);
+    attachments=(ra||[]).map(_fix);
+    certs=(rc||[]).map(_fix);
+    invoices=ri||[];
+    const paidTotals=new Map((rp||[]).map(r=>[String(r.inv_id),Number(r.amount_paid)||0]));
+    invoices.forEach(inv=>{ if(inv.id&&paidTotals.has(String(inv.id))) inv.amountPaid=paidTotals.get(String(inv.id)); });
+    await _resolveFileUrls(ptype,token,attachments,certs,invoices);
+    jobs.forEach(j=>{
+      const rel=invoices.filter(inv=>{
+        const a=(inv.jobAddress||inv.billToAddress||'').toLowerCase().trim();
+        return a===(j.address||'').toLowerCase().trim();
+      });
+      if(rel.length){
+        const allPaid=rel.every(i=>i.status==='Paid');
+        const anyInvoiced=rel.some(i=>i.status==='Awaiting Payment'||i.status==='Draft');
+        if(allPaid)j.paid=true;
+        else if(anyInvoiced)j.invoiced=true;
+      }
+    });
+  }
+  return {jobs,attachments,certs,invoices};
+}
+
+async function _pollPortalUpdates(){
+  // _d is only set once init() finishes its first successful load — a poll
+  // tick firing before then (or after a load error left it unset) has
+  // nothing to diff against or patch, so it's a no-op, not an error.
+  if(_pollInFlight||!_d||!_d.entity)return;
+  _pollInFlight=true;
+  try{
+    const {jobs,attachments,certs,invoices}=await _fetchPortalJobData(_d.entity);
+    // Reuses the exact same diff _computeChangesSinceLastVisit already
+    // does for "what changed since you last opened this link" — calling
+    // it again here just diffs against the snapshot from the previous
+    // poll (or the initial load) instead, and overwrites it the same way.
+    const changes=_computeChangesSinceLastVisit(jobs,certs,invoices,token);
+    _d.jobs=jobs; _d.attachments=attachments; _d.certs=certs; _d.invoices=invoices;
+    invoices.forEach(inv=>{ if(inv.id) _INV_STORE.set(inv.id,inv); });
+    if(changes.length){
+      // Prepend so the newest changes lead the notification list, without
+      // discarding anything from earlier this same visit still unread.
+      _d.changesSinceLastVisit=[...changes,...(_d.changesSinceLastVisit||[])];
+      const nb=document.getElementById('notif-btn'),nd=document.getElementById('notif-dot');
+      if(nb)nb.style.display='flex'; if(nd)nd.style.display='block';
+      rerenderCurrentTab();
+      toast(changes.length===1?'Updated — 1 change':`Updated — ${changes.length} changes`);
+    }
+  }catch(e){ console.warn('[Portal] Live-update poll failed',e); }
+  finally{ _pollInFlight=false; }
+}
+
+function _startLiveUpdatePolling(){
+  setInterval(_pollPortalUpdates,_POLL_INTERVAL_MS);
+  // Catches up immediately on return from background/lock screen, same as
+  // the PIN watchdog below — otherwise a client who left the tab open
+  // overnight would still wait up to a full interval after coming back.
+  document.addEventListener('visibilitychange',()=>{ if(!document.hidden) _pollPortalUpdates(); });
+}
+
 // ── PUSH NOTIFICATIONS ───────────────────────────────────────────────────────
 // Free Web Push (VAPID) — no third-party service, no account. See
 // docs/history/sql-migration-notes/PHASE6_PUSH_NOTIFICATIONS_SQL.md /
@@ -617,6 +710,7 @@ async function init(){
     initKeyboard();
     initOffline();
     initPush();
+    _startLiveUpdatePolling();
     updateGreeting();
     go('overview');
   // Start hero banner animation after render
