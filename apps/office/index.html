@@ -931,6 +931,10 @@ input[type=color]{border:none;background:none;cursor:pointer;padding:0;height:32
 .cdash-wrap{display:flex;flex-direction:column;gap:0}
 .cdash-top{padding:18px 18px 0}
 .cdash-kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px;min-height:0}
+.cdash-windows{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.cdash-windows .pkpi{padding:12px 14px}
+.cdash-windows .pkpi-val{font-size:22px}
+.cdash-windows .pkpi-lbl{margin-top:4px}
 .cdash-kpi{background:var(--s1);border:1px solid var(--border);border-radius:var(--r2);padding:14px 16px;position:relative;overflow:hidden;cursor:pointer;transition:all .15s}
 .cdash-kpi:hover{border-color:var(--border2);transform:translateY(-1px)}
 .cdash-kpi.active{border-color:var(--acc)!important;box-shadow:0 0 0 2px rgba(245,166,35,.15)}
@@ -2402,6 +2406,7 @@ body.density-relaxed .jtable td{font-size:15px}
             <th style="padding:10px 12px;text-align:left;font-size:11px;color:var(--txt3);border-bottom:1px solid var(--border);font-family:var(--fh);font-weight:600">Date</th>
             <th style="padding:10px 12px;text-align:left;font-size:11px;color:var(--txt3);border-bottom:1px solid var(--border);font-family:var(--fh);font-weight:600">Due Date</th>
             <th style="padding:10px 12px;text-align:left;font-size:11px;color:var(--txt3);border-bottom:1px solid var(--border);font-family:var(--fh);font-weight:600">Client / Landlord</th>
+            <th style="padding:10px 12px;text-align:left;font-size:11px;color:var(--txt3);border-bottom:1px solid var(--border);font-family:var(--fh);font-weight:600">Address</th>
             <th style="padding:10px 12px;text-align:left;font-size:11px;color:var(--txt3);border-bottom:1px solid var(--border);font-family:var(--fh);font-weight:600">Sent by Agent</th>
             <th style="padding:10px 12px;text-align:left;font-size:11px;color:var(--txt3);border-bottom:1px solid var(--border);font-family:var(--fh);font-weight:600">Agency</th>
             <th style="padding:10px 12px;text-align:left;font-size:11px;color:var(--txt3);border-bottom:1px solid var(--border);font-family:var(--fh);font-weight:600">Description</th>
@@ -2721,6 +2726,10 @@ body.density-relaxed .jtable td{font-size:15px}
       <div id="certs-dash-panel">
         <div class="cdash-top">
           <div class="cdash-kpis" id="cd-kpis"></div>
+          <div style="margin-bottom:14px">
+            <div style="font-family:var(--fh);font-size:12px;font-weight:700;color:var(--txt2);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">⏳ Renewal Chase Windows</div>
+            <div class="cdash-windows" id="cd-windows"></div>
+          </div>
           <div style="background:var(--s1);border:1px solid var(--border);border-radius:var(--r2);padding:14px 16px;margin-bottom:14px">
             <div style="font-family:var(--fh);font-size:12px;font-weight:700;color:var(--txt2);margin-bottom:10px;text-transform:uppercase;letter-spacing:1px">📅 Upcoming Expiries — Next 12 Months</div>
             <div id="cd-timeline" style="display:flex;gap:3px;align-items:flex-end;height:64px"></div>

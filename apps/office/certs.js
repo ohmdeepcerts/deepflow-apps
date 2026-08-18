@@ -182,6 +182,23 @@ export function switchCertTab(tab,_skipFormInit){
   if(tab==='stats')    renderCertStats();
 }
 
+// Jumps to the Expiring tab pre-filtered to a specific day-window (e.g. "due
+// within 7 days") rather than the single 60-day default the tab normally
+// opens to — lets office staff triage by urgency straight from the
+// dashboard instead of manually setting the From/To filters every time.
+export function goExpiryWindow(maxDays){
+  switchCertTab('expiring');
+  setTimeout(()=>{
+    const from=document.getElementById('exp-from');
+    const to=document.getElementById('exp-to');
+    const status=document.getElementById('exp-status');
+    if(from) from.value=localDateStr(new Date());
+    if(to) to.value=localDateStr(new Date(Date.now()+maxDays*86400000));
+    if(status) status.value='expiring';
+    renderExpiringPanel();
+  },50);
+}
+
 export function filterCerts(status){
   switchCertTab('list');
   setTimeout(()=>{
@@ -1325,6 +1342,28 @@ export async function renderCertDash(){
       <div class="pkpi-lbl">${k.lbl}</div>
       <div class="pkpi-sub">${k.sub}</div>
     </div>`).join('');
+
+  // ── Renewal chase windows — same certs deliberately counted in more than
+  // one bucket (cumulative "due within N days", not exclusive bands) since
+  // office staff ask "anything due this week?" and "anything due this
+  // month?" as separate questions, not a partition of the same list. ──
+  const windowDefs=[
+    {days:7,lbl:'Within 7 Days',pk:'var(--red)',ic:'🔥'},
+    {days:30,lbl:'Within 30 Days',pk:'var(--yellow)',ic:'⏰'},
+    {days:60,lbl:'Within 60 Days',pk:'#f0a030',ic:'📆'},
+    {days:90,lbl:'Within 90 Days',pk:'var(--blue)',ic:'🗓️'},
+  ];
+  window._certWindowGo=windowDefs.map(w=>w.days);
+  document.getElementById('cd-windows').innerHTML=windowDefs.map((w,i)=>{
+    const cnt=allCerts.filter(c=>c.expiryDate&&daysDiff(c.expiryDate)>=0&&daysDiff(c.expiryDate)<=w.days).length;
+    return`<div class="pkpi" style="--pk:${w.pk}" onclick="goExpiryWindow(_certWindowGo[${i}])">
+      <div class="pkpi-blob"></div><div class="pkpi-deco">${w.ic}</div>
+      <div class="pkpi-ic">${w.ic}</div>
+      <div class="pkpi-val">${cnt}</div>
+      <div class="pkpi-lbl">${w.lbl}</div>
+      <div class="pkpi-sub">due for renewal</div>
+    </div>`;
+  }).join('');
 
   // ── Timeline: next 12 months ──
   const months=Array.from({length:12},(_,i)=>{

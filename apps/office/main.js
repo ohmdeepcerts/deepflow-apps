@@ -11,7 +11,7 @@ import {
   certSendIndivEmail, certSendIndivWA, renderCertStats, setCremMode, generateBulkReminder,
   copyCremMsg, importCertCSV, exportCertCSV, exportCertPDF, downloadCertTemplate, renderCertDash,
   addExpiryToExistingCert, previewCertPdf, uploadCertPdf, removeCertPdf, createRenewalJob,
-  renderCertMissing, setMissingFilter, renderExpiringPanel, clearExpiringFilters,
+  renderCertMissing, setMissingFilter, renderExpiringPanel, clearExpiringFilters, goExpiryWindow,
   toggleApplianceSection, addApplianceRow, updateApplianceField, removeApplianceRow,
   openBulkApplianceModal, submitBulkAppliances, generateCertPdf, extractAppliancesFromPhoto,
   openRenewCertModal, submitRenewCert, sendCertToClient, regenerateCertsForPaidJob,
@@ -3297,10 +3297,21 @@ async function nextJobNum(prefix){
     // DB sequence, falls back to the old scan-based method if unavailable.
     const jobPrefix=S.jobPrefix||'JOB-';
     try{
-      const n=await _sb('rpc/next_job_num',{method:'POST',body:{}});
-      if(typeof n==='number'){
-        S.jobNextNum=n+1;
-        return jobPrefix+String(n).padStart(4,'0');
+      // The sequence can drift behind the real max jobnum (e.g. after a bulk
+      // SQL import that inserts jobs directly and never calls this RPC), in
+      // which case nextval() hands back an already-used number. Guard against
+      // that here rather than trusting the sequence blindly — cheap existence
+      // check, capped retries so a genuinely broken sequence can't loop forever.
+      for(let attempt=0; attempt<10; attempt++){
+        const n=await _sb('rpc/next_job_num',{method:'POST',body:{}});
+        if(typeof n!=='number') break;
+        const candidate=jobPrefix+String(n).padStart(4,'0');
+        const clash=await _sb(`jobs?select=id&jobnum=eq.${encodeURIComponent(candidate)}&limit=1`);
+        if(!clash || !clash.length){
+          S.jobNextNum=n+1;
+          return candidate;
+        }
+        console.warn('[nextJobNum] sequence produced already-used', candidate, '— retrying');
       }
     }catch(e){ console.warn('[nextJobNum] next_job_num RPC failed, using fallback',e); }
     const rows = await _sb('jobs?select=jobnum&order=jobnum.desc&limit=500') || [];
@@ -15154,7 +15165,7 @@ Object.assign(window, {
   openPropModal, openRenewCertModal, openStandaloneProformaModal, openWhatsApp, postComment, previewCertPdf,
   previewWaTemplate, printFilteredInvoices, printProforma, quickConfirm, quickEditPrice, quickEditTime, quickStatus,
   removeApplianceRow, removeCertPdf, removeCreditItem, removeInvCustomText, renderAgentsSection, renderAuditLog, renderCertMissing, renderCertStats, renderCertTable, renderClientPicker,
-  renderExpiringPanel, setMissingFilter, clearExpiringFilters,
+  renderExpiringPanel, setMissingFilter, clearExpiringFilters, goExpiryWindow,
   renderDirSection, renderEngReport, renderExpenses, renderInvItems, renderInvList, renderJobs, renderMapPage,
   renderNotifPreview, renderPLDashboard, renderProps, renderReports, renderRequests, renderSettings, renderStmt,
   requestNotifPermission, resetColWidths, resetPortalPin, resolveMergeField, saveAgency, saveAgencyFromJob, 

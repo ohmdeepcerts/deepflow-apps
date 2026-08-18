@@ -108,7 +108,7 @@ export async function renderStmt() {
   if (agency) invs = invs.filter(i => i.agencyName === agency);
   if (staff) invs = invs.filter(i => i.engineer === staff);
   if (status) invs = invs.filter(i => i.status === status);
-  if (search) invs = invs.filter(i => [i.number,i.clientName,i.description,i.agentName,i.agencyName,i.engineer].join(' ').toLowerCase().includes(search));
+  if (search) invs = invs.filter(i => [i.number,i.clientName,i.propertyAddress,i.jobAddress,i.description,i.agentName,i.agencyName,i.engineer].join(' ').toLowerCase().includes(search));
 
   invs.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   _stmtInvoices = invs;
@@ -156,7 +156,7 @@ export async function renderStmt() {
   if (!tbody) return;
 
   if (!invs.length) {
-    tbody.innerHTML = `<tr><td colspan="16" style="padding:40px;text-align:center;color:var(--txt3)">No invoices match your filters</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="17" style="padding:40px;text-align:center;color:var(--txt3)">No invoices match your filters</td></tr>`;
     if (tfoot) tfoot.innerHTML = '';
     return;
   }
@@ -178,6 +178,7 @@ export async function renderStmt() {
       <td style="padding:8px 12px;font-size:12px">${inv.date||'—'}</td>
       <td style="padding:8px 12px;font-size:12px">${inv.dueDate||'—'}</td>
       <td style="padding:8px 12px;font-family:var(--fh);font-weight:600">${inv.clientName||'—'}</td>
+      <td style="padding:8px 12px;font-size:12px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(inv.propertyAddress||inv.jobAddress||'')}">${escHtml(inv.propertyAddress||inv.jobAddress||'—')}</td>
       <td style="padding:8px 12px;font-size:12px;color:var(--txt2)">${inv.agentName||'—'}</td>
       <td style="padding:8px 12px;font-size:12px;color:var(--txt2)">${inv.agencyName||'—'}</td>
       <td style="padding:8px 12px;font-size:12px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${inv.description||'—'}</td>
@@ -196,7 +197,7 @@ export async function renderStmt() {
 
   // Footer totals
   if (tfoot) tfoot.innerHTML = `<tr style="border-top:2px solid var(--border2)">
-    <td colspan="9" style="padding:10px 12px;font-family:var(--fh);font-weight:700;font-size:13px">TOTALS (${invs.length} invoices)</td>
+    <td colspan="10" style="padding:10px 12px;font-family:var(--fh);font-weight:700;font-size:13px">TOTALS (${invs.length} invoices)</td>
     <td style="padding:10px 12px;text-align:right;font-family:var(--fh);font-weight:700">£${totalSub.toFixed(2)}</td>
     <td style="padding:10px 12px;text-align:right;font-family:var(--fh);font-weight:700;color:var(--blue)">£${totalVat.toFixed(2)}</td>
     <td style="padding:10px 12px;text-align:right;font-family:var(--fh);font-weight:700;color:var(--acc)">£${totalGrand.toFixed(2)}</td>
