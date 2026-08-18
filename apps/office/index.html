@@ -4284,23 +4284,20 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS last_accuracy integer;</div>
         <span class="jm-col-title">Job Details</span>
         <span class="jm-col-badge job">1</span>
       </div>
-      <div class="fg" style="position:relative">
-        <label class="fl">Postcode <span style="font-weight:400;color:var(--txt3);font-size:10px">(optional — helps find it faster)</span></label>
-        <input type="text" id="jf-postcode" class="fi" placeholder="e.g. RM6 6TT" oninput="postcodeLookup(this)" autocomplete="off" style="text-transform:uppercase">
-        <div id="postcode-drop" class="fdrop" style="display:none"></div>
-        <div id="postcode-hint" style="font-size:11px;color:var(--txt3);margin-top:4px"></div>
-        <div id="postcode-matches"></div>
+      <div style="display:flex;gap:10px">
+        <div class="fg" style="position:relative;flex:7 1 0%">
+          <label class="fl">Address</label>
+          <input type="text" id="jf-addr" class="fi" placeholder="Start typing address…" oninput="fuzzyAddr(this);smartAutofill('addr',this.value)" autocomplete="off">
+          <div id="addr-drop" class="fdrop" style="display:none"></div>
+        </div>
+        <div class="fg" style="position:relative;flex:3 1 0%">
+          <label class="fl">Postcode</label>
+          <input type="text" id="jf-postcode" class="fi" placeholder="RM6 6TT" oninput="postcodeLookup(this)" autocomplete="off" style="text-transform:uppercase">
+          <div id="postcode-drop" class="fdrop" style="display:none"></div>
+        </div>
       </div>
-      <div class="fg" style="position:relative">
-        <label class="fl">Address</label>
-        <input type="text" id="jf-addr" class="fi" placeholder="Start typing address…" oninput="fuzzyAddr(this);smartAutofill('addr',this.value)" autocomplete="off">
-        <div id="addr-drop" class="fdrop" style="display:none"></div>
-      </div>
-      <div class="fg">
-        <label class="fl">Referrer / Landlord</label>
-        <input type="text" id="jf-ref" class="fi" placeholder="Auto-filled or type…" oninput="smartAutofill('ref',this.value)" autocomplete="off">
-        <div id="ref-drop" class="autofill-drop" style="display:none"></div>
-      </div>
+      <div id="postcode-hint" style="font-size:11px;color:var(--txt3);margin-top:-8px;margin-bottom:8px"></div>
+      <div id="postcode-matches"></div>
       <div class="fg"><label class="fl" style="display:flex;justify-content:space-between;align-items:center">
         Certificates Required
         <button type="button" class="btn btn-ghost btn-xs" onclick="addCertTypeInline()" style="font-size:9px;padding:2px 7px">+ New Type</button>

@@ -297,7 +297,7 @@ setInterval(()=>{
   const mo=document.getElementById('mo-job');
   if(mo&&mo.classList.contains('open')){
     const d={};
-    const ids=['jf-addr','jf-ref','jf-desc','jf-time','jf-eng','jf-date','jf-access','jf-contact','jf-price','jf-priority','jf-status','jf-notes','jf-ll-name','jf-ll-phone','jf-ll-email','jf-ll-addr','jf-ll-wa','jf-agency','jf-agent'];
+    const ids=['jf-addr','jf-desc','jf-time','jf-eng','jf-date','jf-access','jf-contact','jf-price','jf-priority','jf-status','jf-notes','jf-ll-name','jf-ll-phone','jf-ll-email','jf-ll-addr','jf-ll-wa','jf-agency','jf-agent'];
     ids.forEach(id=>{const el=document.getElementById(id);if(el)d[id]=el.value;});
     localStorage.setItem('df_job_draft',JSON.stringify(d));
   }
@@ -3825,7 +3825,6 @@ async function openJobModal(id){
     const draft=localStorage.getItem('df_job_draft');
     if(draft){try{const d=JSON.parse(draft);
       if(d['jf-addr'])f('jf-addr').value=d['jf-addr'];
-      if(d['jf-ref'])f('jf-ref').value=d['jf-ref'];
       if(d['jf-desc'])f('jf-desc').value=d['jf-desc'];
       if(d['jf-time'])f('jf-time').value=d['jf-time'];
       if(d['jf-eng'])f('jf-eng').value=d['jf-eng'];
@@ -3873,7 +3872,7 @@ async function openJobModal(id){
       if(!j)return;
       _editJobBaselineModified=j.modified||null;
       document.getElementById('mo-job-title').textContent=`✎ Edit Job ${j.jobNum?'· '+j.jobNum:''}`;
-      f('jf-addr').value=j.address||'';f('jf-ref').value=j.referrer||'';
+      f('jf-addr').value=j.address||'';
       f('jf-trade').value=j.trade||'';f('jf-eng').value=j.engineer||'';
       f('jf-date').value=j.date||jDate;
       f('jf-desc').value=j.description||'';setTimeout(()=>autoGrowById('jf-desc'),10);f('jf-time').value=j.timeSlot||'';
@@ -3954,7 +3953,7 @@ async function openJobModal(id){
     });
   } else {
     document.getElementById('mo-job-title').textContent='📋 New Job';
-    ['jf-addr','jf-ref','jf-desc','jf-time','jf-contact','jf-price','jf-notes',
+    ['jf-addr','jf-desc','jf-time','jf-contact','jf-price','jf-notes',
      'jf-ll-name','jf-ll-phone','jf-ll-email','jf-ll-addr','jf-ll-wa','jf-ll-notes',
      'jf-agency','jf-agency-phone','jf-agency-email','jf-agent','jf-agent-phone','jf-agent-email','jf-agency-notes'
     ].forEach(x=>f(x).value='');
@@ -4126,7 +4125,7 @@ function confirmKS(){
 
 function clearJobForm(){
   // Clear ALL form fields
-  const fields=['jf-addr','jf-ref','jf-desc','jf-time','jf-eng','jf-access','jf-contact','jf-price','jf-priority','jf-status','jf-notes','jf-ll-name','jf-ll-phone','jf-ll-email','jf-ll-addr','jf-ll-wa','jf-ll-notes','jf-agency','jf-agency-phone','jf-agency-email','jf-agent','jf-agent-phone','jf-agent-email','jf-agency-notes'];
+  const fields=['jf-addr','jf-desc','jf-time','jf-eng','jf-access','jf-contact','jf-price','jf-priority','jf-status','jf-notes','jf-ll-name','jf-ll-phone','jf-ll-email','jf-ll-addr','jf-ll-wa','jf-ll-notes','jf-agency','jf-agency-phone','jf-agency-email','jf-agent','jf-agent-phone','jf-agent-email','jf-agency-notes'];
   fields.forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   // Reset job date to today, engineer to default
   document.getElementById('jf-date').value=TODAY();
@@ -4295,13 +4294,21 @@ async function saveJob(){
   // Use CR number if pre-set from portal request, otherwise generate next job number
   const jobNum=existingJob?.jobNum||(window._pendingCRNum||(isNew?await nextJobNum():''));
   window._pendingCRNum=null; // clear after use
+  // Referrer is no longer its own form field — it's derived from whichever
+  // of Agency/Agent/Landlord is actually filled in (same priority order as
+  // the billing-name fallback chain used elsewhere: agencyName||agentName||
+  // landlordName). Falls back to the existing stored referrer so legacy
+  // jobs that only ever had that field set don't get silently blanked.
+  const _landlordNameVal=getUserPerm('seeLandlord')?document.getElementById('jf-ll-name').value.trim():(existingJob?.landlordName||'');
+  const _agencyNameVal=document.getElementById('jf-agency').value.trim();
+  const _agentNameVal=document.getElementById('jf-agent').value.trim();
   const j={
     id:editJid||uid(),
     jobNum,
     date:document.getElementById('jf-date').value||jDate,
     address:addr,
     postcode:extractPostcode(addr),
-    referrer:document.getElementById('jf-ref').value.trim(),
+    referrer:_agencyNameVal||_agentNameVal||_landlordNameVal||(existingJob?.referrer||''),
     trade:tradeVal,
     certTypes:[..._jobCertTypes],
     engineer:document.getElementById('jf-eng').value,
@@ -4317,17 +4324,17 @@ async function saveJob(){
     notes:document.getElementById('jf-notes').value.trim(),
     priority:document.getElementById('jf-priority').value,
     status:document.getElementById('jf-status').value,
-    landlordName:getUserPerm('seeLandlord')?document.getElementById('jf-ll-name').value.trim():(existingJob?.landlordName||''),
+    landlordName:_landlordNameVal,
     landlordPhone:getUserPerm('seeLandlordPhone')?document.getElementById('jf-ll-phone').value.trim():(existingJob?.landlordPhone||''),
     landlordEmail:getUserPerm('seeLandlord')?document.getElementById('jf-ll-email').value.trim():(existingJob?.landlordEmail||''),
     landlordAddr:document.getElementById('jf-ll-addr').value.trim(),
     landlordWA:document.getElementById('jf-ll-wa').value.trim(),
     landlordNotes:document.getElementById('jf-ll-notes').value.trim(),
     clientPersonId:existingJob?.clientPersonId||null,
-    agencyName:document.getElementById('jf-agency').value.trim(),
+    agencyName:_agencyNameVal,
     agencyPhone:document.getElementById('jf-agency-phone').value.trim(),
     agencyEmail:document.getElementById('jf-agency-email').value.trim(),
-    agentName:document.getElementById('jf-agent').value.trim(),
+    agentName:_agentNameVal,
     agentPhone:document.getElementById('jf-agent-phone').value.trim(),
     agentEmail:document.getElementById('jf-agent-email').value.trim(),
     agencyNotes:document.getElementById('jf-agency-notes').value.trim(),
@@ -4697,7 +4704,7 @@ async function selectAddr(pid){
   // silently reintroduce the same lost-agency-link bug this replaces.
   const llName=p.landlordHistory?.[0]||'';
   if(llName){
-    document.getElementById('jf-ref').value=llName;
+    document.getElementById('jf-ll-name').value=llName;
     await autoFillLandlordByName(llName);
   }
   if(p.agency){
@@ -4790,7 +4797,7 @@ document.addEventListener('click',e=>{if(!e.target.closest('#postcode-drop')&&!e
 // ════════════════════════════════════════════════════════════════
 
 function closeAllAutofillDrops(){
-  ['ref-drop','ll-drop','ll-phone-drop','ll-email-drop','agency-drop','agent-drop','agent-phone-drop','agent-email-drop'].forEach(id=>{
+  ['ll-drop','ll-phone-drop','ll-email-drop','agency-drop','agent-drop','agent-phone-drop','agent-email-drop'].forEach(id=>{
     const el=document.getElementById(id);if(el)el.style.display='none';
   });
 }
@@ -4887,7 +4894,7 @@ async function smartAutofill(type, val, context){
   const agencies=await dAll('agencies');
   const agents=await dAll('agents');
 
-  if(type==='ref' || type==='landlord'){
+  if(type==='landlord'){
     // Search landlords and clients by name
     const matches=persons.filter(p=>(p.roles||[]).some(r=>['landlord','client'].includes(r))&&p.name.toLowerCase().includes(ql)).slice(0,6);
     const items=matches.map(p=>({
@@ -4895,8 +4902,7 @@ async function smartAutofill(type, val, context){
       sub:(p.phone?'📞 '+p.phone:'')+(p.email?' · '+p.email:'')+(p.roles?.includes('landlord')?' [Landlord]':''),
       pid:p.id,name:p.name,phone:p.phone,email:p.email,wa:p.wa,address:p.address,notes:p.notes
     }));
-    const dropId=type==='ref'?'ref-drop':'ll-drop';
-    showAutofillDrop(dropId, items, function(item){
+    showAutofillDrop('ll-drop', items, function(item){
       fillLandlordFields(item);
       closeAllAutofillDrops();
     });
@@ -5050,9 +5056,6 @@ export async function _renderRatingStrip(containerId,clientName,preFilteredInvs)
 }
 
 function fillLandlordFields(p){
-  // Fill referrer field
-  const refEl=document.getElementById('jf-ref');
-  if(refEl&&!refEl.value) refEl.value=p.name||'';
   // Fill tab 2 landlord fields
   document.getElementById('jf-ll-name').value=p.name||'';
   document.getElementById('jf-ll-phone').value=p.phone||'';
