@@ -208,7 +208,8 @@ export async function renderAgenciesSection(){
 export async function renderAgentsSection(){
   const search = (document.getElementById('dir-search-agents')?.value||'').toLowerCase();
   const agencyFilter = document.getElementById('dir-agent-agency-filter')?.value||'';
-  let agents = await dAll('agents');
+  const legacyAgents = await dAll('agents');
+  const personAgents = (await dAll('persons')).filter(p=>(p.roles||[]).includes('agent'));
   const agencies = await dAll('agencies');
   const allJobs = await dAll('jobs');
   const allInvs = await dAll('invoices');
@@ -220,20 +221,29 @@ export async function renderAgentsSection(){
     agFilt.innerHTML = '<option value="">All Agencies</option>' + agencies.map(a=>`<option value="${a.id}" ${a.id===curVal?'selected':''}>${a.name}</option>`).join('');
   }
 
+  // Two sources feed this list: the legacy `agents` table, and `persons`
+  // records reclassified with the 'agent' role (the newer, editable-in-place
+  // path — see openPersonModal). Merged here so reclassifying someone never
+  // makes them disappear from the Agents view.
+  let agents = [
+    ...legacyAgents.map(ag=>({...ag,_src:'agents'})),
+    ...personAgents.map(p=>({...p,_src:'persons'})),
+  ];
   if(agencyFilter) agents = agents.filter(ag=>ag.agencyId===agencyFilter);
-  if(search) agents = agents.filter(ag=>(ag.name+ag.phone+ag.email).toLowerCase().includes(search));
+  if(search) agents = agents.filter(ag=>(ag.name+(ag.phone||'')+(ag.email||'')).toLowerCase().includes(search));
   const grid = document.getElementById('dir-grid-agents');
   if(!grid) return;
-  if(!agents.length){grid.innerHTML='<div class="empty"><div class="ei">👔</div><p>No agents yet. Click "+ Add Agent" to get started.</p></div>';return}
+  if(!agents.length){grid.innerHTML='<div class="empty"><div class="ei">👔</div><p>No agents yet. Click "+ Add Agent", or mark an existing person as an Agent.</p></div>';return}
   grid.innerHTML = agents.map(ag=>{
     const agency = agencies.find(a=>a.id===ag.agencyId);
     const safeName = ag.name.replace(/'/g,"\\'");
+    const editFn = ag._src==='persons' ? `openPersonModal('${ag.id}')` : `openAgentModal('${ag.id}')`;
     const agentJobs = allJobs.filter(j=>j.referrer===ag.name||j.agentName===ag.name||j.agentId===ag.id);
     const jobCount = agentJobs.length;
     const propertyCount = [...new Set(agentJobs.map(j=>j.address).filter(Boolean))].length;
     const agentInvs = allInvs.filter(i=>i.referrer===ag.name||i.agentName===ag.name||i.agentId===ag.id);
     const invTotal = agentInvs.reduce((s,i)=>s+(+(i.total||0)),0);
-    return `<div class="dir-card-v2" style="--card-color:var(--purple);--card-color2:#a855f7" onclick="openAgentModal('${ag.id}')">
+    return `<div class="dir-card-v2" style="--card-color:var(--purple);--card-color2:#a855f7" onclick="${editFn}">
       <div class="card-top"></div>
       <div class="card-body">
         <div class="card-head">
@@ -255,7 +265,7 @@ export async function renderAgentsSection(){
           <div class="card-stat"><div class="card-stat-val">${invTotal>0?'£'+invTotal.toLocaleString():'—'}</div><div class="card-stat-lbl">Invoiced</div></div>
         </div>
         <div class="card-actions">
-          <button onclick="event.stopPropagation();openAgentModal('${ag.id}')">✎ Edit</button>
+          <button onclick="event.stopPropagation();${editFn}">✎ Edit</button>
           ${ag.wa?`<button onclick="event.stopPropagation();window.open('https://wa.me/${ag.wa.replace(/\D/g,'').replace(/^0/,'44')}','_blank')">💬 WA</button>`:''}
           ${ag.email?`<button onclick="event.stopPropagation();window.location.href='mailto:${ag.email}'">✉ Email</button>`:''}
           <button onclick="event.stopPropagation();showPortalInviteModal('${ag.id}','${safeName}','agent','${safeName}')">🔗 Portal</button>
@@ -649,6 +659,8 @@ export async function fillFromMatch(store, id){
     document.getElementById('pf-ll').checked = roles.includes('landlord');
     document.getElementById('pf-cl').checked = roles.includes('client');
     document.getElementById('pf-sc').checked = roles.includes('subcontractor');
+    document.getElementById('pf-agent').checked = roles.includes('agent');
+    document.getElementById('pf-agency-grp').style.display = roles.includes('agent') ? '' : 'none';
     document.getElementById('mo-person-title').textContent = '✎ Edit Person';
     document.getElementById('btn-del-person').style.display = '';
     document.getElementById('btn-wa-person').style.display = r.wa?'':'none';
@@ -890,6 +902,7 @@ export async function deleteCurrentAgent(){
 export async function openPersonModal(id){
   editPid=id||null;
   document.getElementById('pf-sc').onchange=function(){document.getElementById('pf-eng-extra').style.display=this.checked?'':'none'};
+  document.getElementById('pf-agent').onchange=function(){document.getElementById('pf-agency-grp').style.display=this.checked?'':'none'};
   // Fill trade dropdown for person
   const td=document.getElementById('pf-trade');
   td.innerHTML='<option value="">—</option>'+(S.trades||[]).map(t=>`<option>${t.name}</option>`).join('');
@@ -916,12 +929,13 @@ export async function openPersonModal(id){
     document.getElementById('pf-ll').checked=(p.roles||[]).includes('landlord');
     document.getElementById('pf-cl').checked=(p.roles||[]).includes('client');
     document.getElementById('pf-sc').checked=(p.roles||[]).includes('subcontractor');
+    document.getElementById('pf-agent').checked=(p.roles||[]).includes('agent');
     const showExtra=(p.roles||[]).includes('subcontractor');
     document.getElementById('pf-eng-extra').style.display=showExtra?'':'none';
     if(agSel) agSel.value = p.agencyId||'';
-    // Show agency field if they have a linked agency
+    // Show agency field only when this person is classified as an agent
     const agGrp = document.getElementById('pf-agency-grp');
-    if(agGrp) agGrp.style.display = agencies.length ? '' : 'none';
+    if(agGrp) agGrp.style.display = (p.roles||[]).includes('agent') ? '' : 'none';
     document.getElementById('btn-del-person').style.display='';
     document.getElementById('btn-wa-person').style.display=p.wa?'':'none';
     const archBtn=document.getElementById('btn-archive-person');
@@ -933,11 +947,11 @@ export async function openPersonModal(id){
   } else {
     document.getElementById('mo-person-title').textContent='👤 Add Person';
     ['pf-name','pf-phone','pf-email','pf-wa','pf-addr','pf-notes','pf-rate'].forEach(x=>document.getElementById(x).value='');
-    ['pf-ll','pf-cl','pf-sc'].forEach(x=>document.getElementById(x).checked=false);
+    ['pf-ll','pf-cl','pf-sc','pf-agent'].forEach(x=>document.getElementById(x).checked=false);
     document.getElementById('pf-eng-extra').style.display='none';
     if(agSel) agSel.value='';
     const agGrp = document.getElementById('pf-agency-grp');
-    if(agGrp) agGrp.style.display = agencies.length ? '' : 'none';
+    if(agGrp) agGrp.style.display = 'none';
     document.getElementById('btn-del-person').style.display='none';
     document.getElementById('btn-wa-person').style.display='none';
     const archBtn=document.getElementById('btn-archive-person');
@@ -981,6 +995,7 @@ export async function savePerson(silent=false){
   if(document.getElementById('pf-ll').checked)roles.push('landlord');
   if(document.getElementById('pf-cl').checked)roles.push('client');
   if(document.getElementById('pf-sc').checked)roles.push('subcontractor');
+  if(document.getElementById('pf-agent').checked)roles.push('agent');
   const p={
     id:editPid||uid(),name,
     phone:document.getElementById('pf-phone').value.trim(),

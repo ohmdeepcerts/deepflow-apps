@@ -4330,11 +4330,11 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS last_accuracy integer;</div>
       <div class="fg"><label class="fl">Notes</label><textarea id="jf-notes" class="fta" placeholder="Additional notes…" style="min-height:60px"></textarea></div>
     </div>
 
-    <!-- COLUMN 2: Landlord Details -->
+    <!-- COLUMN 2: Contact (Landlord or Client) -->
     <div class="jm-col">
       <div class="jm-col-hd">
         <span class="jm-col-icon">🏠</span>
-        <span class="jm-col-title">Landlord</span>
+        <span class="jm-col-title">Contact</span>
         <span class="jm-col-badge ll">2</span>
       </div>
       <div class="jm-info-box" id="jm-ll-info">
@@ -4361,8 +4361,8 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS last_accuracy integer;</div>
       </div>
       
       <div class="fg" style="position:relative">
-        <label class="fl">Landlord Name <span style="color:var(--txt3);font-weight:400;text-transform:none;font-size:10px">(optional if phone known)</span></label>
-        <input type="text" id="jf-ll-name" class="fi" placeholder="Type landlord name…" oninput="smartAutofill('landlord',this.value)" autocomplete="off">
+        <label class="fl">Contact Name <span style="color:var(--txt3);font-weight:400;text-transform:none;font-size:10px">(landlord, client or agent — searches Directory)</span></label>
+        <input type="text" id="jf-ll-name" class="fi" placeholder="Type a name…" oninput="smartAutofill('landlord',this.value)" autocomplete="off">
         <div id="ll-drop" class="autofill-drop" style="display:none"></div>
       </div>
       <div class="fg" style="position:relative">
@@ -4407,9 +4407,8 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS last_accuracy integer;</div>
       <div class="fg"><label class="fl">Agency Email</label><input type="email" id="jf-agency-email" class="fi" placeholder="Agency email"></div>
       <hr class="sep">
       <div class="fg" style="position:relative">
-        <label class="fl">Agent Name <span style="font-size:10px;color:var(--txt3)">(employee of the agency)</span></label>
-        <input type="text" id="jf-agent" class="fi" placeholder="Type agent name…" oninput="smartAutofill('agent',this.value)" autocomplete="off">
-        <div id="agent-drop" class="autofill-drop" style="display:none"></div>
+        <label class="fl">Agent Name <span style="font-size:10px;color:var(--txt3)">(auto-fills when you pick an Agent in the Contact field →)</span></label>
+        <input type="text" id="jf-agent" class="fi" placeholder="Or type a name not yet in Directory…" autocomplete="off">
       </div>
       <div class="fg" style="position:relative">
         <label class="fl">Agent Phone</label>
@@ -4485,6 +4484,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS last_accuracy integer;</div>
       <label class="fcheck"><input type="checkbox" id="pf-ll"> Landlord</label>
       <label class="fcheck"><input type="checkbox" id="pf-cl"> Client</label>
       <label class="fcheck"><input type="checkbox" id="pf-sc"> Subcontractor</label>
+      <label class="fcheck"><input type="checkbox" id="pf-agent"> Agent <span style="font-weight:400;color:var(--txt3)">(works for an agency)</span></label>
     </div>
   </div>
   <div class="fg" id="pf-agency-grp" style="display:none">

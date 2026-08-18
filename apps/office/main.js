@@ -4797,7 +4797,7 @@ document.addEventListener('click',e=>{if(!e.target.closest('#postcode-drop')&&!e
 // ════════════════════════════════════════════════════════════════
 
 function closeAllAutofillDrops(){
-  ['ll-drop','ll-phone-drop','ll-email-drop','agency-drop','agent-drop','agent-phone-drop','agent-email-drop'].forEach(id=>{
+  ['ll-drop','ll-phone-drop','ll-email-drop','agency-drop','agent-phone-drop','agent-email-drop'].forEach(id=>{
     const el=document.getElementById(id);if(el)el.style.display='none';
   });
 }
@@ -4895,15 +4895,20 @@ async function smartAutofill(type, val, context){
   const agents=await dAll('agents');
 
   if(type==='landlord'){
-    // Search landlords and clients by name
-    const matches=persons.filter(p=>(p.roles||[]).some(r=>['landlord','client'].includes(r))&&p.name.toLowerCase().includes(ql)).slice(0,6);
+    // Search landlords, clients AND agents by name — one box, routed by
+    // role on selection (see below) so reclassifying someone in Directory
+    // (tick a different role checkbox) is all it takes to change which
+    // panel they fill here, no separate "Agent" search to keep in sync.
+    const matches=persons.filter(p=>(p.roles||[]).some(r=>['landlord','client','agent'].includes(r))&&p.name.toLowerCase().includes(ql)).slice(0,6);
     const items=matches.map(p=>({
       label:p.name,
-      sub:(p.phone?'📞 '+p.phone:'')+(p.email?' · '+p.email:'')+(p.roles?.includes('landlord')?' [Landlord]':''),
-      pid:p.id,name:p.name,phone:p.phone,email:p.email,wa:p.wa,address:p.address,notes:p.notes
+      sub:(p.phone?'📞 '+p.phone:'')+(p.email?' · '+p.email:'')+(p.roles?.includes('agent')?' [Agent]':p.roles?.includes('landlord')?' [Landlord]':p.roles?.includes('client')?' [Client]':''),
+      pid:p.id,name:p.name,phone:p.phone,email:p.email,wa:p.wa,address:p.address,notes:p.notes,
+      roles:p.roles||[],agencyId:p.agencyId||''
     }));
     showAutofillDrop('ll-drop', items, function(item){
-      fillLandlordFields(item);
+      if((item.roles||[]).includes('agent')) fillAgentFieldsFromPerson(item);
+      else fillLandlordFields(item);
       closeAllAutofillDrops();
     });
   }
@@ -4941,35 +4946,6 @@ async function smartAutofill(type, val, context){
         document.getElementById('jf-agent-email').value=linked[0].email||'';
         toast(`Auto-filled agent: ${linked[0].name}`,'success');
       }
-    });
-  }
-  else if(type==='agent'){
-    const matches=agents.filter(ag=>ag.name.toLowerCase().includes(ql)).slice(0,6);
-    const items=await Promise.all(matches.map(async ag=>{
-      const agency=agencies.find(a=>a.id===ag.agencyId);
-      return{label:ag.name,sub:(agency?'🏢 '+agency.name:'')+(ag.phone?' · 📞 '+ag.phone:''),agid:ag.id,name:ag.name,phone:ag.phone,email:ag.email,wa:ag.wa,agencyId:ag.agencyId,agencyName:agency?.name||'',agencyPhone:agency?.phone||'',agencyEmail:agency?.email||''};
-    }));
-    showAutofillDrop('agent-drop',items,function(item){
-      document.getElementById('jf-agent').value=item.name;
-      document.getElementById('jf-agent-phone').value=item.phone||'';
-      document.getElementById('jf-agent-email').value=item.email||'';
-      // Show agent rating at top
-      const bar=document.getElementById('jm-ratings-bar');
-      const agentWrap=document.getElementById('jm-rating-agent-wrap');
-      if(bar)bar.style.display='flex';
-      if(agentWrap)agentWrap.style.display='block';
-      _renderRatingStrip('jm-rating-agent', item.name);
-      // Also fill agency if empty
-      if(!document.getElementById('jf-agency').value&&item.agencyName){
-        document.getElementById('jf-agency').value=item.agencyName;
-        document.getElementById('jf-agency-phone').value=item.agencyPhone||'';
-        document.getElementById('jf-agency-email').value=item.agencyEmail||'';
-        // Also show agency rating
-        const agWrap=document.getElementById('jm-rating-ag-wrap');
-        if(agWrap)agWrap.style.display='block';
-        _renderRatingStrip('jm-rating-ag', item.agencyName);
-      }
-      closeAllAutofillDrops();
     });
   }
   else if(type==='phone' && context==='agent'){
@@ -5082,6 +5058,38 @@ function fillLandlordFields(p){
   if(llWrap)llWrap.style.display='block';
   _renderRatingStrip('jm-rating-ll', p.name);
   toast(`Landlord auto-filled: ${p.name}`,'success');
+}
+
+// Routed here (instead of fillLandlordFields) when the Contact box picks a
+// person whose roles include 'agent'. Also pulls in their linked agency
+// (persons.agencyId) so picking an agent fills both Column 3 fields at once.
+async function fillAgentFieldsFromPerson(p){
+  document.getElementById('jf-agent').value=p.name||'';
+  document.getElementById('jf-agent-phone').value=p.phone||'';
+  document.getElementById('jf-agent-email').value=p.email||'';
+  if(p.agencyId){
+    const agencies=await dAll('agencies');
+    const ag=agencies.find(a=>a.id===p.agencyId);
+    if(ag){
+      document.getElementById('jf-agency').value=ag.name||'';
+      document.getElementById('jf-agency-phone').value=ag.phone||'';
+      document.getElementById('jf-agency-email').value=ag.email||'';
+    }
+  }
+  const box=document.getElementById('jm-ag-info');
+  if(box){
+    box.classList.add('visible');
+    document.getElementById('jmi-ag-name').textContent=document.getElementById('jf-agency').value||'—';
+    document.getElementById('jmi-agent-name').textContent=p.name||'—';
+    document.getElementById('jmi-agent-phone').textContent=p.phone||'—';
+    document.getElementById('jmi-agent-email').textContent=p.email||'—';
+  }
+  const bar=document.getElementById('jm-ratings-bar');
+  const agentWrap=document.getElementById('jm-rating-agent-wrap');
+  if(bar)bar.style.display='flex';
+  if(agentWrap)agentWrap.style.display='block';
+  _renderRatingStrip('jm-rating-agent', p.name);
+  toast(`Agent auto-filled: ${p.name}`,'success');
 }
 
 async function autoFillLandlordByName(name){
