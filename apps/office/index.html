@@ -4285,6 +4285,13 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS last_accuracy integer;</div>
         <span class="jm-col-badge job">1</span>
       </div>
       <div class="fg" style="position:relative">
+        <label class="fl">Postcode <span style="font-weight:400;color:var(--txt3);font-size:10px">(optional — helps find it faster)</span></label>
+        <input type="text" id="jf-postcode" class="fi" placeholder="e.g. RM6 6TT" oninput="postcodeLookup(this)" autocomplete="off" style="text-transform:uppercase">
+        <div id="postcode-drop" class="fdrop" style="display:none"></div>
+        <div id="postcode-hint" style="font-size:11px;color:var(--txt3);margin-top:4px"></div>
+        <div id="postcode-matches"></div>
+      </div>
+      <div class="fg" style="position:relative">
         <label class="fl">Address</label>
         <input type="text" id="jf-addr" class="fi" placeholder="Start typing address…" oninput="fuzzyAddr(this);smartAutofill('addr',this.value)" autocomplete="off">
         <div id="addr-drop" class="fdrop" style="display:none"></div>

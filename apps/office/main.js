@@ -4721,6 +4721,70 @@ async function selectAddr(pid){
 function closeAddrDrop(){const d=document.getElementById('addr-drop');if(d)d.style.display='none'}
 document.addEventListener('click',e=>{if(!e.target.closest('#addr-drop')&&!e.target.closest('#jf-addr'))closeAddrDrop()});
 
+// ── Postcode helper (Postcodes.io) ──
+// Deliberately does NOT invent a full address: Postcodes.io has no
+// building/door-number data (it's ONSPD administrative-geography data, not
+// a property gazetteer), so this only (1) autocompletes/validates the
+// postcode itself, catching typos immediately, (2) shows the area as a
+// read-only hint for staff to visually confirm — never auto-inserted into
+// the address text, since Postcodes.io's admin_district often isn't the
+// real Royal Mail post town (e.g. RM6 reports "Barking and Dagenham", not
+// "Romford") and writing that into a real address would be actively wrong —
+// and (3) surfaces any of THIS business's own properties already on file
+// at that postcode as one-click fills via the existing selectAddr(), since
+// most day-to-day bookings are repeat landlords/properties.
+let _postcodeTimer=null;
+function postcodeLookup(inp){
+  clearTimeout(_postcodeTimer);
+  const q=inp.value.trim();
+  const dd=document.getElementById('postcode-drop');
+  const hintEl=document.getElementById('postcode-hint');
+  const matchEl=document.getElementById('postcode-matches');
+  if(q.length<2){ closePostcodeDrop(); if(hintEl)hintEl.textContent=''; if(matchEl)matchEl.innerHTML=''; return; }
+  _postcodeTimer=setTimeout(async()=>{
+    try{
+      const r=await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(q)}/autocomplete`);
+      const j=await r.json();
+      const results=j.result||[];
+      if(!results.length){ closePostcodeDrop(); return; }
+      dd.innerHTML=results.map(pc=>`<div class="fdi" onclick="confirmPostcode('${pc}')"><span>${pc}</span></div>`).join('');
+      const rect=inp.getBoundingClientRect();
+      dd.style.cssText=`display:block;top:${rect.bottom+window.scrollY+4}px;left:${rect.left}px;width:${Math.max(rect.width,220)}px`;
+      // A single exact match (typed the full postcode) confirms itself —
+      // no need to make someone click their own postcode in a dropdown.
+      if(results.length===1 && results[0].replace(/\s+/g,'').toUpperCase()===q.replace(/\s+/g,'').toUpperCase()){
+        confirmPostcode(results[0]);
+      }
+    }catch(e){ console.warn('[postcodeLookup] Postcodes.io request failed',e); }
+  },350);
+}
+async function confirmPostcode(postcode){
+  closePostcodeDrop();
+  document.getElementById('jf-postcode').value=postcode;
+  const hintEl=document.getElementById('postcode-hint');
+  const matchEl=document.getElementById('postcode-matches');
+  try{
+    const r=await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(postcode)}`);
+    const j=await r.json();
+    if(j.result && hintEl){
+      const area=[j.result.admin_ward,j.result.admin_district].filter(Boolean).join(', ');
+      hintEl.innerHTML=`📍 ${area} <span style="color:var(--txt4)">— shown for confirmation only, not added to the address</span>`;
+    }
+  }catch(e){ console.warn('[confirmPostcode] Postcodes.io lookup failed',e); }
+  const norm=postcode.replace(/\s+/g,'').toUpperCase();
+  const matches=allProps.filter(p=>extractPostcode(p.address).replace(/\s+/g,'').toUpperCase()===norm);
+  if(matchEl){
+    matchEl.innerHTML = matches.length
+      ? `<div style="font-size:11px;color:var(--txt3);margin-top:6px;margin-bottom:3px">You already have ${matches.length} propert${matches.length===1?'y':'ies'} here — click to use:</div>`+
+        matches.slice(0,6).map(p=>`<div class="fdi" style="position:static;border:1px solid var(--border);border-radius:6px;margin-bottom:3px" onclick="selectAddr('${p.id}')">
+          <span>${p.address}</span><span class="fmeta">${p.landlord||''}</span>
+        </div>`).join('')
+      : '';
+  }
+}
+function closePostcodeDrop(){const d=document.getElementById('postcode-drop');if(d)d.style.display='none'}
+document.addEventListener('click',e=>{if(!e.target.closest('#postcode-drop')&&!e.target.closest('#jf-postcode'))closePostcodeDrop()});
+
 // ════════════════════════════════════════════════════════════════
 //  SMART AUTOFILL SYSTEM
 // ════════════════════════════════════════════════════════════════
@@ -15153,6 +15217,7 @@ Object.assign(window, {
   exportAuditLog, exportBackup, exportCertCSV, exportCertPDF, exportEngReport, exportEngReportPDF, 
   exportExpensesCSV, exportInvsCSV, exportMasterXLSX, exportPLCSV, exportPropsCSV, exportReportPDF, 
   extractAppliancesFromPhoto, fillCreditNote, fillFromMatch, filterCerts, fuzzyAddr, generateBulkReminder, generateCertPdf,
+  postcodeLookup, confirmPostcode,
   handleAccess, handleLogoUpload, handleNotifClick, handlePriDotClick, importBackup, importCertCSV,
   invClientSelected, invNavSelect, jCalPickDate, jPickDate, jcalShiftMonth, kanbanDragOver, 
   kanbanDragStart, kanbanDrop, loadEarlierJobs, loadEngPerms, loadEngineerLocations, loadStorageDashboard, 
