@@ -4429,6 +4429,41 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS last_accuracy integer;</div>
 
   </div><!-- /jm-3col -->
 
+  <!-- SITE VISITS — timeline for long-running, multi-visit projects (site
+       works spanning weeks/months, visited intermittently). One job record
+       stays open the whole time; each return trip is a new visit logged
+       here rather than a new job. Hidden for brand-new jobs (nothing to log
+       yet); populated in openJobModal(). -->
+  <div id="jm-visits-panel" style="display:none;margin-top:18px;border-top:1px solid var(--border);padding-top:16px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div style="font-family:var(--fh);font-weight:700;font-size:13px;color:var(--txt1)">📅 Site Visits <span id="jm-visits-count" style="font-size:11px;color:var(--txt3);font-weight:400"></span></div>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="toggleAddVisitForm()">+ Add Visit</button>
+    </div>
+    <div id="jm-add-visit-form" style="display:none;background:var(--s2);border:1px solid var(--border);border-radius:var(--r1);padding:12px;margin-bottom:12px">
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <div class="fg" style="flex:1 1 150px;margin-bottom:0">
+          <label class="fl">Date</label>
+          <input type="date" id="vf-date" class="fi">
+        </div>
+        <div class="fg" style="flex:2 1 220px;margin-bottom:0">
+          <label class="fl">Engineers on site <span style="font-weight:400;color:var(--txt3);font-size:10px">(ctrl/cmd-click for more than one)</span></label>
+          <select id="vf-engineers" class="fs" multiple size="3" style="width:100%;height:auto"></select>
+        </div>
+      </div>
+      <div class="fg" style="margin-top:10px;margin-bottom:0">
+        <label class="fl">What was done</label>
+        <textarea id="vf-notes" class="fi fta-grow" placeholder="e.g. First fix wiring, chased walls in kitchen and hallway" rows="2" style="min-height:50px"></textarea>
+      </div>
+      <div style="margin-top:10px;display:flex;gap:8px">
+        <button type="button" class="btn btn-acc btn-sm" onclick="saveVisit()">Save Visit</button>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="toggleAddVisitForm()">Cancel</button>
+      </div>
+    </div>
+    <div id="jm-visits-list">
+      <div style="color:var(--txt3);font-size:12px;padding:8px 0">No visits logged yet.</div>
+    </div>
+  </div>
+
   <!-- INVOICE — the third piece of "whole process" alongside the job itself
        and the engineer's field notes/photos above/below. Hidden for new jobs
        (nothing to link yet); populated in openJobModal(). -->

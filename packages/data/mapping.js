@@ -43,6 +43,7 @@ export const TO_DB = {
   expenses: { jobRef: 'jobref', desc: 'description' },
   overtime: {},
   portal_contacts: { contactName: 'contact_name', sortOrder: 'sort_order' },
+  job_visits: { jobId: 'jobid', visitDate: 'visit_date' },
 };
 
 export const FROM_DB = {};

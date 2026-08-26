@@ -3950,6 +3950,7 @@ async function openJobModal(id){
       openModal('mo-job');
       // Load photos/files uploaded by engineers
       loadJobAttachments(id);
+      loadJobVisits(id);
     });
   } else {
     document.getElementById('mo-job-title').textContent='📋 New Job';
@@ -3964,6 +3965,7 @@ async function openJobModal(id){
     renderCertChips([]);
     document.getElementById('btn-delete-job').style.display='none';
     document.getElementById('jm-photos-panel').style.display='none';
+    document.getElementById('jm-visits-panel').style.display='none';
     document.getElementById('jm-invoice-panel').style.display='none';
     document.getElementById('btn-wa-this-job').style.display='none';
     document.getElementById('btn-wa-ll').style.display='none';
@@ -4512,6 +4514,86 @@ async function loadJobAttachments(jobId){
   }catch(err){
     console.error('loadJobAttachments:',err);
     grid.innerHTML='<div style="color:var(--txt3);font-size:12px">Could not load files</div>';
+  }
+}
+
+// Site Visits — timeline entries for a long-running job. Unlike photos,
+// the panel stays visible with zero entries so "+ Add Visit" is always
+// reachable on any existing job, not just ones already mid-project.
+async function loadJobVisits(jobId){
+  const panel=document.getElementById('jm-visits-panel');
+  const list=document.getElementById('jm-visits-list');
+  const countEl=document.getElementById('jm-visits-count');
+  if(!panel||!list) return;
+  panel.style.display='';
+  list.innerHTML='<div style="color:var(--txt3);font-size:12px;padding:8px 0">Loading…</div>';
+  try{
+    const visits=await _sb('job_visits?jobid=eq.'+encodeURIComponent(jobId)+'&order=visit_date.asc,created.asc');
+    if(!visits||!visits.length){
+      list.innerHTML='<div style="color:var(--txt3);font-size:12px;padding:8px 0">No visits logged yet.</div>';
+      if(countEl) countEl.textContent='';
+      return;
+    }
+    if(countEl) countEl.textContent='('+visits.length+')';
+    list.innerHTML=visits.map((v,i)=>{
+      const engs=(v.engineers||[]).join(', ')||'—';
+      return `<div style="display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">
+        <div style="flex-shrink:0;width:74px">
+          <div style="font-size:10px;font-weight:700;color:var(--acc)">VISIT ${i+1}</div>
+          <div style="font-size:11px;color:var(--txt3)">${formatDateUK(v.visit_date)||v.visit_date}</div>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:600;color:var(--txt1)">👷 ${escHtml(engs)}</div>
+          ${v.notes?`<div style="font-size:12px;color:var(--txt2);margin-top:2px">${escHtml(v.notes)}</div>`:''}
+        </div>
+        <button onclick="deleteVisit('${v.id}')" style="background:none;border:none;color:var(--txt3);cursor:pointer;font-size:13px;padding:2px 4px" title="Delete visit">✕</button>
+      </div>`;
+    }).join('');
+  }catch(err){
+    console.error('loadJobVisits:',err);
+    list.innerHTML='<div style="color:var(--txt3);font-size:12px">Could not load visits</div>';
+  }
+}
+
+function toggleAddVisitForm(){
+  const form=document.getElementById('jm-add-visit-form');
+  if(!form) return;
+  const opening=form.style.display==='none';
+  form.style.display=opening?'':'none';
+  if(opening){
+    document.getElementById('vf-date').value=TODAY();
+    const sel=document.getElementById('vf-engineers');
+    sel.innerHTML=(S.engineers||[]).map(e=>`<option value="${e.name}">${e.name}</option>`).join('');
+    document.getElementById('vf-notes').value='';
+  }
+}
+
+async function saveVisit(){
+  if(!editJid){toast('Save the job first, then add a visit','warn');return}
+  const date=document.getElementById('vf-date').value;
+  if(!date){toast('Pick a date for the visit','error');return}
+  const sel=document.getElementById('vf-engineers');
+  const engineers=[...sel.selectedOptions].map(o=>o.value);
+  const notes=document.getElementById('vf-notes').value.trim();
+  try{
+    await dPut('job_visits',{id:uid(),jobId:editJid,visitDate:date,engineers,notes,created:Date.now()});
+    toggleAddVisitForm();
+    await loadJobVisits(editJid);
+    toast('Visit logged','success');
+  }catch(err){
+    console.error('saveVisit:',err);
+    toast('Could not save visit — check console','error');
+  }
+}
+
+async function deleteVisit(id){
+  if(!confirm('Delete this visit entry?')) return;
+  try{
+    await dDel('job_visits',id);
+    await loadJobVisits(editJid);
+  }catch(err){
+    console.error('deleteVisit:',err);
+    toast('Could not delete visit','error');
   }
 }
 
@@ -9569,6 +9651,7 @@ const SB_TABLE_GROUPS=[
     {id:'attachments',label:'Attachments (rows)',icon:'📎'},
     {id:'portal_contacts',label:'Portal Contacts',icon:'☎'},
     {id:'job_comments',label:'Job Comments',icon:'💬'},
+    {id:'job_visits',label:'Site Visits',icon:'📅'},
     {id:'overtime',label:'Overtime Logs',icon:'🕑'},
   ]},
 ];
@@ -9927,6 +10010,7 @@ export async function exportBackup(){
     expenses:await dAll('expenses'),
     agencies:await dAll('agencies'),
     agents:await dAll('agents'),
+    job_visits:await dAll('job_visits'),
     settings:S,
     exportDate:new Date().toISOString()
   };
@@ -9951,6 +10035,7 @@ async function importBackup(inp){
       if(data.expenses)await _concurrentEach(data.expenses, e=>dPut('expenses',e));
       if(data.agencies)await _concurrentEach(data.agencies, a=>dPut('agencies',a));
       if(data.agents)await _concurrentEach(data.agents, a=>dPut('agents',a));
+      if(data.job_visits)await _concurrentEach(data.job_visits, v=>dPut('job_visits',v));
       if(data.settings){Object.assign(S,data.settings);await saveAllSettings()}
       toast('Backup imported successfully!','success');
       location.reload();
@@ -9960,7 +10045,7 @@ async function importBackup(inp){
 
 async function clearAllData(){
   confirm2('⚠️ Clear ALL Data','This will permanently delete ALL jobs, invoices, people, and certificates. This cannot be undone!',async()=>{
-    for(const tbl of ['jobs','persons','invoices','certs','agencies','agents','job_comments','activity','attachments','payments','expenses','overtime','engineer_requests','audit_log']){
+    for(const tbl of ['jobs','persons','invoices','certs','agencies','agents','job_comments','job_visits','activity','attachments','payments','expenses','overtime','engineer_requests','audit_log']){
       try{await _sb(tbl+'?id=neq.00000000-0000-0000-0000-000000000000',{method:'DELETE',prefer:'return=minimal'});}catch(e){ console.warn('[DeepFlow]', e); }
     }
     // FIX BUG1: payments/expenses/overtime now in Supabase — localStorage cleanup no longer needed
@@ -15229,6 +15314,7 @@ Object.assign(window, {
   exportExpensesCSV, exportInvsCSV, exportMasterXLSX, exportPLCSV, exportPropsCSV, exportReportPDF, 
   extractAppliancesFromPhoto, fillCreditNote, fillFromMatch, filterCerts, fuzzyAddr, generateBulkReminder, generateCertPdf,
   postcodeLookup, confirmPostcode,
+  loadJobVisits, toggleAddVisitForm, saveVisit, deleteVisit,
   handleAccess, handleLogoUpload, handleNotifClick, handlePriDotClick, importBackup, importCertCSV,
   invClientSelected, invNavSelect, jCalPickDate, jPickDate, jcalShiftMonth, kanbanDragOver, 
   kanbanDragStart, kanbanDrop, loadEarlierJobs, loadEngPerms, loadEngineerLocations, loadStorageDashboard, 
