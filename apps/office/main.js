@@ -42,6 +42,7 @@ import {
 import { openCreditNoteModal, addCreditItem, fillCreditNote, saveCreditNote, creditNote, updateCreditItem, removeCreditItem } from './credit-notes.js';
 import { renderInvCustomTexts, addInvCustomText, removeInvCustomText } from './invoice-custom-text.js';
 import { renderSqlSnippets, copySql } from './sql-guide.js';
+import { renderPlanner, initPlanner } from './planner.js';
 import { exportMasterXLSX } from './master-xlsx-export.js';
 import { oneClickBackup, showJobsSkeleton, checkCronSetup } from './backup-diagnostics.js';
 
@@ -10060,6 +10061,7 @@ async function init(){
   await initDB();
   await loadSettings();
   await _refreshAllProps();
+  initPlanner();
 
   // Set default WA templates if empty
   if(!S.waJobTpl||S.waJobTpl.length<10){
@@ -10353,7 +10355,7 @@ function setJobsView(v){
     if(calPane) calPane.style.display='none';
     if(btnEng){ btnEng.classList.add('btn-acc'); btnEng.classList.remove('btn-ghost'); btnEng.style.display='none'; }
     if(btnList) btnList.style.display='';
-    renderEngView();
+    renderPlanner();
   } else {
     if(engView) engView.style.display='none';
     if(listPane) listPane.style.display='flex';
@@ -10362,78 +10364,6 @@ function setJobsView(v){
     if(btnList) btnList.style.display='none';
     renderJobs();
   }
-}
-
-async function renderEngView(){
-  const jobs=await dAll('jobs');
-  const dayJobs=jobs.filter(j=>j.date===jDate);
-  dayJobs.sort((a,b)=>{
-    const po={Emergency:0,Urgent:1,Normal:2,Low:3};
-    return (po[a.priority]||2)-(po[b.priority]||2)||a.created-b.created;
-  });
-
-  const engineers=(S.engineers||[]).map(e=>e.name);
-  const byEng={};
-  engineers.forEach(e=>{byEng[e]=[]});
-  byEng['Unassigned']=[];
-
-  dayJobs.forEach(j=>{
-    const k=j.engineer&&byEng[j.engineer]!==undefined?j.engineer:'Unassigned';
-    byEng[k].push(j);
-  });
-
-  const wrap=document.getElementById('eng-view-wrap');
-  wrap.innerHTML='';
-
-  Object.entries(byEng).forEach(([eng,jobs])=>{
-    if(eng!=='Unassigned'&&jobs.length===0) return; // skip empty engineers unless unassigned
-    const col=document.createElement('div');
-    col.className='eng-col'+(eng==='Unassigned'?' unassigned-col':'');
-    col.innerHTML=`
-      <div class="eng-col-hd">
-        <div>
-          <div class="eng-col-name">${eng==='Unassigned'?'⚠️ Unassigned':eng}</div>
-          <div class="eng-col-count">${jobs.length} job${jobs.length!==1?'s':''}</div>
-        </div>
-        ${eng!=='Unassigned'?`<div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">
-          <button class="btn btn-wa btn-xs" onclick="waEngineerAllJobs('${eng}')">📱 All Jobs</button>
-        </div>`:''}
-      </div>
-      <div id="ecol-${eng.replace(/\s/g,'_')}">
-        ${jobs.length?jobs.map((j,idx)=>{
-          const tc=tradeColor(j.trade);
-          const prtyMap={Emergency:'🚨',Urgent:'🔥',Normal:'',Low:'↓'};
-          const prty=prtyMap[j.priority]||'';
-          return`<div class="eng-job-card" ondblclick="openJobModal('${j.id}')">
-            <div class="eng-job-num">Job ${idx+1} of ${jobs.length}</div>
-            <div class="eng-job-addr">
-              <span class="dot" style="background:${tc};flex-shrink:0"></span>
-              ${prty?`<span>${prty}</span>`:''}
-              ${escHtml(j.address)}
-            </div>
-            <div class="eng-job-meta">
-              ${j.timeSlot?`🕐 ${escHtml(j.timeSlot)}<br>`:''}
-              🔧 ${escHtml(j.description)||'—'}<br>
-              ${j.access?`🔑 ${escHtml(j.access)}${j.contact?' · '+escHtml(j.contact):''}<br>`:''}
-              ${j.notes?`📝 ${escHtml(j.notes)}<br>`:''}
-            </div>
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px">
-              ${sBadge(j.status)}
-              ${j.price?`<span style="font-family:var(--fh);font-weight:700;font-size:13px">£${Number(j.price).toFixed(0)}</span>`:''}
-            </div>
-            <div class="eng-job-actions">
-              <button class="btn btn-wa btn-xs" onclick="waSingleEngJob('${j.id}','${eng}');event.stopPropagation()">📱 Send</button>
-              <button class="btn btn-ghost btn-xs" onclick="openJobModal('${j.id}');event.stopPropagation()">✎ Edit</button>
-              <select class="csel" style="font-size:11px;padding:3px 6px;width:auto;flex:1" onchange="quickStatus('${j.id}',this.value);setTimeout(renderEngView,300)" onclick="event.stopPropagation()">
-                ${['Pending','In Progress','Engineer Completed','Completed','Invoiced','Cancelled'].map(s=>`<option ${j.status===s?'selected':''}>${s}</option>`).join('')}
-              </select>
-            </div>
-          </div>`;
-        }).join(''):`<div style="color:var(--txt3);font-size:12px;padding:20px;text-align:center">No jobs today</div>`}
-      </div>
-    `;
-    wrap.appendChild(col);
-  });
 }
 
 async function waSingleEngJob(jobId,engName){
