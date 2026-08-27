@@ -129,7 +129,26 @@ export async function renderPlanner(){
   if(dfpMode==='day') await renderDayPlanner();
   if(dfpMode==='week') await renderWeekPlanner();
   if(dfpMode==='month') await renderMonthPlanner();
+  _dfpFillHeight();
 }
+
+// The board's own CSS relies on flex:1 all the way up to a viewport-height
+// ancestor to stretch — when a day/week has few jobs, that chain leaves a
+// dead white gap below the content instead of the board's grey background
+// filling the rest of the screen. Rather than fight that CSS cascade
+// blind, measure the real available space and set it directly — correct
+// regardless of how DeepFlow's surrounding chrome is sized, and self-
+// corrects on window resize.
+function _dfpFillHeight(){
+  const ws = el('dfpWorkspace');
+  const grid = el('dfpGrid');
+  if(!ws || !grid) return;
+  const top = ws.getBoundingClientRect().top;
+  const h = Math.max(320, window.innerHeight - top - 16);
+  ws.style.minHeight = h+'px';
+  grid.style.minHeight = h+'px';
+}
+window.addEventListener('resize', ()=>{ if(el('dfpGrid')) _dfpFillHeight(); });
 
 function confirmMoveJobDate(job, newDate){
   if(!job || !newDate || job.date===newDate) return false;
