@@ -1384,7 +1384,11 @@ body.density-relaxed .jtable td{font-size:15px}
    DeepFlow's previous plain hairline label, per explicit request to match
    that design exactly rather than DeepFlow's own dark/light theme tokens. */
 .jsg-hd{position:relative;display:flex;align-items:center;gap:12px;min-height:34px;padding:7px 10px 7px 12px;margin:6px 8px 4px;border-radius:7px;overflow:hidden;position:sticky;top:26px;z-index:3;
-  background:linear-gradient(90deg,rgba(236,205,119,.78) 0%,rgba(244,223,154,.66) 30%,rgba(250,241,207,.42) 62%,rgba(247,248,250,0) 92%)}
+  /* Gradient fades toward the solid page background (--bg), never to
+     transparent — a sticky header with a see-through tail lets whatever's
+     scrolling underneath bleed through it in real time, which is what
+     caused the "ghost trail" of previous date headings while scrolling. */
+  background:linear-gradient(90deg,rgba(236,205,119,.78) 0%,rgba(244,223,154,.66) 30%,rgba(250,241,207,.42) 62%,var(--bg) 92%)}
 .jsg-hd::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:#c69a24;border-radius:7px 0 0 7px}
 .jsg-hd-label{position:relative;z-index:1;font-family:var(--fh);font-size:14px;font-weight:800;color:#3c2f11;letter-spacing:-.01em;white-space:nowrap}
 .jsg-hd.today-group .jsg-hd-label{color:#3c2f11}
