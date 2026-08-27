@@ -2671,9 +2671,13 @@ async function renderJobs(){
   // "Projects" = jobs with 2+ real visits logged (job_visits), computed
   // once here from the real table (not simulated) and reused for both the
   // status-tab counts and the Projects filter below.
-  const _visitRows = await _sb('job_visits?select=jobid') || [];
+  // dAll() (not raw _sb()) — this has a 30s cache built in, so the extra
+  // "Projects" lookup doesn't fire a fresh network fetch on every render
+  // (search keystrokes, filter clicks, etc.) the way the first cut of this
+  // did.
+  const _visitRows = await dAll('job_visits') || [];
   const _visitCounts = {};
-  _visitRows.forEach(v=>{ _visitCounts[v.jobid]=(_visitCounts[v.jobid]||0)+1; });
+  _visitRows.forEach(v=>{ _visitCounts[v.jobId]=(_visitCounts[v.jobId]||0)+1; });
   const projectJobIds = new Set(Object.keys(_visitCounts).filter(id=>_visitCounts[id]>=2));
 
   renderJobStatusTabs(allJobs, projectJobIds);
@@ -2774,6 +2778,7 @@ async function renderJobs(){
     }
     const doneCount = gjobs.filter(j=>j.status===STATUS.COMPLETED||j.status===STATUS.INVOICED).length;
     const countLabel = `${gjobs.length} job${gjobs.length!==1?'s':''}${doneCount?` · ${doneCount} done`:''}`;
+    const dayTotal = gjobs.reduce((s,j)=>s+Number(j.price||0),0);
     const dateShort = (dateKey!=='TBC')?new Date(dateKey+'T00:00:00').toLocaleDateString('en-GB',{day:'2-digit',month:'short'}):'';
 
     // Click a date heading to filter to that day; click the same one again
@@ -2783,7 +2788,7 @@ async function renderJobs(){
     html += `<div class="jsg-hd ${isToday?'today-group':''}" data-date-group="${dateKey}" ${_headingClick}>
       <span class="jsg-hd-label">${dayLabel}${dateShort&&dayLabel!=='Today'&&dayLabel!=='Yesterday'&&dayLabel!=='Tomorrow'?'':dateShort?` <span style="opacity:.5;font-weight:400">${dateShort}</span>`:''}</span>
       <div class="jsg-hd-line"></div>
-      <span class="jsg-hd-count">${countLabel}</span>
+      <span class="jsg-hd-count"><span>${countLabel}</span>${dayTotal?`<strong>£${dayTotal.toLocaleString('en-GB',{minimumFractionDigits:0,maximumFractionDigits:0})}</strong>`:''}</span>
     </div><div class="jsg-rows" data-date="${dateKey}">`;
 
     gjobs.forEach(j=>{
