@@ -1314,6 +1314,9 @@ let _jRange='default',_jcalMonth=null,_jcalJobDates={};
 // instead of a silent dead end at the top of the list.
 let _jPastExtensionDays=0;
 let _calPaneVisible=true,_jUnbookedOnly=false,_jUnconfirmedOnly=false;
+// Status tabs (visual layer over the existing filter primitives — see
+// renderJobStatusTabs/setJStatusTab) and the exact-date search box.
+let _jStatusTab='all', _jExactDate='';
 let _pendCertQueue=[],_pendCertJob=null,_jobNumLock=false,_jobCertTypes=[];
 // Cert type ids the user has explicitly unchecked for the job currently
 // open in the New/Edit Job form — see toggleCertChip()/autoDetectCertTypes()
@@ -2583,6 +2586,41 @@ function debounceRenderJobs(){clearTimeout(_rjTimer);_rjTimer=setTimeout(renderJ
 let _cmdTimer;
 function debounceRenderCmd(q){clearTimeout(_cmdTimer);_cmdTimer=setTimeout(()=>renderCmd(q),200);}
 
+// Status tabs — All/Projects/Unassigned/<real statuses>. Visual layer over
+// existing filter primitives (j-status-filter's value, _jUnbookedOnly) so
+// renderJobs()'s actual filtering logic barely changed to support this.
+const JOB_STATUS_TABS=[['All','all'],['Projects','projects'],['Unassigned','unassigned'],
+  ['Pending','Pending'],['In Progress','In Progress'],['Engineer Completed','Engineer Completed'],
+  ['Completed','Completed'],['Invoiced','Invoiced'],['Cannot Access','Cannot Access'],['Cancelled','Cancelled']];
+
+function renderJobStatusTabs(allJobs, projectJobIds){
+  const bar=document.getElementById('j-status-tabs');
+  if(!bar) return;
+  bar.innerHTML=JOB_STATUS_TABS.map(([label,val])=>{
+    const count = val==='all' ? allJobs.length
+      : val==='projects' ? allJobs.filter(j=>projectJobIds.has(j.id)).length
+      : val==='unassigned' ? allJobs.filter(j=>!j.date||j.date===''||!j.engineer||j.engineer==='').length
+      : allJobs.filter(j=>j.status===val).length;
+    return `<button type="button" class="j-status-tab ${_jStatusTab===val?'active':''}" onclick="setJStatusTab('${val}')">${escHtml(label)}${count?` <span class="cnt">${count}</span>`:''}</button>`;
+  }).join('');
+}
+
+function setJStatusTab(tab){
+  _jStatusTab=tab;
+  _jUnbookedOnly = tab==='unassigned';
+  _jUnconfirmedOnly = false;
+  const sf=document.getElementById('j-status-filter');
+  if(sf) sf.value = (tab==='all'||tab==='projects'||tab==='unassigned') ? '' : tab;
+  renderJobs();
+}
+
+function setJExactDate(v){
+  _jExactDate = v||'';
+  const inp=document.getElementById('j-exact-date');
+  if(inp) inp.value=_jExactDate;
+  renderJobs();
+}
+
 async function renderJobs(){
   const lbl = document.getElementById('j-date-lbl');
   if(lbl) lbl.textContent = fmtD(jDate);
@@ -2630,8 +2668,22 @@ async function renderJobs(){
   renderMiniCal();
   renderCalEngSummary(allJobs, today);
 
+  // "Projects" = jobs with 2+ real visits logged (job_visits), computed
+  // once here from the real table (not simulated) and reused for both the
+  // status-tab counts and the Projects filter below.
+  const _visitRows = await _sb('job_visits?select=jobid') || [];
+  const _visitCounts = {};
+  _visitRows.forEach(v=>{ _visitCounts[v.jobid]=(_visitCounts[v.jobid]||0)+1; });
+  const projectJobIds = new Set(Object.keys(_visitCounts).filter(id=>_visitCounts[id]>=2));
+
+  renderJobStatusTabs(allJobs, projectJobIds);
+
   let jobs = allJobs;
-  if(search){
+  if(_jExactDate){
+    // Exact-date search overrides the normal range/search filters entirely —
+    // matches the shared Jobs/Planner design's exact-date behaviour.
+    jobs = jobs.filter(j=>j.date===_jExactDate);
+  } else if(search){
     jobs = jobs.filter(j=>(j.address+' '+j.description+' '+j.referrer+' '+j.engineer+' '+(j.notes||'')+' '+(j.jobNum||'')+' '+(j.contact||'')+' '+(j.landlordName||'')+' '+(j.trade||'')).toLowerCase().includes(search));
   } else {
     if(_jRange === '7'){
@@ -2666,6 +2718,7 @@ async function renderJobs(){
   }
   if(sfVal) jobs = jobs.filter(j=>j.status===sfVal);
   if(pfVal) jobs = jobs.filter(j=>j.priority===pfVal);
+  if(_jStatusTab==='projects') jobs = jobs.filter(j=>projectJobIds.has(j.id));
 
   // Populate _jobRowData with every job object — gives drag-drop reliable access
   // to job data WITHOUT depending on _jobCache (which poll can nullify mid-drag)
@@ -2723,7 +2776,11 @@ async function renderJobs(){
     const countLabel = `${gjobs.length} job${gjobs.length!==1?'s':''}${doneCount?` · ${doneCount} done`:''}`;
     const dateShort = (dateKey!=='TBC')?new Date(dateKey+'T00:00:00').toLocaleDateString('en-GB',{day:'2-digit',month:'short'}):'';
 
-    html += `<div class="jsg-hd ${isToday?'today-group':''}" data-date-group="${dateKey}">
+    // Click a date heading to filter to that day; click the same one again
+    // to clear — same toggle as the exact-date search box, since both just
+    // set _jExactDate.
+    const _headingClick = dateKey!=='TBC' ? `onclick="setJExactDate(_jExactDate==='${dateKey}'?'':'${dateKey}')" style="cursor:pointer" title="Click to show only this date"` : '';
+    html += `<div class="jsg-hd ${isToday?'today-group':''}" data-date-group="${dateKey}" ${_headingClick}>
       <span class="jsg-hd-label">${dayLabel}${dateShort&&dayLabel!=='Today'&&dayLabel!=='Yesterday'&&dayLabel!=='Tomorrow'?'':dateShort?` <span style="opacity:.5;font-weight:400">${dateShort}</span>`:''}</span>
       <div class="jsg-hd-line"></div>
       <span class="jsg-hd-count">${countLabel}</span>
@@ -15270,7 +15327,7 @@ Object.assign(window, {
   selectAddr, selectAllVisibleJobs, sendAllOverdueEmail, sendAllOverdueWA, sendBroadcast, sendCertToClient, sendInvEmail, sendInvWA,
   showPortalInviteModal,
   sendLandlordComplete, sendLandlordWA, sendOverdueWA, sendTenantWA, sendToWA, setAccent, setCremMode, setFontSize,
-  setInvFilter, setInvType, setInvView, setJRange, setJobsView, setPriFilter,
+  setInvFilter, setInvType, setInvView, setJRange, setJobsView, setPriFilter, setJStatusTab, setJExactDate,
   setReqType, setSidebarWidth, setTheme, shiftDay, showAgeBucket, showAllEngJobs,
   showColMenu, showJobAudit, showPropertyCerts, showWaPanel, skipCertExpiry, smartAutofill, stmtClearFilters,
   stmtQuickRange, stmtToggleAll, stmtToggleSel, submitBulkAppliances, submitRenewCert, switchAuditTab, switchCertTab, switchDirSection,

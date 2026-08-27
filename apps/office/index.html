@@ -1519,7 +1519,7 @@ body.density-relaxed .jtable td{font-size:15px}
 .jsr3-cell-access{font-size:11px;color:var(--txt);padding:2px 4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .jsr3-cell-referrer{font-size:11px;color:var(--txt);padding:2px 4px;overflow:hidden;white-space:normal;line-height:1.3;display:flex;flex-direction:column;justify-content:center;gap:1px}
 .jsr3-cell-referrer .jsr3-ref-name{font-weight:700;color:var(--txt);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.jsr3-cell-referrer .jsr3-ref-sub{font-size:9.5px;color:var(--txt3);font-family:var(--fm);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.jsr3-cell-referrer .jsr3-ref-sub{font-size:10.5px;color:var(--txt3);font-family:var(--fm);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .jsr3-cell-desc{font-size:11px;color:var(--txt);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:2px 4px;cursor:default;font-style:normal}
 .jsr3-cell-contact{font-size:10.5px;color:var(--txt2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:2px 4px}
 .jsr3-cell-time{font-size:11px;color:#1d6fad;font-weight:600;padding:2px 4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -1536,8 +1536,13 @@ body.density-relaxed .jtable td{font-size:15px}
 /* Status pill dropdown — same rounded-pill treatment as the shared design's
    .status chip, kept as a real <select> (not a static label) since
    changing status inline from the list is existing, working behaviour. */
-.jsr-sel{background:var(--s2)!important;border:1px solid var(--border)!important;border-radius:10px!important;color:var(--txt)!important;font-family:var(--fh);font-size:9.5px!important;font-weight:700!important;padding:3px 8px!important;outline:none;cursor:pointer;width:auto;max-width:100%}
+.jsr-sel{background:var(--s2)!important;border:1px solid var(--border)!important;border-radius:10px!important;color:var(--txt)!important;font-family:var(--fh);font-size:11px!important;font-weight:700!important;padding:3px 8px!important;outline:none;cursor:pointer;width:auto;max-width:100%}
 .jsg-add:hover{border-color:var(--acc);color:var(--acc)}
+/* Status tab pills — matches the shared Jobs/Planner design's .status-tab */
+.j-status-tab{border:1px solid var(--border);background:var(--s1);color:var(--txt2);padding:5px 11px;border-radius:13px;font-size:11px;font-family:var(--fh);font-weight:600;cursor:pointer;white-space:nowrap}
+.j-status-tab:hover{border-color:var(--border2)}
+.j-status-tab.active{background:rgba(245,166,35,.12);border-color:var(--acc);color:var(--acc);font-weight:800}
+.j-status-tab .cnt{opacity:.65;margin-left:2px}
 /* Rich tooltip */
 .df-tip{position:fixed;z-index:9000;background:var(--s1);border:1px solid var(--border2);border-radius:10px;padding:12px 14px;font-size:12px;color:var(--txt);box-shadow:var(--sh2);max-width:360px;pointer-events:auto;animation:mIn .1s ease;line-height:1.5}
 .df-tip-title{font-family:var(--fh);font-weight:800;font-size:13px;margin-bottom:6px;color:var(--txt)}
@@ -3639,10 +3644,16 @@ body.density-relaxed .jtable td{font-size:15px}
       <select class="fs" id="j-eng-filter" onchange="renderJobs()" style="width:110px;padding:4px 6px;font-size:11px">
         <option value="">Engineer</option>
       </select>
-      <select class="fs" id="j-status-filter" onchange="renderJobs()" style="width:110px;padding:4px 6px;font-size:11px">
+      <select class="fs" id="j-status-filter" onchange="renderJobs()" style="width:110px;padding:4px 6px;font-size:11px;display:none">
         <option value="">Status</option>
         <option>Pending</option><option>In Progress</option><option>Engineer Completed</option><option>Completed</option><option>Invoiced</option><option>Cancelled</option><option>Cannot Access</option>
       </select>
+
+      <div class="j-exact-date" style="height:29px;display:flex;align-items:center;gap:5px;padding:0 5px 0 8px;border:1px solid #e6cf87;background:#fffbed;border-radius:6px;white-space:nowrap">
+        <span style="font-size:10px;font-weight:900;color:#8a6a14;text-transform:uppercase;letter-spacing:.025em">Search date</span>
+        <input type="date" id="j-exact-date" class="fi" onchange="setJExactDate(this.value)" style="width:116px;border:0;background:transparent;padding:0 3px;color:#6c5513;font-weight:800;font-size:11px">
+        <button type="button" onclick="setJExactDate('')" title="Clear date filter" style="width:19px;height:19px;border:0;border-radius:50%;background:#f3e5b7;color:#7b6217;display:grid;place-items:center;font-size:12px;font-weight:900;padding:0;cursor:pointer">×</button>
+      </div>
 
       <!-- Settings menu (hidden options) -->
       <div style="position:relative;display:inline-flex" id="jobs-more-menu">
@@ -3677,6 +3688,12 @@ body.density-relaxed .jtable td{font-size:15px}
       <input type="date" id="j-datepick" style="display:none" onchange="jPickDate(this.value)">
       <div class="date-lbl" id="j-date-lbl" style="display:none"></div>
     </div>
+
+    <!-- Status tabs — visual replacement for the old dropdown, but they
+         just set j-status-filter's value (and the existing _jUnbookedOnly /
+         a new "projects" flag) and re-render, so renderJobs()'s filter
+         logic needed no changes to support this. -->
+    <div class="j-status-tabs" id="j-status-tabs" style="display:flex;align-items:center;gap:5px;padding:7px 12px;flex-wrap:wrap;border-bottom:1px solid var(--border)"></div>
 
     <!-- WhatsApp panel -->
     <div id="wa-panel" style="display:none"></div>
