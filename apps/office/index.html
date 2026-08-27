@@ -1544,6 +1544,11 @@ body.density-relaxed .jtable td{font-size:15px}
    changing status inline from the list is existing, working behaviour. */
 .jsr-sel{background:var(--s2)!important;border:1px solid var(--border)!important;border-radius:10px!important;color:var(--txt)!important;font-family:var(--fh);font-size:11px!important;font-weight:700!important;padding:3px 8px!important;outline:none;cursor:pointer;width:auto;max-width:100%}
 .jsg-add:hover{border-color:var(--acc);color:var(--acc)}
+/* Jobs table / Engineer Planner toggle — visible, not buried in a menu */
+.j-view-toggle{display:flex;border:1px solid var(--border);border-radius:7px;overflow:hidden;background:var(--s1)}
+.j-view-btn{border:0;background:transparent;color:var(--txt2);padding:6px 11px;font-size:11px;font-family:var(--fh);font-weight:600;cursor:pointer}
+.j-view-btn+.j-view-btn{border-left:1px solid var(--border)}
+.j-view-btn.active{background:var(--txt);color:var(--bg)}
 /* Status tab pills — matches the shared Jobs/Planner design's .status-tab */
 .j-status-tab{border:1px solid var(--border);background:var(--s1);color:var(--txt2);padding:5px 11px;border-radius:13px;font-size:11px;font-family:var(--fh);font-weight:600;cursor:pointer;white-space:nowrap}
 .j-status-tab:hover{border-color:var(--border2)}
@@ -3629,6 +3634,14 @@ body.density-relaxed .jtable td{font-size:15px}
   <div class="page" id="pg-jobs">
     <!-- Toolbar -->
     <div class="jobs-ctrl">
+      <!-- Jobs table / Engineer Planner — a visible toggle, matching the
+           reference design's placement, instead of buried in the ☰ menu.
+           Reuses setJobsView('list'/'engineer'), already wired. -->
+      <div class="j-view-toggle">
+        <button type="button" class="j-view-btn active" id="j-view-btn-table" onclick="setJobsView('list')">Jobs table</button>
+        <button type="button" class="j-view-btn" id="j-view-btn-planner" onclick="setJobsView('engineer')">Engineer planner</button>
+      </div>
+
       <!-- Day nav -->
       <button class="btn btn-ghost btn-sm day-nav-btn" onclick="shiftDay(-1)" title="Previous day (←)">◀</button>
       <button class="btn btn-ghost btn-sm day-nav-btn" onclick="setJRange('default');jPickDate(TODAY());renderJobs()" style="font-weight:700;min-width:52px" title="Jump to today">Today</button>
@@ -3688,7 +3701,8 @@ body.density-relaxed .jtable td{font-size:15px}
         <button class="btn btn-ghost btn-sm" onclick="clearSel()">✕</button>
       </div>
 
-      <button class="btn btn-acc btn-sm" onclick="openJobModal()" style="margin-left:auto;flex-shrink:0">+ New Job</button>
+      <button class="btn btn-ghost btn-sm" onclick="openProjectPicker()" style="margin-left:auto;flex-shrink:0;color:#674db7;border-color:#d9d1f5;background:#f5f2ff">＋ Add Visit from Projects</button>
+      <button class="btn btn-acc btn-sm" onclick="openJobModal()" style="flex-shrink:0">+ New Job</button>
 
       <!-- hidden date fields kept for backward compat with all existing JS -->
       <input type="date" id="j-datepick" style="display:none" onchange="jPickDate(this.value)">
@@ -6581,6 +6595,26 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS last_accuracy integer;</div>
       <section class="detail-panel" data-dfp-panel="invoices" id="dfpDetailInvoices"></section>
       <section class="detail-panel" data-dfp-panel="client" id="dfpDetailClient"></section>
     </div>
+  </div>
+</div>
+
+<!-- Running Projects picker — "＋ Add Visit from Projects". Jumps straight
+     to the existing, already-working Add Visit flow inside the job form
+     rather than duplicating it. -->
+<div class="dfplanner project-picker-backdrop" id="dfpProjectPickerBackdrop">
+  <div class="project-picker">
+    <div class="project-picker-head">
+      <div class="project-picker-icon">P</div>
+      <div>
+        <h3>Running Projects</h3>
+        <p>Pick a project to add its next visit — same job number, same property, same client.</p>
+      </div>
+      <button class="project-picker-close" id="dfpProjectPickerClose">×</button>
+    </div>
+    <div class="project-picker-search">
+      <input id="dfpProjectPickerSearch" placeholder="Search job number, address or client..." />
+    </div>
+    <div class="project-picker-list" id="dfpProjectPickerList"></div>
   </div>
 </div>
 

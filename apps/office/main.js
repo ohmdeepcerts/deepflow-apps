@@ -42,7 +42,7 @@ import {
 import { openCreditNoteModal, addCreditItem, fillCreditNote, saveCreditNote, creditNote, updateCreditItem, removeCreditItem } from './credit-notes.js';
 import { renderInvCustomTexts, addInvCustomText, removeInvCustomText } from './invoice-custom-text.js';
 import { renderSqlSnippets, copySql } from './sql-guide.js';
-import { renderPlanner, initPlanner } from './planner.js';
+import { renderPlanner, initPlanner, openProjectPicker } from './planner.js';
 import { exportMasterXLSX } from './master-xlsx-export.js';
 import { oneClickBackup, showJobsSkeleton, checkCronSetup } from './backup-diagnostics.js';
 
@@ -10420,12 +10420,21 @@ function setJobsView(v){
   const engView=document.getElementById('eng-view');
   const listPane=document.getElementById('jobs-list-pane');
   const calPane=document.getElementById('jobs-cal-pane');
+  // The visible Jobs table / Engineer Planner toggle. (btn-view-eng/
+  // btn-view-list below were referenced here but never existed anywhere
+  // in the page — dead code from before this toggle had a real button;
+  // left as harmless no-ops via the null guards rather than removed, in
+  // case something else still expects them.)
+  const jViewTable=document.getElementById('j-view-btn-table');
+  const jViewPlanner=document.getElementById('j-view-btn-planner');
   const btnEng=document.getElementById('btn-view-eng');
   const btnList=document.getElementById('btn-view-list');
   if(v==='engineer'){
     if(engView) engView.style.display='flex';
     if(listPane) listPane.style.display='none';
     if(calPane) calPane.style.display='none';
+    if(jViewTable) jViewTable.classList.remove('active');
+    if(jViewPlanner) jViewPlanner.classList.add('active');
     if(btnEng){ btnEng.classList.add('btn-acc'); btnEng.classList.remove('btn-ghost'); btnEng.style.display='none'; }
     if(btnList) btnList.style.display='';
     renderPlanner();
@@ -10433,6 +10442,8 @@ function setJobsView(v){
     if(engView) engView.style.display='none';
     if(listPane) listPane.style.display='flex';
     if(calPane && _calPaneVisible) calPane.classList.remove('cal-hidden');
+    if(jViewTable) jViewTable.classList.add('active');
+    if(jViewPlanner) jViewPlanner.classList.remove('active');
     if(btnEng){ btnEng.classList.remove('btn-acc'); btnEng.classList.add('btn-ghost'); btnEng.style.display=''; }
     if(btnList) btnList.style.display='none';
     renderJobs();
@@ -15317,7 +15328,7 @@ Object.assign(window, {
   exportExpensesCSV, exportInvsCSV, exportMasterXLSX, exportPLCSV, exportPropsCSV, exportReportPDF, 
   extractAppliancesFromPhoto, fillCreditNote, fillFromMatch, filterCerts, fuzzyAddr, generateBulkReminder, generateCertPdf,
   postcodeLookup, confirmPostcode,
-  loadJobVisits, toggleAddVisitForm, saveVisit, deleteVisit,
+  loadJobVisits, toggleAddVisitForm, saveVisit, deleteVisit, openProjectPicker,
   handleAccess, handleLogoUpload, handleNotifClick, handlePriDotClick, importBackup, importCertCSV,
   invClientSelected, invNavSelect, jCalPickDate, jPickDate, jcalShiftMonth, kanbanDragOver, 
   kanbanDragStart, kanbanDrop, loadEarlierJobs, loadEngPerms, loadEngineerLocations, loadStorageDashboard, 
