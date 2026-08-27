@@ -2621,6 +2621,15 @@ function setJExactDate(v){
   renderJobs();
 }
 
+// Inline onclick="..." HTML runs in global (window) scope, not this
+// module's scope — it can't read the module-private _jExactDate variable
+// directly (that's a ReferenceError, silently swallowed, so the click
+// just does nothing). This wrapper reads/writes it from inside the module
+// where it's actually in scope, and is itself the thing exposed on window.
+function toggleJDateHeading(dateKey){
+  setJExactDate(_jExactDate===dateKey ? '' : dateKey);
+}
+
 async function renderJobs(){
   const lbl = document.getElementById('j-date-lbl');
   if(lbl) lbl.textContent = fmtD(jDate);
@@ -2784,7 +2793,7 @@ async function renderJobs(){
     // Click a date heading to filter to that day; click the same one again
     // to clear — same toggle as the exact-date search box, since both just
     // set _jExactDate.
-    const _headingClick = dateKey!=='TBC' ? `onclick="setJExactDate(_jExactDate==='${dateKey}'?'':'${dateKey}')" style="cursor:pointer" title="Click to show only this date"` : '';
+    const _headingClick = dateKey!=='TBC' ? `onclick="toggleJDateHeading('${dateKey}')" style="cursor:pointer" title="Click to show only this date"` : '';
     html += `<div class="jsg-hd ${isToday?'today-group':''}" data-date-group="${dateKey}" ${_headingClick}>
       <span class="jsg-hd-label">${dayLabel}${dateShort&&dayLabel!=='Today'&&dayLabel!=='Yesterday'&&dayLabel!=='Tomorrow'?'':dateShort?` <span style="opacity:.5;font-weight:400">${dateShort}</span>`:''}</span>
       <div class="jsg-hd-line"></div>
@@ -15332,7 +15341,7 @@ Object.assign(window, {
   selectAddr, selectAllVisibleJobs, sendAllOverdueEmail, sendAllOverdueWA, sendBroadcast, sendCertToClient, sendInvEmail, sendInvWA,
   showPortalInviteModal,
   sendLandlordComplete, sendLandlordWA, sendOverdueWA, sendTenantWA, sendToWA, setAccent, setCremMode, setFontSize,
-  setInvFilter, setInvType, setInvView, setJRange, setJobsView, setPriFilter, setJStatusTab, setJExactDate,
+  setInvFilter, setInvType, setInvView, setJRange, setJobsView, setPriFilter, setJStatusTab, setJExactDate, toggleJDateHeading,
   setReqType, setSidebarWidth, setTheme, shiftDay, showAgeBucket, showAllEngJobs,
   showColMenu, showJobAudit, showPropertyCerts, showWaPanel, skipCertExpiry, smartAutofill, stmtClearFilters,
   stmtQuickRange, stmtToggleAll, stmtToggleSel, submitBulkAppliances, submitRenewCert, switchAuditTab, switchCertTab, switchDirSection,
