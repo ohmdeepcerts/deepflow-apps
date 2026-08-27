@@ -2840,13 +2840,15 @@ async function renderJobs(){
           <span onclick="quickEditPrice('${j.id}','${j.price||0}',this)" style="cursor:text;min-width:32px;display:inline-block">${priceStr||'—'}</span>
         </div>
 
-        <!-- COL 8: Referrer — landlord > agent > agency > referrer field -->
+        <!-- COL 8: Referrer — landlord > agent > agency > referrer field,
+             name + phone stacked to match the shared Jobs/Planner design's
+             two-line client-card treatment -->
         <div class="jsr3-cell jsr3-cell-referrer" data-col="referrer">${(()=>{
-          if(j.landlordName) return '🏠 '+escHtml(j.landlordName);
-          if(j.agentName)    return '👤 '+escHtml(j.agentName);
-          if(j.agencyName)   return '🏢 '+escHtml(j.agencyName);
-          if(j.referrer)     return escHtml(j.referrer);
-          return '<span style="color:var(--txt3);font-size:10px">—</span>';
+          const name = j.landlordName||j.agentName||j.agencyName||j.referrer||'';
+          if(!name) return '<span style="color:var(--txt3);font-size:10px">—</span>';
+          const icon = j.landlordName?'🏠':j.agentName?'👤':j.agencyName?'🏢':'';
+          const phone = j.landlordPhone||j.agentPhone||j.agencyPhone||'';
+          return `<span class="jsr3-ref-name">${icon?icon+' ':''}${escHtml(name)}</span>${phone?`<span class="jsr3-ref-sub">${escHtml(phone)}</span>`:''}`;
         })()}</div>
 
         <!-- COL 9: Status dropdown -->

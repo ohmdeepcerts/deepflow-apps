@@ -1379,13 +1379,17 @@ body.density-relaxed .jtable td{font-size:15px}
 #jobs-list-pane{flex:1;display:flex;flex-direction:column;overflow-y:scroll;overflow-x:auto;min-height:0;scrollbar-width:thin;scrollbar-color:var(--border2) transparent}
 #jobs-list-scroll{flex:1;display:flex;flex-direction:column}
 
-/* date group header */
-.jsg-hd{display:flex;align-items:center;gap:8px;padding:3px 12px 2px;position:sticky;top:26px;background:var(--bg);z-index:3;border-top:1px solid var(--border)}
-.jsg-hd-label{font-family:var(--fh);font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.8px;white-space:nowrap}
-.jsg-hd.today-group .jsg-hd-label{color:var(--acc)}
-.jsg-hd-line{flex:1;height:1px;background:var(--border)}
-.jsg-hd.today-group .jsg-hd-line{background:rgba(245,166,35,.25)}
-.jsg-hd-count{font-size:10px;color:var(--txt3);font-weight:700;font-family:var(--fm);white-space:nowrap}
+/* date group header — matches the shared Jobs/Planner design's amber
+   date-heading treatment (see .dfplanner .jobs-date-heading) rather than
+   DeepFlow's previous plain hairline label, per explicit request to match
+   that design exactly rather than DeepFlow's own dark/light theme tokens. */
+.jsg-hd{position:relative;display:flex;align-items:center;gap:12px;min-height:34px;padding:7px 10px 7px 12px;margin:6px 8px 4px;border-radius:7px;overflow:hidden;position:sticky;top:26px;z-index:3;
+  background:linear-gradient(90deg,rgba(236,205,119,.78) 0%,rgba(244,223,154,.66) 30%,rgba(250,241,207,.42) 62%,rgba(247,248,250,0) 92%)}
+.jsg-hd::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:#c69a24;border-radius:7px 0 0 7px}
+.jsg-hd-label{position:relative;z-index:1;font-family:var(--fh);font-size:14px;font-weight:800;color:#3c2f11;letter-spacing:-.01em;white-space:nowrap}
+.jsg-hd.today-group .jsg-hd-label{color:#3c2f11}
+.jsg-hd-line{display:none}
+.jsg-hd-count{position:relative;z-index:1;margin-left:auto;font-size:10px;color:#6b5314;font-weight:800;font-family:var(--fm);white-space:nowrap;background:rgba(255,251,235,.96);border:1px solid rgba(202,166,69,.5);border-radius:10px;padding:3px 8px}
 
 /* job rows */
 .jsg-rows{padding:0;display:flex;flex-direction:column;gap:0}
@@ -1439,14 +1443,17 @@ body.density-relaxed .jtable td{font-size:15px}
 .jsr3{display:grid;align-items:center;background:var(--s1);border:none;border-bottom:1px solid var(--border);border-radius:0;overflow:hidden;cursor:default;transition:background .4s ease,border-left-color .4s ease,box-shadow .4s ease,opacity .2s ease,transform .15s ease;position:relative;min-height:32px;box-sizing:border-box;font-size:12px}
 .jsr3:hover{background:var(--s2)}
 .jsg-rows{padding:0;display:flex;flex-direction:column;gap:0}
-.jsr3.jsr-emg{background:rgba(230,95,0,.22);border-left:4px solid #e65f00}
-.jsr3.jsr-urg{background:rgba(140,60,220,.20);border-left:4px solid #8c3cdc}
-.jsr3.jsr-cert{background:rgba(20,170,70,.20);border-left:4px solid #14aa46}
-.jsr3.jsr-repair{background:rgba(180,45,45,.24);border-left:4px solid #b42d2d}
+/* Row tint per job type — matches the shared Jobs/Planner design's exact
+   palette (certificate/repair/urgent/emergency) rather than DeepFlow's
+   previous colour choices, per explicit request to match that design. */
+.jsr3.jsr-emg{background:#fff4ed;border-left:4px solid #ec8348}
+.jsr3.jsr-urg{background:#fffdf4;border-left:4px solid #d6a838}
+.jsr3.jsr-cert{background:#f2fbf9;border-left:4px solid #45b591}
+.jsr3.jsr-repair{background:#fff8f8;border-left:4px solid #d6686e}
 .jsr3:hover{border-color:var(--border2);box-shadow:0 1px 8px rgba(0,0,0,.07)}
 .jsr3.jsr-past{opacity:1}/* FIX: removed opacity fade for past jobs */
-.jsr3.jsr-normal{background:rgba(60,120,230,.16);border-left:4px solid #3c78e6}
-.jsr3.jsr-low{background:#f0f0f0;border-left:4px solid var(--border2)}
+.jsr3.jsr-normal{background:var(--s1);border-left:4px solid transparent}
+.jsr3.jsr-low{background:var(--s1);border-left:4px solid var(--border2)}
 
 /* ═══ Instant priority change feedback ═══ */
 .jsg-rows{transition:opacity .15s ease}
@@ -1507,10 +1514,12 @@ body.density-relaxed .jtable td{font-size:15px}
 /* Resize handle visible stripe on right edge of header cells */
 /* Resize handle: 8px wide grab area with 2px visual line (::after) — see lines 234-237 */
 .jsr3-cell-status{padding:2px 4px;display:flex;align-items:center}
-.jsr3-cell-addr{font-family:var(--fh);font-size:11px;font-weight:600;color:var(--txt);padding:2px 4px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.jsr3-cell-addr:hover{color:var(--acc)}
+.jsr3-cell-addr{font-family:var(--fh);font-size:11px;font-weight:600;color:var(--txt);padding:2px 4px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-decoration:underline;text-decoration-color:transparent;text-underline-offset:2px;transition:text-decoration-color .15s}
+.jsr3-cell-addr:hover{color:var(--acc);text-decoration-color:var(--acc)}
 .jsr3-cell-access{font-size:11px;color:var(--txt);padding:2px 4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.jsr3-cell-referrer{font-size:11px;color:var(--txt);padding:2px 4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.jsr3-cell-referrer{font-size:11px;color:var(--txt);padding:2px 4px;overflow:hidden;white-space:normal;line-height:1.3;display:flex;flex-direction:column;justify-content:center;gap:1px}
+.jsr3-cell-referrer .jsr3-ref-name{font-weight:700;color:var(--txt);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.jsr3-cell-referrer .jsr3-ref-sub{font-size:9.5px;color:var(--txt3);font-family:var(--fm);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .jsr3-cell-desc{font-size:11px;color:var(--txt);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:2px 4px;cursor:default;font-style:normal}
 .jsr3-cell-contact{font-size:10.5px;color:var(--txt2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:2px 4px}
 .jsr3-cell-time{font-size:11px;color:#1d6fad;font-weight:600;padding:2px 4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -1521,8 +1530,13 @@ body.density-relaxed .jtable td{font-size:15px}
 /* Fixed-width action slots so buttons stay aligned across all rows */
 .jsr3-cell-actions{padding:2px 4px;display:grid;grid-template-columns:22px 22px 22px 22px 22px;gap:0;align-items:center;flex-shrink:0;overflow:visible}
 .jsr-act-slot{display:flex;align-items:center;justify-content:center;width:22px;height:20px;flex-shrink:0;overflow:hidden}
-/* Consistent job number badge — all prefixes look the same */
-.jsr3-jobnum{font-size:9px;font-weight:700;padding:1px 4px;border-radius:4px;background:var(--s2);color:var(--txt2);border:1px solid var(--border);display:inline-block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;line-height:1.2}
+/* Consistent job number badge — all prefixes look the same. Monospace to
+   match the shared Jobs/Planner design's .job-no treatment. */
+.jsr3-jobnum{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10px;font-weight:700;padding:1px 4px;border-radius:4px;background:var(--s2);color:var(--txt2);border:1px solid var(--border);display:inline-block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;line-height:1.2}
+/* Status pill dropdown — same rounded-pill treatment as the shared design's
+   .status chip, kept as a real <select> (not a static label) since
+   changing status inline from the list is existing, working behaviour. */
+.jsr-sel{background:var(--s2)!important;border:1px solid var(--border)!important;border-radius:10px!important;color:var(--txt)!important;font-family:var(--fh);font-size:9.5px!important;font-weight:700!important;padding:3px 8px!important;outline:none;cursor:pointer;width:auto;max-width:100%}
 .jsg-add:hover{border-color:var(--acc);color:var(--acc)}
 /* Rich tooltip */
 .df-tip{position:fixed;z-index:9000;background:var(--s1);border:1px solid var(--border2);border-radius:10px;padding:12px 14px;font-size:12px;color:var(--txt);box-shadow:var(--sh2);max-width:360px;pointer-events:auto;animation:mIn .1s ease;line-height:1.5}
