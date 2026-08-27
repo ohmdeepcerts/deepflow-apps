@@ -6547,6 +6547,48 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS last_accuracy integer;</div>
   </div>
 </div>
 
+<!-- Compose Email Modal — general "email this client" action, wired to the
+     app's real send-email pipeline (Resend/SendGrid, whichever is
+     configured), not a new provider. -->
+<div class="dfplanner email-modal-backdrop" id="dfpEmailBackdrop">
+  <div class="email-compose">
+    <div class="email-head">
+      <div class="email-head-icon">✉</div>
+      <div><h3>Send Email</h3><p>Compose a message to the client.</p></div>
+      <button class="email-close" id="dfpEmailClose">×</button>
+    </div>
+    <div class="email-body">
+      <div class="email-grid">
+        <div class="email-field">
+          <label>To</label>
+          <div class="email-to-row">
+            <input id="dfpEmailTo" type="email" />
+            <span class="recipient-pill" id="dfpEmailClientName">Client</span>
+          </div>
+        </div>
+        <div class="email-field"><label>Subject</label><input id="dfpEmailSubject" placeholder="Enter email subject" /></div>
+        <div class="email-field"><label>Message</label><textarea id="dfpEmailMessage" placeholder="Write your message here..."></textarea></div>
+        <div class="email-field">
+          <label>Attachments</label>
+          <div class="attachment-zone">
+            <div class="attachment-row">
+              <button class="attach-btn" id="dfpAttachBtn" type="button">＋ Add attachment</button>
+              <span class="attach-note">PDF, image, certificate, invoice or other job document</span>
+            </div>
+            <input id="dfpEmailAttachments" type="file" multiple hidden />
+            <div class="attachment-list" id="dfpAttachmentList"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="email-footer">
+      <div class="email-footer-note" id="dfpEmailFooterNote"></div>
+      <button class="btn" id="dfpEmailCancel">Cancel</button>
+      <button class="send-email-btn" id="dfpSendEmailBtn">Send Email</button>
+    </div>
+  </div>
+</div>
+
 <!-- WA Preview Modal -->
 <div class="overlay" id="mo-wa">
 <div class="modal" style="max-width:560px">

@@ -6567,7 +6567,7 @@ export async function _sendEmail({to, cc, subject, html, attachments, replyTo}){
 // (#0d1f3c) used across the invoice PDF/masthead so every email reads as
 // the same document family instead of a plain-text afterthought. Callers
 // supply just the body content between the header and footer.
-function _brandedEmailShell(bodyHtml){
+export function _brandedEmailShell(bodyHtml){
   const addrLine = [S.coAddr, S.coPhone, S.coEmail, S.coWeb].filter(Boolean).map(escHtml).join(' &nbsp;·&nbsp; ');
   return `
 <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;background:#f2f4f8;padding:24px 12px">

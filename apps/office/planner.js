@@ -11,7 +11,7 @@
 
 import { escHtml } from '@ui';
 import { formatDateUK } from '@business';
-import { S, dAll, _sb, toast, calcInvTotal, getAppUser } from './main.js';
+import { S, dAll, _sb, toast, calcInvTotal, getAppUser, _sendEmail, _brandedEmailShell } from './main.js';
 // openJobModal isn't an ES export of main.js (only exposed on window for
 // inline HTML handlers), so it's called via window here rather than imported.
 
@@ -116,6 +116,7 @@ function dayJobRow(j, engName, showEngineer, rowCount, total, invoices, unassign
     <td>
       <div class="day-actions">
         <button class="icon-btn dfp-edit-job" data-id="${j.id}" title="Edit">✎</button>
+        <button class="icon-btn dfp-email-job" data-id="${j.id}" title="Email client">✉</button>
       </div>
     </td>
   </tr>`;
@@ -597,6 +598,7 @@ export async function openJobDetails(jobId, tab='overview'){
         <div class="client-contact-line">✉ ${escHtml(contact.email||'—')}</div>
         <div class="client-detail-actions">
           ${contact.phone?`<button class="btn" data-open="${callLink}">Call</button><button class="btn" data-open="${waLink}">WhatsApp</button>`:''}
+          ${contact.email?`<button class="btn dfp-email-job" data-id="${job.id}">Email</button>`:''}
         </div>
       </div>
       <div class="detail-card span2">
@@ -655,8 +657,102 @@ document.addEventListener('keydown', e=>{
   }
 });
 
+// ════════════════════════════════════════════════════════════════
+//  EMAIL COMPOSER — real send-email pipeline (Resend/SendGrid),
+//  not a new provider
+// ════════════════════════════════════════════════════════════════
+
+let emailJobId = null;
+let emailAttachments = [];
+
+function fileToBase64(file){
+  return new Promise((resolve,reject)=>{
+    const r=new FileReader();
+    r.onload=()=>resolve(String(r.result).split(',')[1]||'');
+    r.onerror=reject;
+    r.readAsDataURL(file);
+  });
+}
+
+export async function openEmailComposer(jobId){
+  const jobs = await dAll('jobs');
+  const job = jobs.find(x=>x.id===jobId);
+  if(!job){ toast('Job not found','error'); return; }
+  const contact = resolveContact(job);
+  emailJobId = jobId;
+  emailAttachments = [];
+  el('dfpAttachmentList').innerHTML='';
+  el('dfpEmailAttachments').value='';
+  el('dfpEmailTo').value = contact.email||'';
+  el('dfpEmailClientName').textContent = contact.name||'Client';
+  el('dfpEmailSubject').value = `${job.jobNum||'Job'} — ${job.address||''}`;
+  el('dfpEmailMessage').value = `Hello ${contact.name||''},\n\nRegarding job ${job.jobNum||''} at:\n${job.address||''}\n\n${job.description||''}\n\nKind regards`;
+  el('dfpEmailFooterNote').textContent = '';
+  el('dfpEmailBackdrop').classList.add('show');
+  setTimeout(()=>el('dfpEmailSubject').focus(),40);
+}
+
+function closeEmailComposer(){
+  el('dfpEmailBackdrop').classList.remove('show');
+  emailJobId=null; emailAttachments=[];
+}
+
+function renderEmailAttachments(){
+  el('dfpAttachmentList').innerHTML = emailAttachments.map((f,i)=>`
+    <span class="attachment-chip">📎 ${escHtml(f.name)}<button type="button" data-remove-attachment="${i}" title="Remove">×</button></span>
+  `).join('');
+}
+
+async function sendComposedEmail(){
+  const to = el('dfpEmailTo').value.trim();
+  const subject = el('dfpEmailSubject').value.trim();
+  const message = el('dfpEmailMessage').value.trim();
+  if(!to){ toast('Client email address is required','error'); return; }
+  if(!subject){ toast('Enter an email subject','error'); return; }
+  if(!message){ toast('Write an email message','error'); return; }
+
+  el('dfpSendEmailBtn').disabled = true;
+  el('dfpSendEmailBtn').textContent = 'Sending…';
+  try{
+    const attachments = await Promise.all(emailAttachments.map(async f=>({
+      filename: f.name, content: await fileToBase64(f),
+    })));
+    const html = _brandedEmailShell(`<p style="white-space:pre-wrap;font-size:14px;color:#1f2937;line-height:1.6">${escHtml(message)}</p>`);
+    const result = await _sendEmail({to, subject, html, attachments});
+    if(result.ok){
+      toast('Email sent','success');
+      closeEmailComposer();
+    } else {
+      toast('Email failed: '+(result.error||'unknown error'),'error');
+    }
+  } finally {
+    el('dfpSendEmailBtn').disabled = false;
+    el('dfpSendEmailBtn').textContent = 'Send Email';
+  }
+}
+
+document.addEventListener('click', e=>{
+  const emailBtn = e.target.closest('#dfpGrid .dfp-email-job, .job-detail-body .dfp-email-job');
+  if(emailBtn){
+    if(e.target.closest('.job-detail-body')) closeJobDetails();
+    openEmailComposer(emailBtn.dataset.id);
+    return;
+  }
+  const removeAtt = e.target.closest('[data-remove-attachment]');
+  if(removeAtt){ emailAttachments.splice(Number(removeAtt.dataset.removeAttachment),1); renderEmailAttachments(); return; }
+});
+
 export function initPlanner(){
   el('dfpDate').value = dfpDate;
+  el('dfpEmailClose').addEventListener('click', closeEmailComposer);
+  el('dfpEmailCancel').addEventListener('click', closeEmailComposer);
+  el('dfpEmailBackdrop').addEventListener('click', e=>{ if(e.target===el('dfpEmailBackdrop')) closeEmailComposer(); });
+  el('dfpAttachBtn').addEventListener('click', ()=>el('dfpEmailAttachments').click());
+  el('dfpEmailAttachments').addEventListener('change', e=>{
+    emailAttachments = [...e.target.files];
+    renderEmailAttachments();
+  });
+  el('dfpSendEmailBtn').addEventListener('click', sendComposedEmail);
   el('dfpDetailClose').addEventListener('click', closeJobDetails);
   el('dfpDetailBackdrop').addEventListener('click', e=>{ if(e.target===el('dfpDetailBackdrop')) closeJobDetails(); });
   el('dfpDetailTabs').addEventListener('click', e=>{
