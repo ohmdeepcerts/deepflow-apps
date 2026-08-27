@@ -6513,6 +6513,40 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS last_accuracy integer;</div>
 </div>
 </div>
 
+<!-- Job Detail Modal — richer read view for a job: visit timeline (with
+     photos/comments), invoices, client. Design is the scoped, verbatim
+     shared Jobs/Planner design (see dfplanner-styles); data is real. -->
+<div class="dfplanner job-detail-backdrop" id="dfpDetailBackdrop">
+  <div class="job-detail-modal">
+    <div class="job-detail-head">
+      <div class="job-detail-headline">
+        <div class="project-icon">J</div>
+        <div class="job-detail-title">
+          <h2 id="dfpDetailTitle">Job</h2>
+          <p id="dfpDetailSubtitle">Property address</p>
+        </div>
+        <div class="job-detail-summary" id="dfpDetailSummary"></div>
+        <div class="detail-action-row">
+          <button class="detail-project-btn add" id="dfpDetailAddVisit">＋ Add Visit</button>
+        </div>
+        <button class="detail-close" id="dfpDetailClose">×</button>
+      </div>
+    </div>
+    <div class="job-detail-tabs" id="dfpDetailTabs">
+      <button class="detail-tab active" data-dfp-tab="overview">Overview</button>
+      <button class="detail-tab" data-dfp-tab="activity">Activity / Visits</button>
+      <button class="detail-tab" data-dfp-tab="invoices">Invoices</button>
+      <button class="detail-tab" data-dfp-tab="client">Client Details</button>
+    </div>
+    <div class="job-detail-body">
+      <section class="detail-panel active" data-dfp-panel="overview" id="dfpDetailOverview"></section>
+      <section class="detail-panel" data-dfp-panel="activity" id="dfpDetailActivity"></section>
+      <section class="detail-panel" data-dfp-panel="invoices" id="dfpDetailInvoices"></section>
+      <section class="detail-panel" data-dfp-panel="client" id="dfpDetailClient"></section>
+    </div>
+  </div>
+</div>
+
 <!-- WA Preview Modal -->
 <div class="overlay" id="mo-wa">
 <div class="modal" style="max-width:560px">
