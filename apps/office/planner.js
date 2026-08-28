@@ -113,7 +113,7 @@ function dayJobRow(j, engName, showEngineer, rowCount, total, invoices, unassign
     <td class="day-amount">${money(j.price)}</td>
     <td class="day-client">${contactMarkup(j)}</td>
     <td class="day-status"><span class="status">${escHtml(j.status||'Pending')}</span></td>
-    <td>
+    <td class="day-actions-cell">
       <div class="day-actions">
         <button class="icon-btn dfp-edit-job" data-id="${j.id}" title="Edit">✎</button>
         <button class="icon-btn dfp-email-job" data-id="${j.id}" title="Email client">✉</button>

@@ -2283,9 +2283,16 @@ body.density-relaxed .jtable td{font-size:15px}
 
 .dfplanner .day-amount {text-align:right;font-weight:800;color:#3c4248;white-space:nowrap;min-width:82px}
 
-.dfplanner .day-status {min-width:108px}
+/* Status and Actions pinned to the right edge of the horizontal scroll —
+   the table is genuinely wider than the visible board on real screens
+   (confirmed: 1478px table vs ~1115px visible area), so without this the
+   two most operationally important columns are scrolled off by default. */
+.dfplanner .day-status {min-width:108px;position:sticky;right:92px;background:#fff;z-index:2;box-shadow:-6px 0 6px -6px rgba(20,25,31,.08)}
+.dfplanner .day-group-row:hover .day-status {background:#fbfcfd}
 
 .dfplanner .day-actions {display:flex;align-items:center;gap:2px;white-space:nowrap;min-width:92px}
+.dfplanner .day-actions-cell {position:sticky;right:0;background:#fff;z-index:2}
+.dfplanner .day-group-row:hover .day-actions-cell {background:#fbfcfd}
 
 .dfplanner .day-client {min-width:235px}
 
