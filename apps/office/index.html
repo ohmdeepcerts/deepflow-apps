@@ -2220,10 +2220,30 @@ body.density-relaxed .jtable td{font-size:15px}
     }
 
 .dfplanner .day-table-wrap {
-      width:max(100%,1480px);min-width:1480px;box-sizing:border-box;
-      background:#fff;border:1px solid #e1e4e8;border-radius:10px;overflow:hidden;
+      /* Fixed to the table's own natural width — NOT max(100%,1480px).
+         That stretched the wrap to fill #dfpGrid's full scroll-container
+         width on any screen wider than ~1480px+sidebar, and since most
+         columns are min-width (not fixed), the browser's table layout
+         dumped all that extra space into one or two flexible columns
+         instead of the table just sitting at its natural size — the
+         board looked like it only used half the page, with the rest a
+         blank stretched-out gap inside a column rather than real content. */
+      /* overflow was hidden here, but position:sticky on .day-status /
+         .day-actions-cell resolves its containing block to the NEAREST
+         ancestor with overflow != visible — with this wrap now exactly as
+         wide as its own table (no internal overflow of its own), that made
+         THIS box the sticky containing block instead of the real scrolling
+         ancestor (#dfpGrid, overflow-x:auto), so the sticky columns had no
+         scroll range to react to and never actually pinned. Clipping now
+         happens on the table's own corner cells instead (see .day-table
+         tbody tr:last-child td rules), so this can stay visible. */
+      width:1480px;box-sizing:border-box;
+      background:#fff;border:1px solid #e1e4e8;border-radius:10px;
       box-shadow:0 2px 8px rgba(20,25,31,.025)
     }
+
+.dfplanner .day-table tbody tr:last-child td:first-child {border-radius:0 0 0 9px}
+.dfplanner .day-table tbody tr:last-child td:last-child {border-radius:0 0 9px 0}
 
 .dfplanner .day-table {
       width:100%;border-collapse:separate;border-spacing:0
@@ -3250,9 +3270,17 @@ body.density-relaxed .jtable td{font-size:15px}
 
 .dfplanner .month-more {font-size:9px}
 
-.dfplanner /* Make planner content genuinely occupy the available monitor width. */
-    .planner-board > .day-table-wrap,
-.dfplanner .planner-board > .week-board,
+.dfplanner /* Make planner content genuinely occupy the available monitor width.
+   Day view is deliberately excluded — .day-table-wrap has its own fixed,
+   content-matched width (see the .dfplanner .day-table-wrap rule above);
+   stretching it to 100% here overrode that with max(100%,100%), forcing
+   the table wider than its columns need on any monitor bigger than
+   ~1480px+sidebar. The browser's table auto-layout then dumped that extra
+   width unevenly into whichever column could grow, instead of the table
+   just sitting at its natural size — on a wide screen the board looked
+   like it only used half the page, with the rest a blank stretched gap
+   inside one column rather than real content. */
+    .planner-board > .week-board,
 .dfplanner .planner-board > .month-wrap {
       width:max(100%, var(--planner-min-width, 100%));
     }
