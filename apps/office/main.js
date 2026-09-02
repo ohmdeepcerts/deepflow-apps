@@ -57,7 +57,8 @@ import {
 import { openCreditNoteModal, addCreditItem, fillCreditNote, saveCreditNote, creditNote, updateCreditItem, removeCreditItem } from './credit-notes.js';
 import { renderInvCustomTexts, addInvCustomText, removeInvCustomText } from './invoice-custom-text.js';
 import { renderSqlSnippets, copySql } from './sql-guide.js';
-import { renderPlanner, initPlanner, openProjectPicker } from './planner.js';
+import { renderPlanner, initPlanner } from './planner-board.js';
+import { openProjectPicker } from './planner-projects.js';
 import { exportMasterXLSX } from './master-xlsx-export.js';
 import { oneClickBackup, showJobsSkeleton, checkCronSetup } from './backup-diagnostics.js';
 import { renderReports, getTopAddresses, exportReportPDF } from './reports.js';

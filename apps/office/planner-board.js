@@ -1,61 +1,40 @@
-// Engineer Planner — Day/Week/Month drag-and-drop dispatch board.
+// Engineer Planner — the Day/Week/Month drag-and-drop dispatch board itself:
+// grid rendering for all three view modes, their shared drag-drop wiring,
+// the mode/date navigation controls, and initPlanner (which wires up every
+// planner-*.js sibling's listeners at boot). Extracted from planner.js
+// verbatim (Phase 4 of the follow-up modularization pass) — no behaviour
+// changes.
+//
 // Visual design is the scoped, verbatim copy of the shared Jobs/Planner
 // design (see dfplanner-styles in index.html's <head>) — this file only
-// supplies real data and real behaviour underneath it. Phase 1: Day view.
+// supplies real data and real behaviour underneath it.
 //
 // Deliberately does NOT reuse the demo's flat "client" field — every job's
 // billed party is resolved the same way the rest of DeepFlow already does
 // (Agency > Agent > Landlord > Referrer), so this stays consistent with the
 // reclassification work already shipped rather than regressing to a single
 // generic contact.
+//
+// This module and main.js (and the other planner-*.js files) import from
+// each other, same as every other extracted module: safe because every
+// cross-module reference is used only inside function bodies, never at
+// module-evaluation time.
 
 import { escHtml } from '@ui';
-import { formatDateUK } from '@business';
-import { S, dAll, _sb, toast, calcInvTotal, getAppUser, _sendEmail, _brandedEmailShell } from './main.js';
+import { S, dAll, _sb, toast } from './main.js';
+import {
+  TODAY, isoDate, parseLocalDate, addDays, prettyDate, startOfWeek, endOfWeek,
+  el, money, resolveContact, jobDataType, invoiceFor,
+} from './planner-core.js';
+import { closeJobDetails, switchDetailTab } from './planner-detail.js';
+import { closeEmailComposer, renderEmailAttachments, sendComposedEmail, setEmailAttachments } from './planner-email.js';
+import { closeProjectPicker, renderProjectPickerList } from './planner-projects.js';
 // openJobModal isn't an ES export of main.js (only exposed on window for
 // inline HTML handlers), so it's called via window here rather than imported.
 
 let dfpDate = TODAY();
 let dfpMode = 'day';
 let activeDragId = null;
-
-function TODAY(){
-  const d=new Date();
-  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-}
-function isoDate(d){
-  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-}
-function parseLocalDate(s){ return new Date(`${s}T12:00:00`); }
-function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
-function prettyDate(s, opts={weekday:'short',day:'numeric',month:'short'}){
-  return parseLocalDate(s).toLocaleDateString('en-GB',opts);
-}
-function startOfWeek(d){ const x=new Date(d); const day=(x.getDay()+6)%7; x.setDate(x.getDate()-day); return x; }
-function endOfWeek(d){ return addDays(startOfWeek(d),6); }
-const el = id => document.getElementById(id);
-const money = n => '£'+Number(n||0).toFixed(2);
-
-// Same priority chain as billing-name resolution and the invoice sync logic
-// elsewhere in main.js: Agency > Agent > Landlord > Referrer.
-function resolveContact(j){
-  const name = j.agencyName||j.agentName||j.landlordName||j.referrer||'';
-  const phone = j.agencyPhone||j.agentPhone||j.landlordPhone||'';
-  const email = j.agencyEmail||j.agentEmail||j.landlordEmail||'';
-  return {name, phone, email};
-}
-
-// Job priority already carries Certificate/Repair/Urgent/Emergency as real
-// values (see the job form's Priority select) — reused directly rather than
-// inventing a parallel "type" field the demo has but DeepFlow doesn't.
-function jobDataType(j){
-  const p=(j.priority||'').toLowerCase();
-  return ['certificate','repair','urgent','emergency'].includes(p) ? p : 'normal';
-}
-
-function invoiceFor(j, invoices){
-  return invoices.find(i=>i.jobId===j.id||i.linkedJobId===j.id);
-}
 
 function compactInvoiceMarkup(j, invoices){
   const inv=invoiceFor(j, invoices);
@@ -461,379 +440,6 @@ document.addEventListener('click', e=>{
   if(edit){ window.openJobModal(edit.dataset.id); return; }
 });
 
-// ════════════════════════════════════════════════════════════════
-//  JOB DETAIL MODAL — Overview / Activity-Visits / Invoices / Client
-// ════════════════════════════════════════════════════════════════
-
-let detailJobId = null;
-
-function invoiceStatusLabel(inv){
-  if(inv.status==='Paid') return 'Paid';
-  if(inv.status==='Awaiting Payment') return 'Unpaid';
-  return inv.status||'Draft';
-}
-function invoiceStatusClass(inv){
-  if(inv.status==='Paid') return 'paid';
-  if(inv.status==='Awaiting Payment') return 'unpaid';
-  return 'partial';
-}
-
-export async function openJobDetails(jobId, tab='overview'){
-  const jobs = await dAll('jobs');
-  const job = jobs.find(x=>x.id===jobId);
-  if(!job){ toast('Job not found — try refreshing','error'); return; }
-  detailJobId = jobId;
-
-  const [visits, allInvoices, allAttachments] = await Promise.all([
-    _sb(`job_visits?jobid=eq.${encodeURIComponent(jobId)}&order=visit_date.asc,created.asc`),
-    dAll('invoices'),
-    _sb(`attachments?visit_id=not.is.null`),
-  ]);
-  const invoices = allInvoices.filter(i=>i.jobId===jobId||i.linkedJobId===jobId);
-  const contact = resolveContact(job);
-
-  el('dfpDetailTitle').textContent = job.jobNum||'Job';
-  el('dfpDetailSubtitle').textContent = job.address||'';
-  el('dfpDetailSummary').innerHTML = `
-    <span class="summary-chip"><b>${visits.length}</b> visit${visits.length===1?'':'s'}</span>
-    <span class="summary-chip"><b>${invoices.length}</b> invoice${invoices.length===1?'':'s'}</span>
-    <span class="summary-chip"><b>${money(job.price)}</b> job value</span>
-  `;
-  el('dfpDetailAddVisit').onclick = ()=>{ closeJobDetails(); window.openJobModal(jobId); };
-
-  // Overview
-  el('dfpDetailOverview').innerHTML = `
-    <div class="detail-grid">
-      <div class="detail-card">
-        <div class="detail-card-label">Job number</div>
-        <div class="detail-card-value">${escHtml(job.jobNum||'')}</div>
-        <div class="detail-card-sub">${escHtml(job.status||'Pending')}</div>
-      </div>
-      <div class="detail-card">
-        <div class="detail-card-label">Visits logged</div>
-        <div class="detail-card-value">${visits.length}</div>
-        <div class="detail-card-sub">${visits.map((v,i)=>`Visit ${i+1} · ${formatDateUK(v.visit_date)||v.visit_date}`).join('<br>')||'None yet'}</div>
-      </div>
-      <div class="detail-card">
-        <div class="detail-card-label">Job date</div>
-        <div class="detail-card-value">${formatDateUK(job.date)||job.date||'—'}</div>
-        <div class="detail-card-sub">${escHtml(job.timeSlot||'—')}</div>
-      </div>
-      <div class="detail-card">
-        <div class="detail-card-label">Engineer</div>
-        <div class="detail-card-value">${escHtml(job.engineer||'Unassigned')}</div>
-        <div class="detail-card-sub">${invoices.length} invoice${invoices.length===1?'':'s'} issued</div>
-      </div>
-      <div class="detail-card span2">
-        <div class="detail-card-label">Property</div>
-        <div class="detail-card-value">${escHtml(job.address||'')}</div>
-        <div class="detail-card-sub">Access: ${escHtml(job.access||'—')}</div>
-      </div>
-      <div class="detail-card span2">
-        <div class="detail-card-label">Client</div>
-        <div class="detail-card-value">${escHtml(contact.name||'—')}</div>
-        <div class="detail-card-sub">${escHtml(contact.phone||'—')} · ${escHtml(contact.email||'—')}</div>
-      </div>
-      <div class="detail-card span4">
-        <div class="detail-card-label">Description</div>
-        <div class="detail-card-value">${escHtml(job.description||'—')}</div>
-      </div>
-    </div>`;
-
-  // Activity / Visits — real comments (job_visits.comments) and real
-  // photos (attachments.visit_id) rather than the fabricated feed a demo
-  // would show; both render an honest empty state until populated.
-  el('dfpDetailActivity').innerHTML = visits.length ? `
-    <div class="activity-timeline">
-      ${visits.map((v,i)=>{
-        const comments = Array.isArray(v.comments) ? v.comments : [];
-        const photos = allAttachments.filter(a=>a.visit_id===v.id);
-        return `<article class="visit-detail-card">
-          <div class="visit-detail-head">
-            <div class="visit-number-block"><small>Visit</small><b>${i+1}</b></div>
-            <div class="visit-head-main">
-              <h3>${escHtml((v.engineers||[]).join(', ')||'No engineer assigned')}</h3>
-              <p>${escHtml(v.notes||'No notes for this visit')}</p>
-            </div>
-            <div class="visit-head-meta">
-              <b>${formatDateUK(v.visit_date)||v.visit_date}</b>
-            </div>
-          </div>
-          <div class="visit-detail-body">
-            <div class="visit-section-title">Comments <span class="count">${comments.length}</span></div>
-            <div class="visit-comments">
-              ${comments.length ? comments.map(c=>`
-                <div class="visit-comment">
-                  <div class="visit-eng-avatar">${escHtml((c.by||'?').slice(0,2).toUpperCase())}</div>
-                  <div class="comment-who"><b>${escHtml(c.by||'Office')}</b><span>${escHtml(c.time||'')}</span></div>
-                  <div class="comment-text">${escHtml(c.text||'')}</div>
-                </div>`).join('') : `<div class="detail-empty" style="padding:12px">No comments on this visit yet.</div>`}
-            </div>
-            <div style="display:flex;gap:6px;margin-bottom:12px">
-              <input type="text" class="dfp-comment-input" data-visit-id="${v.id}" placeholder="Add a comment about this visit…" style="flex:1;border:1px solid #dfe2e6;border-radius:7px;padding:7px 9px;font-size:11px">
-              <button type="button" class="btn dfp-add-comment" data-visit-id="${v.id}">Add</button>
-            </div>
-            <div class="visit-section-title">Photos <span class="count">${photos.length}</span></div>
-            <div class="visit-photos">
-              ${photos.length ? photos.map(p=>`
-                <div class="visit-photo" title="${escHtml(p.name||'')}">
-                  <div class="visit-photo-preview">▧</div>
-                  <div class="visit-photo-info"><b>${escHtml(p.name||'Photo')}</b><span>${escHtml(p.uploaded_by_name||'')}</span></div>
-                </div>`).join('') : `<div class="detail-empty" style="grid-column:1/-1;padding:12px">No photos tagged to this visit yet — engineer-app photo tagging is next on the list.</div>`}
-            </div>
-          </div>
-        </article>`;
-      }).join('')}
-    </div>` : `<div class="detail-empty">No visits logged for this job yet.</div>`;
-
-  // Invoices — real invoices, real totals (no flattened job fields)
-  el('dfpDetailInvoices').innerHTML = invoices.length ? `<table class="project-invoice-table">
-    <thead><tr><th>Invoice</th><th>Date</th><th>Amount</th><th>Status</th><th>Outstanding</th></tr></thead>
-    <tbody>
-      ${invoices.map(inv=>{
-        const t=calcInvTotal(inv);
-        const outstanding = inv.status==='Paid' ? 0 : t.grand;
-        return `<tr>
-          <td><b>${escHtml(inv.number||'')}</b></td>
-          <td>${formatDateUK(inv.date)||inv.date||'—'}</td>
-          <td><b>${money(t.grand)}</b></td>
-          <td><span class="invoice-status ${invoiceStatusClass(inv)}">${escHtml(invoiceStatusLabel(inv))}</span></td>
-          <td>${money(outstanding)}</td>
-        </tr>`;
-      }).join('')}
-    </tbody>
-  </table>` : `<div class="detail-empty">No invoices have been issued for ${escHtml(job.jobNum||'this job')} yet.</div>`;
-
-  // Client
-  const phoneDigits=(contact.phone||'').replace(/[^\d+]/g,'');
-  const callLink = phoneDigits ? `tel:${phoneDigits}` : '#';
-  const waLink = phoneDigits ? `https://wa.me/${phoneDigits.replace('+','')}?text=${encodeURIComponent(`Hello, regarding job ${job.jobNum||''} at ${job.address||''}.`)}` : '#';
-  el('dfpDetailClient').innerHTML = `
-    <div class="detail-grid">
-      <div class="detail-card span2">
-        <div class="detail-card-label">Client / Account</div>
-        <div class="client-big-line">${escHtml(contact.name||'—')}</div>
-        <div class="client-contact-line">☎ ${escHtml(contact.phone||'—')}</div>
-        <div class="client-contact-line">✉ ${escHtml(contact.email||'—')}</div>
-        <div class="client-detail-actions">
-          ${contact.phone?`<button class="btn" data-open="${callLink}">Call</button><button class="btn" data-open="${waLink}">WhatsApp</button>`:''}
-          ${contact.email?`<button class="btn dfp-email-job" data-id="${job.id}">Email</button>`:''}
-        </div>
-      </div>
-      <div class="detail-card span2">
-        <div class="detail-card-label">Property</div>
-        <div class="detail-card-value">${escHtml(job.address||'')}</div>
-        <div class="detail-card-sub">Access instructions: ${escHtml(job.access||'—')}</div>
-      </div>
-    </div>`;
-
-  switchDetailTab(tab);
-  el('dfpDetailBackdrop').classList.add('show');
-}
-
-function closeJobDetails(){
-  el('dfpDetailBackdrop').classList.remove('show');
-  detailJobId = null;
-}
-
-function switchDetailTab(tab){
-  document.querySelectorAll('#dfpDetailTabs .detail-tab').forEach(b=>b.classList.toggle('active', b.dataset.dfpTab===tab));
-  document.querySelectorAll('.job-detail-body .detail-panel').forEach(p=>p.classList.toggle('active', p.dataset.dfpPanel===tab));
-}
-
-async function addVisitComment(visitId, text){
-  const trimmed=(text||'').trim();
-  if(!trimmed) return;
-  const rows = await _sb(`job_visits?id=eq.${encodeURIComponent(visitId)}&limit=1`);
-  const visit = rows && rows[0];
-  if(!visit) return;
-  const comments = Array.isArray(visit.comments) ? visit.comments : [];
-  comments.push({by: getAppUser()?.name||'Office', time: new Date().toLocaleString('en-GB',{hour:'2-digit',minute:'2-digit'}), text: trimmed});
-  await _sb(`job_visits?id=eq.${encodeURIComponent(visitId)}`,{method:'PATCH', body:{comments}, prefer:'return=minimal'});
-  toast('Comment added','success');
-  if(detailJobId) openJobDetails(detailJobId, 'activity');
-}
-
-document.addEventListener('click', e=>{
-  const opener = e.target.closest('.job-detail-body [data-open]');
-  if(opener){ const u=opener.dataset.open; if(u&&u!=='#') window.open(u,'_blank'); return; }
-  const addBtn = e.target.closest('.dfp-add-comment');
-  if(addBtn){
-    const input = document.querySelector(`.dfp-comment-input[data-visit-id="${addBtn.dataset.visitId}"]`);
-    if(input){ addVisitComment(addBtn.dataset.visitId, input.value); input.value=''; }
-    return;
-  }
-  if(e.target.closest('button,select,input,a')) return;
-  const clickable = e.target.closest('#dfpGrid .clickable-job[data-job-id]');
-  if(clickable) openJobDetails(clickable.dataset.jobId);
-});
-document.addEventListener('keydown', e=>{
-  const input = e.target.closest('.dfp-comment-input');
-  if(input && e.key==='Enter'){
-    e.preventDefault();
-    addVisitComment(input.dataset.visitId, input.value);
-    input.value='';
-  }
-});
-
-// ════════════════════════════════════════════════════════════════
-//  EMAIL COMPOSER — real send-email pipeline (Resend/SendGrid),
-//  not a new provider
-// ════════════════════════════════════════════════════════════════
-
-let emailJobId = null;
-let emailAttachments = [];
-
-function fileToBase64(file){
-  return new Promise((resolve,reject)=>{
-    const r=new FileReader();
-    r.onload=()=>resolve(String(r.result).split(',')[1]||'');
-    r.onerror=reject;
-    r.readAsDataURL(file);
-  });
-}
-
-export async function openEmailComposer(jobId){
-  const jobs = await dAll('jobs');
-  const job = jobs.find(x=>x.id===jobId);
-  if(!job){ toast('Job not found','error'); return; }
-  const contact = resolveContact(job);
-  emailJobId = jobId;
-  emailAttachments = [];
-  el('dfpAttachmentList').innerHTML='';
-  el('dfpEmailAttachments').value='';
-  el('dfpEmailTo').value = contact.email||'';
-  el('dfpEmailClientName').textContent = contact.name||'Client';
-  el('dfpEmailSubject').value = `${job.jobNum||'Job'} — ${job.address||''}`;
-  el('dfpEmailMessage').value = `Hello ${contact.name||''},\n\nRegarding job ${job.jobNum||''} at:\n${job.address||''}\n\n${job.description||''}\n\nKind regards`;
-  el('dfpEmailFooterNote').textContent = '';
-  el('dfpEmailBackdrop').classList.add('show');
-  setTimeout(()=>el('dfpEmailSubject').focus(),40);
-}
-
-function closeEmailComposer(){
-  el('dfpEmailBackdrop').classList.remove('show');
-  emailJobId=null; emailAttachments=[];
-}
-
-function renderEmailAttachments(){
-  el('dfpAttachmentList').innerHTML = emailAttachments.map((f,i)=>`
-    <span class="attachment-chip">📎 ${escHtml(f.name)}<button type="button" data-remove-attachment="${i}" title="Remove">×</button></span>
-  `).join('');
-}
-
-async function sendComposedEmail(){
-  const to = el('dfpEmailTo').value.trim();
-  const subject = el('dfpEmailSubject').value.trim();
-  const message = el('dfpEmailMessage').value.trim();
-  if(!to){ toast('Client email address is required','error'); return; }
-  if(!subject){ toast('Enter an email subject','error'); return; }
-  if(!message){ toast('Write an email message','error'); return; }
-
-  el('dfpSendEmailBtn').disabled = true;
-  el('dfpSendEmailBtn').textContent = 'Sending…';
-  try{
-    const attachments = await Promise.all(emailAttachments.map(async f=>({
-      filename: f.name, content: await fileToBase64(f),
-    })));
-    const html = _brandedEmailShell(`<p style="white-space:pre-wrap;font-size:14px;color:#1f2937;line-height:1.6">${escHtml(message)}</p>`);
-    const result = await _sendEmail({to, subject, html, attachments});
-    if(result.ok){
-      toast('Email sent','success');
-      closeEmailComposer();
-    } else {
-      toast('Email failed: '+(result.error||'unknown error'),'error');
-    }
-  } finally {
-    el('dfpSendEmailBtn').disabled = false;
-    el('dfpSendEmailBtn').textContent = 'Send Email';
-  }
-}
-
-document.addEventListener('click', e=>{
-  const emailBtn = e.target.closest('#dfpGrid .dfp-email-job, .job-detail-body .dfp-email-job');
-  if(emailBtn){
-    if(e.target.closest('.job-detail-body')) closeJobDetails();
-    openEmailComposer(emailBtn.dataset.id);
-    return;
-  }
-  const removeAtt = e.target.closest('[data-remove-attachment]');
-  if(removeAtt){ emailAttachments.splice(Number(removeAtt.dataset.removeAttachment),1); renderEmailAttachments(); return; }
-});
-
-// ════════════════════════════════════════════════════════════════
-//  RUNNING PROJECTS PICKER — "＋ Add Visit from Projects"
-// ════════════════════════════════════════════════════════════════
-
-let _projectPickerCache = null;
-
-async function loadProjectGroups(){
-  const [jobs, visits] = await Promise.all([dAll('jobs'), dAll('job_visits')]);
-  const byJob = {};
-  visits.forEach(v=>{ (byJob[v.jobId]=byJob[v.jobId]||[]).push(v); });
-  const groups = Object.entries(byJob)
-    .filter(([,list])=>list.length>=2) // a "project" = 2+ real visits, not a status
-    .map(([jobId,list])=>{
-      const job = jobs.find(j=>j.id===jobId);
-      if(!job) return null;
-      // dAll('job_visits') returns mapped camelCase (visitDate), not the
-      // raw column name (visit_date) — mixing the two up here would sort
-      // by an always-undefined field and silently misorder "latest visit".
-      list.sort((a,b)=>(a.visitDate||'').localeCompare(b.visitDate||''));
-      const latest = list[list.length-1];
-      const engs = [...new Set(list.flatMap(v=>v.engineers||[]))];
-      return {job, visits:list, latest, engs};
-    })
-    .filter(Boolean)
-    .sort((a,b)=>(b.latest.visitDate||'').localeCompare(a.latest.visitDate||''));
-  return groups;
-}
-
-export async function openProjectPicker(){
-  _projectPickerCache = await loadProjectGroups();
-  el('dfpProjectPickerSearch').value='';
-  renderProjectPickerList();
-  el('dfpProjectPickerBackdrop').classList.add('show');
-  setTimeout(()=>el('dfpProjectPickerSearch').focus(),40);
-}
-
-function closeProjectPicker(){
-  el('dfpProjectPickerBackdrop').classList.remove('show');
-}
-
-function renderProjectPickerList(){
-  const q=(el('dfpProjectPickerSearch').value||'').trim().toLowerCase();
-  const contact = g=>resolveContact(g.job);
-  const groups = (_projectPickerCache||[]).filter(g=>{
-    if(!q) return true;
-    const c=contact(g);
-    return [g.job.jobNum,g.job.address,c.name].filter(Boolean).join(' ').toLowerCase().includes(q);
-  });
-  el('dfpProjectPickerList').innerHTML = groups.length ? groups.map(g=>{
-    const c=contact(g);
-    return `<div class="project-pick-card">
-      <div class="project-pick-job"><b>${escHtml(g.job.jobNum||'')}</b><span>${g.visits.length} visit${g.visits.length===1?'':'s'}</span></div>
-      <div class="project-pick-main"><b>${escHtml(g.job.address||'')}</b><span>${escHtml(c.name||'—')} · ${g.engs.length} engineer${g.engs.length===1?'':'s'}</span></div>
-      <div class="project-pick-meta"><small>Latest visit</small><b>${formatDateUK(g.latest.visitDate)||g.latest.visitDate||'—'}</b></div>
-      <button class="open-project-btn" data-view-project="${g.job.id}">View</button>
-      <button class="add-next-visit" data-add-project-visit="${g.job.id}">＋ Add Visit ${g.visits.length+1}</button>
-    </div>`;
-  }).join('') : `<div class="picker-empty">No running projects match this search.</div>`;
-}
-
-function startProjectVisit(jobId){
-  closeProjectPicker();
-  window.openJobModal(jobId);
-  setTimeout(()=>window.toggleAddVisitForm && window.toggleAddVisitForm(), 200);
-}
-
-document.addEventListener('click', e=>{
-  const addBtn = e.target.closest('#dfpProjectPickerList [data-add-project-visit]');
-  if(addBtn){ startProjectVisit(addBtn.dataset.addProjectVisit); return; }
-  const viewBtn = e.target.closest('#dfpProjectPickerList [data-view-project]');
-  if(viewBtn){ closeProjectPicker(); openJobDetails(viewBtn.dataset.viewProject); return; }
-});
-
 export function initPlanner(){
   el('dfpDate').value = dfpDate;
   el('dfpProjectPickerClose').addEventListener('click', closeProjectPicker);
@@ -844,7 +450,7 @@ export function initPlanner(){
   el('dfpEmailBackdrop').addEventListener('click', e=>{ if(e.target===el('dfpEmailBackdrop')) closeEmailComposer(); });
   el('dfpAttachBtn').addEventListener('click', ()=>el('dfpEmailAttachments').click());
   el('dfpEmailAttachments').addEventListener('change', e=>{
-    emailAttachments = [...e.target.files];
+    setEmailAttachments([...e.target.files]);
     renderEmailAttachments();
   });
   el('dfpSendEmailBtn').addEventListener('click', sendComposedEmail);
