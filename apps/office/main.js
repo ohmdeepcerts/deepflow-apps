@@ -44,10 +44,9 @@ import {
   sendEngineerAssignedPush,
 } from './audit.js';
 import { onMapViewChange, renderMapPage, loadEngineerLocations } from './maps.js';
-import {
-  initEngReport, renderEngReport, openEngDeepReport, downloadEngPayslip, exportEngReport,
-  exportEngReportPDF, showAllEngJobs, _switchEngDeepTab, _editEngFromDeep, _renderEngDeepJobsList,
-} from './engineer-reports.js';
+import { initEngReport, renderEngReport, exportEngReport, exportEngReportPDF, showAllEngJobs } from './engineer-reports-list.js';
+import { openEngDeepReport, _switchEngDeepTab, _editEngFromDeep, _renderEngDeepJobsList } from './engineer-reports-modal.js';
+import { downloadEngPayslip } from './engineer-reports-output.js';
 import {
   stmtQuickRange, stmtClearFilters, renderStmt, stmtToggleSel, stmtToggleAll,
   bulkDownloadPDFs, printFilteredInvoices,
