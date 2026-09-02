@@ -5,23 +5,39 @@ import { STATUS, calcLineItemsTotal, officeVatRate, daysDiff, formatDateUK, loca
 import { createOfflineQueue } from '@offline';
 import {
   getCertTab, switchCertTab, filterCerts, clearCertFilters, renderCertTable, certPageNav,
-  toggleAllCerts, bulkNRToggle, bulkDeleteCerts, editCertRecord, openCertForm, ctypeToggle,
-  saveCertForm, cancelCertForm, updateCertAddrSugg, certContactSugg, certFillContact,
-  updateCertJobSugg, certLinkJob, certUnlinkJob,
-  certSendIndivEmail, certSendIndivWA, renderCertStats, setCremMode, generateBulkReminder,
-  copyCremMsg, importCertCSV, exportCertCSV, exportCertPDF, downloadCertTemplate, renderCertDash,
-  addExpiryToExistingCert, previewCertPdf, uploadCertPdf, removeCertPdf, createRenewalJob,
-  renderCertMissing, setMissingFilter, renderExpiringPanel, clearExpiringFilters, goExpiryWindow,
-  toggleApplianceSection, addApplianceRow, updateApplianceField, removeApplianceRow,
-  openBulkApplianceModal, submitBulkAppliances, generateCertPdf, extractAppliancesFromPhoto,
-  openRenewCertModal, submitRenewCert, sendCertToClient, regenerateCertsForPaidJob,
-} from './certs.js';
+  toggleAllCerts, bulkNRToggle, bulkDeleteCerts, editCertRecord, goExpiryWindow,
+} from './certs-list.js';
+import {
+  openCertForm, ctypeToggle, saveCertForm, cancelCertForm, updateCertAddrSugg, certContactSugg,
+  certFillContact, updateCertJobSugg, certLinkJob, certUnlinkJob, certSendIndivEmail, certSendIndivWA,
+} from './certs-form.js';
+import { renderCertStats, renderCertDash } from './certs-stats-dashboard.js';
+import {
+  setCremMode, generateBulkReminder, copyCremMsg, importCertCSV, exportCertCSV, exportCertPDF,
+  downloadCertTemplate,
+} from './certs-reminders.js';
+import {
+  renderCertMissing, setMissingFilter, renderExpiringPanel, clearExpiringFilters,
+} from './certs-missing-expiring.js';
+import {
+  addExpiryToExistingCert, previewCertPdf, uploadCertPdf, removeCertPdf, generateCertPdf,
+  sendCertToClient, regenerateCertsForPaidJob,
+} from './certs-pdf.js';
+import {
+  createRenewalJob, toggleApplianceSection, addApplianceRow, updateApplianceField,
+  removeApplianceRow, openBulkApplianceModal, submitBulkAppliances, extractAppliancesFromPhoto,
+  openRenewCertModal, submitRenewCert,
+} from './certs-appliances.js';
 import {
   getCurDirSection, switchDirSection, renderDir, renderDirSection, updateDirTabBadges,
-  openPersonModal, openPersonModalFor, savePerson, deleteCurrentPerson, openPersonWA, toggleArchivePerson,
+  openEngDir, renderAgentsSection,
+} from './directory-sections.js';
+import { matchDir, openPersonModalFor } from './directory-matching.js';
+import {
+  openPersonModal, savePerson, deleteCurrentPerson, openPersonWA, toggleArchivePerson,
   openAgencyModal, saveAgency, deleteCurrentAgency, openAgentModal, saveAgent, deleteCurrentAgent,
-  openEngDir, matchDir, fillFromMatch, openImportModal, currentEditId, renderAgentsSection,
-} from './directory.js';
+  fillFromMatch, openImportModal, currentEditId,
+} from './directory-crud.js';
 import {
   logAudit, sendNotificationWebhook, sendPushNotification, notifyNextTenantEta,
   switchAuditTab, renderAuditLog, exportAuditLog, initAuditLog, testNotifWebhook,
@@ -382,7 +398,7 @@ export let S = {
   // as before until one is explicitly assigned.
   companyProfiles:[],
   // Starting serial for auto-generated certificate reference numbers (e.g.
-  // "GBE1000") — see generateCertRef() in certs.js. Advances by 1 every
+  // "GBE1000") — see generateCertRef() in certs-core.js. Advances by 1 every
   // time a new certificate is saved with a blank Reference Number; empty
   // by default, meaning auto-numbering is off and certNum stays fully
   // manual until an admin opts in via Settings.
@@ -7822,9 +7838,9 @@ export async function downloadInvPDFById(id){
   _storeInvoicePDF(inv,doc).catch(e=>console.warn('[DeepFlow] Background PDF store failed for',inv.number,e));
 }
 
-// Local Storage helper — same pattern as certs.js's sbStorage(), duplicated
-// rather than imported since certs.js doesn't export its copy and importing
-// across these sibling modules isn't worth the coupling for one function.
+// Local Storage helper — same pattern as certs-core.js's sbStorage(),
+// duplicated rather than imported since importing across these sibling
+// modules isn't worth the coupling for one function.
 async function _invPdfSbStorage(path,file){
   const jwt=await _getJWT();
   const res=await fetch(`${SB_URL}/storage/v1/object/deepflow/${path}`,{
