@@ -18,7 +18,8 @@
 
 import { SB_URL, SB_KEY } from '@core';
 import { escHtml } from '@ui';
-import { S, toast, TODAY, _sb, _getJWT, _fix, _portalBaseUrl, getAppUser } from './main.js';
+import { S, toast, TODAY, _sb, _getJWT, _fix, getAppUser } from './main.js';
+import { _portalBaseUrl } from './client-portal-admin.js';
 
 let _auditTab='all';
 

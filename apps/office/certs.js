@@ -21,8 +21,9 @@ import {
   S, dAll, dGet, dPut, dDel, toast, confirm2, uid, TODAY, logActivity,
   updateBadges, nav, closeModal, openModal, _getJWT, setJDate, _sb,
   saveCertExpiry, skipCertExpiry, setPendCertJob, _sendEmail, _certReadyEmailHtml, _blobToBase64,
-  resolveCompanyProfile, saveAllSettings, signedUrl, _certLockedEmailHtml, _jobPortalLink,
+  resolveCompanyProfile, saveAllSettings, signedUrl, _certLockedEmailHtml,
 } from './main.js';
+import { _jobPortalLink } from './client-portal-admin.js';
 
 // Emailed/shared links need to keep working long after this browser
 // session ends — a 1-hour preview expiry would break the "Download
