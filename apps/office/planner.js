@@ -205,8 +205,8 @@ async function renderDayPlanner(){
     <table class="day-table">
       <thead><tr>
         <th style="width:185px">Engineer</th><th style="width:24px"></th><th>Job / Invoice</th>
-        <th>Address</th><th>Description</th><th>Access</th><th>Time</th>
-        <th style="text-align:right">Amount</th><th>Client + Contact</th><th class="day-status">Status</th><th class="day-actions-cell">Actions</th>
+        <th>Address</th><th>Description</th><th class="day-access">Access</th><th class="day-time">Time</th>
+        <th class="day-amount" style="text-align:right">Amount</th><th>Client + Contact</th><th class="day-status">Status</th><th class="day-actions-cell">Actions</th>
       </tr></thead>
       ${bodies}
     </table>

@@ -2220,14 +2220,17 @@ body.density-relaxed .jtable td{font-size:15px}
     }
 
 .dfplanner .day-table-wrap {
-      /* Fixed to the table's own natural width — NOT max(100%,1480px).
-         That stretched the wrap to fill #dfpGrid's full scroll-container
-         width on any screen wider than ~1480px+sidebar, and since most
-         columns are min-width (not fixed), the browser's table layout
-         dumped all that extra space into one or two flexible columns
-         instead of the table just sitting at its natural size — the
-         board looked like it only used half the page, with the rest a
-         blank stretched-out gap inside a column rather than real content. */
+      /* Grows to fill #dfpGrid on wide screens, floors at 1480px (forcing
+         horizontal scroll below that) on narrow ones — safe to let it grow
+         now because .day-table below uses table-layout:fixed with explicit
+         widths on the utility columns (Engineer/Access/Time/Amount/Status/
+         Actions) and no width at all on the content columns (Job/Invoice,
+         Address, Description, Client+Contact). Fixed layout gives any extra
+         space to the columns with no declared width, split evenly between
+         them — so growth lands as more breathing room in the columns that
+         actually want it, not as an uneven stretch or a dead gap beside the
+         table (both tried before this and both looked broken on wide
+         monitors — see git history on this rule for why). */
       /* overflow was hidden here, but position:sticky on .day-status /
          .day-actions-cell resolves its containing block to the NEAREST
          ancestor with overflow != visible — with this wrap now exactly as
@@ -2237,7 +2240,7 @@ body.density-relaxed .jtable td{font-size:15px}
          scroll range to react to and never actually pinned. Clipping now
          happens on the table's own corner cells instead (see .day-table
          tbody tr:last-child td rules), so this can stay visible. */
-      width:1480px;box-sizing:border-box;
+      width:100%;min-width:1480px;box-sizing:border-box;
       background:#fff;border:1px solid #e1e4e8;border-radius:10px;
       box-shadow:0 2px 8px rgba(20,25,31,.025)
     }
@@ -2246,7 +2249,7 @@ body.density-relaxed .jtable td{font-size:15px}
 .dfplanner .day-table tbody tr:last-child td:last-child {border-radius:0 0 9px 0}
 
 .dfplanner .day-table {
-      width:100%;border-collapse:separate;border-spacing:0
+      width:100%;table-layout:fixed;border-collapse:separate;border-spacing:0
     }
 
 .dfplanner .day-table thead th {
@@ -2293,28 +2296,37 @@ body.density-relaxed .jtable td{font-size:15px}
 
 .dfplanner .day-drag {display:grid;place-items:center;color:#a4a9af;font-size:14px;width:24px}
 
-.dfplanner .day-address {font-weight:700;color:#343940;min-width:220px}
+/* No width set on address/desc/client on purpose — table-layout:fixed
+   gives any column with no declared width an equal share of whatever
+   space is left after the fixed-width utility columns below, so these
+   (and the un-classed Job/Invoice column) are what actually grow on a
+   wide screen instead of the table stretching unevenly or not at all. */
+.dfplanner .day-address {font-weight:700;color:#343940}
 
-.dfplanner .day-desc {color:#666c73;min-width:240px}
+.dfplanner .day-desc {color:#666c73}
 
-.dfplanner .day-access {min-width:92px}
+/* These use `width`, not `min-width` — table-layout:fixed sizes columns
+   from the width declared on the FIRST row's cells (the <thead> th here,
+   which now carries these same classes — see planner.js), and ignores
+   min-width for that calculation. */
+.dfplanner .day-access {width:100px}
 
-.dfplanner .day-time {min-width:112px}
+.dfplanner .day-time {width:110px}
 
-.dfplanner .day-amount {text-align:right;font-weight:800;color:#3c4248;white-space:nowrap;min-width:82px}
+.dfplanner .day-amount {text-align:right;font-weight:800;color:#3c4248;white-space:nowrap;width:90px}
 
 /* Status and Actions pinned to the right edge of the horizontal scroll —
    the table is genuinely wider than the visible board on real screens
    (confirmed: 1478px table vs ~1115px visible area), so without this the
    two most operationally important columns are scrolled off by default. */
-.dfplanner .day-status {min-width:108px;position:sticky;right:92px;background:#fff;z-index:2;box-shadow:-6px 0 6px -6px rgba(20,25,31,.08)}
+.dfplanner .day-status {width:108px;position:sticky;right:100px;background:#fff;z-index:2;box-shadow:-6px 0 6px -6px rgba(20,25,31,.08)}
 .dfplanner .day-group-row:hover .day-status {background:#fbfcfd}
 
-.dfplanner .day-actions {display:flex;align-items:center;gap:2px;white-space:nowrap;min-width:92px}
-.dfplanner .day-actions-cell {position:sticky;right:0;background:#fff;z-index:2}
+.dfplanner .day-actions {display:flex;align-items:center;gap:2px;white-space:nowrap}
+.dfplanner .day-actions-cell {width:100px;position:sticky;right:0;background:#fff;z-index:2}
 .dfplanner .day-group-row:hover .day-actions-cell {background:#fbfcfd}
 
-.dfplanner .day-client {min-width:235px}
+.dfplanner .day-client {}
 
 .dfplanner .day-client .client-card {min-width:0}
 
