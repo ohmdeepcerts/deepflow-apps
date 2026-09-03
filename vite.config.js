@@ -1,5 +1,5 @@
-import { resolve } from 'node:path';
-import { copyFileSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
+import { copyFileSync, mkdirSync } from 'node:fs';
 import { defineConfig } from 'vite';
 
 // Copies each app's sw.js to dist/<app>/sw.js after build. Vite's normal
@@ -18,10 +18,14 @@ const copyServiceWorkers = () => ({
   name: 'copy-service-workers',
   closeBundle() {
     for (const app of ['office', 'engineer', 'portal']) {
-      copyFileSync(
-        resolve(__dirname, `apps/${app}/sw.js`),
-        resolve(__dirname, `dist/${app}/sw.js`)
-      );
+      const dest = resolve(__dirname, `dist/${app}/sw.js`);
+      // closeBundle isn't guaranteed to fire after every app's dist/<app>/
+      // directory has been written — on at least one Vite/Rolldown version
+      // this ran before dist/office/ existed yet, since office is by far
+      // the largest bundle. mkdirSync-recursive makes the copy robust to
+      // that ordering regardless of which app finishes writing first.
+      mkdirSync(dirname(dest), { recursive: true });
+      copyFileSync(resolve(__dirname, `apps/${app}/sw.js`), dest);
     }
   },
 });
