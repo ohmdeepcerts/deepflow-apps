@@ -89,6 +89,7 @@ import {
   toggleCol, showColMenu, toggleColPicker, resetColWidths, initScrollListDrag,
 } from './jobs-columns-dragdrop.js';
 import { startLivePoll, startRealtimeSync } from './jobs-realtime-sync.js';
+import { closeCtx } from './jobs-context-menu.js';
 // Re-exported (not just imported) because job-requests.js and
 // invoices-proforma.js still import these from main.js — their own import
 // lists didn't change when this split moved the implementations to
@@ -8464,63 +8465,6 @@ document.addEventListener('keydown',e=>{
   }
 });
 
-// ════════════════════════════════════════════════════════════════
-//  CONTEXT MENU (right-click on job rows)
-// ════════════════════════════════════════════════════════════════
-let ctxJobId=null;
-document.addEventListener('contextmenu',async e=>{
-  const row=e.target.closest('.jsr3[data-id]')||e.target.closest('#jtbody tr[data-id]');
-  if(!row) return;
-  e.preventDefault();
-  ctxJobId=row.dataset.id;
-  const job=await dGet('jobs',ctxJobId);
-  if(!job) return;
-  
-  const menu=document.getElementById('ctx-menu');
-  const statusOpts=['Pending','In Progress','Completed','Invoiced','Cancelled'];
-  menu.innerHTML=`
-    <div style="padding:8px 14px 6px;border-bottom:1px solid var(--border)">
-      <div style="font-family:var(--fh);font-weight:800;font-size:12px;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px">${job.address||'Job'}</div>
-      <div style="font-size:10px;color:var(--txt3);margin-top:2px">${job.jobNum||''} ${job.date||''}</div>
-    </div>
-    <div style="padding:4px 0">
-      <div class="ctx-item" onclick="quickStatus('${job.id}','Engineer Completed');closeCtx()">🔷 Mark Engineer Completed</div>
-      <div class="ctx-item" onclick="quickStatus('${job.id}','Completed');closeCtx()">✅ Mark Completed (Finalize)</div>
-      <div class="ctx-item" onclick="quickStatus('${job.id}','In Progress');closeCtx()">🔨 Mark In Progress</div>
-      <div class="ctx-item" onclick="quickStatus('${job.id}','Cannot Access');closeCtx()">🚫 Mark Cannot Access</div>
-      <div class="ctx-item" onclick="quickStatus('${job.id}','Invoiced');closeCtx()">◎ Mark Invoiced</div>
-      <div class="ctx-item" onclick="quickStatus('${job.id}','Cancelled');closeCtx()">✕ Mark Cancelled</div>
-    </div>
-    <div class="ctx-sep"></div>
-    ${job.confirmed===false
-      ? `<div class="ctx-item" onclick="closeCtx();quickConfirm('${job.id}',true)">✅ Mark as Confirmed</div>`
-      : `<div class="ctx-item" onclick="closeCtx();quickConfirm('${job.id}',false)">⏳ Mark as Unconfirmed</div>`
-    }
-    <div class="ctx-sep"></div>
-    <div class="ctx-item" onclick="closeCtx();openJobModal('${job.id}')">✎ Open & Edit Job</div>
-    <div class="ctx-item" onclick="closeCtx();openJobForInvoice('${job.id}')">◎ Create Invoice</div>
-    <div class="ctx-item" onclick="closeCtx();duplicateJob('${job.id}')">⊞ Duplicate to Today</div>
-    <div class="ctx-sep"></div>
-    <div class="ctx-item" onclick="closeCtx();waSingleJobById('${job.id}')">📱 WhatsApp Engineer</div>
-    <div class="ctx-item" onclick="closeCtx();sendTenantWA('${job.id}')">📅 Tenant Booking Confirm</div>
-    <div class="ctx-item" onclick="closeCtx();sendLandlordComplete('${job.id}')">🏠 Landlord Work Done</div>
-    <div class="ctx-sep"></div>
-    <div class="ctx-item" onclick="closeCtx();ctxCopyAddr('${job.id}')">📋 Copy Address</div>
-    <div class="ctx-item" onclick="closeCtx();showPropertyCerts('${job.address}')">◈ View Property Certs</div>
-    <div class="ctx-item" onclick="closeCtx();showJobAudit('${job.id}')">🕐 Audit Trail</div>
-    <div class="ctx-sep"></div>
-    <div class="ctx-item danger" onclick="closeCtx();deleteJobById('${job.id}')">🗑 Delete Job</div>
-  `;
-  
-  // Position menu
-  let x=e.clientX, y=e.clientY;
-  menu.style.display='block';
-  const mw=menu.offsetWidth, mh=menu.offsetHeight;
-  if(x+mw>window.innerWidth) x=window.innerWidth-mw-8;
-  if(y+mh>window.innerHeight) y=window.innerHeight-mh-8;
-  menu.style.left=x+'px'; menu.style.top=y+'px';
-});
-
 // ════ BROADCAST ALERTS ════
 // openBroadcast/_ALERTS_SQL/_ensureAlertsTable/sendBroadcast/showAlertSetupModal
 // now live in broadcast-alerts.js. _ALERTS_SQL is imported back below since
@@ -8710,11 +8654,6 @@ DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='engineer_r
 
 // showAlertSetupModal now lives in broadcast-alerts.js.
 
-function closeCtx(){
-  document.getElementById('ctx-menu').style.display='none';
-  ctxJobId=null;
-}
-
 function toggleSidebar(){
   const sb=document.getElementById('sidebar');
   const btn=document.getElementById('sidebar-toggle');
@@ -8880,9 +8819,6 @@ function attachJobTooltips(){
     }
   });
 }
-document.addEventListener('click',()=>closeCtx());
-document.addEventListener('keydown',e=>{if(e.key==='Escape')closeCtx()});
-
 async function duplicateJob(id){
   const j=await dGet('jobs',id);
   if(!j) return;
