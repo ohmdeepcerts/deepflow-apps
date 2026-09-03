@@ -83,6 +83,18 @@ import {
   setReqType, renderRequests, _showReqDetail, _reqCreateJob, _reqAcknowledge, _reqApproveEng, _reqReject, _reqReopen,
   _reqSendReply, approvePortalReq, createJobFromPortalReq,
 } from './job-requests.js';
+import {
+  createProforma, openStandaloneProformaModal, saveStandaloneProforma, openDisposableModal, saveDisposableInvoice,
+  convertProformaToInvoice, printProforma,
+} from './invoices-proforma.js';
+import {
+  renderCreditNotesAdmin, openPaymentModal, savePayment, showAgeBucket, invViewMode, setInvView,
+  kanbanDragStart, kanbanDragOver, kanbanDrop,
+} from './invoices-extras.js';
+// Re-exported (not just imported) because reports.js still imports
+// renderAgeingReport from main.js — its own import list didn't change when
+// this split moved renderAgeingReport's implementation to invoices-extras.js.
+export { renderAgeingReport } from './invoices-extras.js';
 import { exportMasterXLSX } from './master-xlsx-export.js';
 import { oneClickBackup, showJobsSkeleton, checkCronSetup } from './backup-diagnostics.js';
 import { renderReports, getTopAddresses, exportReportPDF } from './reports.js';
@@ -1254,7 +1266,8 @@ let _pendCertQueue=[],_pendCertJob=null,_jobNumLock=false,_jobCertTypes=[];
 // below for why this exists.
 let _jobCertTypesExcluded=new Set();
 export function setPendCertJob(v){ _pendCertJob=v; }
-let editInvId=null,invItems=[],curInvId=null;
+let editInvId=null,invItems=[];
+export let curInvId=null;
 let _matchTimers={},_autoSaveTimers={};
 
 let _resizing=null;
@@ -1843,7 +1856,7 @@ const tradeColor=(t)=>{const f=(S.trades||[]).find(x=>x.name===t);return f?f.col
 const JOB_CACHE_TTL = 300000; // 5 minutes
 // _jobRowData: stores full job objects keyed by id, populated every renderJobs().
 // Used by drag-drop so it NEVER depends on _jobCache (which poll can nullify mid-drag).
-const _jobRowData = {};
+export const _jobRowData = {};
 
 
 // ══════════════════════════════════════════════════════════════
@@ -3474,7 +3487,7 @@ async function _autoInvoiceInner(j){
 }
 
 
-async function nextInvNum(isAgency=false){
+export async function nextInvNum(isAgency=false){
   const prefix=isAgency?(S.agencyInvPrefix||'AGN-'):(S.invPrefix||'INV-');
   // Atomic DB sequence — agency and regular invoices now have genuinely
   // separate series. Falls back to the old scan-based method if the RPC
@@ -3508,7 +3521,7 @@ async function nextInvNum(isAgency=false){
 // ══════════════════════════════════════════════════════════════
 
 // Get next proforma number
-async function nextProformaNum(){
+export async function nextProformaNum(){
   // Atomic DB sequence — falls back to the old scan-based method if the
   // RPC isn't available yet (SQL not run).
   try{
@@ -3521,186 +3534,6 @@ async function nextProformaNum(){
     const n=parseInt(last.replace(/[^0-9]/g,''))||0;
     return 'PF-'+String(n+1).padStart(3,'0');
   }catch(e){return 'PF-001';}
-}
-
-// Create proforma from job
-async function createProforma(jobId){
-  const job=_jobRowData[jobId];
-  if(!job){toast('Job not found','error');return;}
-  const now=Date.now();
-  const num=await nextProformaNum();
-  const vr=getVatRate();
-  const price=Number(job.price)||0;
-  const vat=price*vr/100;
-  // Built in camelCase and run through _toDb() like every other invoice
-  // write path (dPut) does — this used to hand-type snake_case keys
-  // directly, which had drifted out of sync with the real column names
-  // (dueDate, billToName, jobId, jobDate, certTypes, vat, etc. were all
-  // being sent as literal unrecognized columns), so every proforma
-  // creation failed outright with a PGRST204.
-  const body=_toDb('invoices',{
-    type:'proforma',
-    status:'Draft',
-    number:num,
-    date:TODAY(),
-    dueDate:TODAY(),
-    billToName:job.llName||job.clientName||'',
-    billToAddress:job.llAddr||job.address||'',
-    jobId:job.id,
-    jobNum:job.jobNum||'',
-    jobDate:job.date||'',
-    jobAddress:job.address||'',
-    propertyAddress:job.address||'',
-    engineer:job.engineer||'',
-    certTypes:job.certTypes||'',
-    agentName:job.agentName||'',
-    agencyName:job.agencyName||'',
-    clientPersonId:job.clientPersonId||null,
-    clientAgencyId:job.clientAgencyId||null,
-    clientName:job.llName||job.clientName||'',
-    clientEmail:job.llEmail||job.clientEmail||'',
-    items:[{desc:job.description||job.certTypes||'Work',qty:1,unit:price,vat:true}],
-    subtotal:price,
-    vatAmount:vat,
-    total:price+vat,
-    created:now,modified:now
-  });
-  try{
-    const r=await _sb('invoices',{method:'POST',body});
-    if(r?.[0]){toast('Proforma '+num+' created','success');renderInvList();return r[0];}
-  }catch(e){toast('Failed: '+e.message,'error');}
-}
-
-// Create disposable invoice (quick, minimal details, may be deleted)
-async function createDisposableInv(clientName, amount, desc){
-  const now=Date.now();
-  const num=await nextInvNum(false);
-  const vr=getVatRate();
-  const price=Number(amount)||0;
-  const vatAmt=price*vr/100;
-  const body={
-    type:'invoice',status:'Draft',number:num,
-    date:TODAY(),dueDate:TODAY(),
-    clientName:clientName||'TBC',billToName:clientName||'TBC',
-    description:desc||'Disposable invoice',
-    items:[{desc:desc||'Item',qty:1,unit:price,vat:vr>0}],
-    // DO NOT send subtotal/vat/total — these are NOT database columns
-    // They are computed from items[] on the fly
-    disposable:true,created:now,modified:now
-  };
-  try{
-    const r=await _sb('invoices',{method:'POST',body});
-    if(r?.[0]){toast('Disposable invoice '+num+' created','success',3000);renderInvList();return r[0];}
-  }catch(e){toast('Failed: '+e.message,'error');}
-}
-
-// Open standalone Proforma modal
-function openStandaloneProformaModal(){
-  document.getElementById('pf-client').value='';
-  document.getElementById('pf-desc').value='';
-  document.getElementById('pf-amount').value='';
-  document.getElementById('pf-due').value=TODAY();
-  document.getElementById('pfx-notes').value='';
-  openModal('mo-proforma');
-}
-// Save standalone Proforma from modal
-async function saveStandaloneProforma(){
-  const client=document.getElementById('pf-client').value.trim();
-  const desc=document.getElementById('pf-desc').value.trim();
-  const amount=parseFloat(document.getElementById('pf-amount').value)||0;
-  const notes=document.getElementById('pfx-notes').value.trim();
-  if(!client){toast('Enter client name','warn');return;}
-  if(amount<=0){toast('Enter a valid amount','warn');return;}
-  closeModal('mo-proforma');
-  await createStandaloneProforma(client,desc,amount,notes);
-}
-// Open Disposable Invoice modal
-function openDisposableModal(){
-  document.getElementById('dp-client').value='';
-  document.getElementById('dp-desc').value='';
-  document.getElementById('dp-amount').value='';
-  document.getElementById('dp-due').value=TODAY();
-  openModal('mo-disposable');
-}
-// Save Disposable Invoice from modal
-async function saveDisposableInvoice(){
-  const client=document.getElementById('dp-client').value.trim();
-  const desc=document.getElementById('dp-desc').value.trim();
-  const amount=parseFloat(document.getElementById('dp-amount').value)||0;
-  if(!client){toast('Enter client name','warn');return;}
-  if(amount<=0){toast('Enter a valid amount','warn');return;}
-  closeModal('mo-disposable');
-  await createDisposableInv(client,amount,desc);
-}
-
-// Create standalone proforma (no job) — creates PR job after save
-async function createStandaloneProforma(clientName,desc,price,notes){
-  const now=Date.now();
-  const num=await nextProformaNum();
-  const body={
-    type:'proforma',status:'Draft',number:num,
-    date:TODAY(),dueDate:TODAY(),
-    billToName:clientName||'',clientName:clientName||'',
-    notes:notes||'',
-    items:[{desc:desc||'Work',qty:1,unit:Number(price)||0,vat:true}],
-    created:now,modified:now
-  };
-  try{
-    const r=await _sb('invoices',{method:'POST',body});
-    if(!r?.[0]){toast('Failed to create proforma','error');return;}
-    const inv=r[0];
-    // Auto-create a job linked to this proforma. nextJobNum() only ever
-    // special-cases the literal 'CR' — any other argument, including the
-    // 'PR' this used to pass, falls straight through to the regular
-    // JOB-#### branch, which ignores the prefix argument entirely. So this
-    // has only ever produced an ordinary job number from the same shared
-    // sequence as every other job, never a distinct PR- series; passing
-    // 'PR' implied one exists when it doesn't, so it's dropped rather than
-    // left as a misleading no-op argument.
-    const jobNum=await nextJobNum();
-    const jobBody={
-      jobNum,status:'Pending',priority:'Normal',
-      description:desc||'Work from proforma',
-      address:'TBC',price:Number(price)||0,
-      date:TODAY(),certTypes:'Proforma',modified:now,created:now
-    };
-    const jr=await _sb('jobs',{method:'POST',body:jobBody});
-    if(jr?.[0]){
-      // Link the proforma to the job
-      await _sb('invoices?id=eq.'+inv.id,{method:'PATCH',body:{jobId:jr[0].id,jobNum,modified:now}});
-      toast('Proforma '+num+' created + Job '+jobNum+' added','success');
-    }
-    renderInvList();return inv;
-  }catch(e){toast('Failed: '+e.message,'error');}
-}
-
-// Convert proforma to real invoice
-async function convertProformaToInvoice(proformaId){
-  const inv=await dGet('invoices',proformaId);
-  if(!inv){toast('Proforma not found','error');return;}
-  if(inv.type!=='proforma'){toast('Not a proforma invoice','error');return;}
-  // Matches _autoInvoiceInner()'s series check (§1.4) — either field routes
-  // to AGN-. Used to check agentName only, so a job referred purely through
-  // an agency (agencyName, no separate agentName) landed on INV- if it went
-  // through a proforma first, but AGN- if auto-invoiced directly — same job,
-  // different series depending on path. createProforma() now also copies
-  // agencyName onto the proforma so this check has something to see.
-  const isAgency=!!(inv.agentName||inv.agencyName);
-  const realNum=await nextInvNum(isAgency);
-  const now=Date.now();
-  try{
-    await _sb('invoices?id=eq.'+proformaId,{method:'PATCH',body:{type:'invoice',number:realNum,status:'Draft',proformaConverted:true,convertedAt:now,modified:now}});
-    toast('Converted to '+realNum,'success');
-    // Log in audit
-    await _sb('invoice_audit',{method:'POST',body:{invoiceId:proformaId,action:'converted',from:'proforma',to:realNum,user:_appUser?.name||'System',timestamp:now}});
-    viewInv(proformaId);
-    renderInvList();
-  }catch(e){toast('Conversion failed: '+e.message,'error');}
-}
-
-// Print proforma
-function printProforma(id){
-  window.print();
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -5254,82 +5087,6 @@ function _auditEntry(icon,color,title,detail,ts){
   </div>`;
 }
 
-// ── Credit Notes Admin Panel ──────────────────────────────────────────────────
-async function renderCreditNotesAdmin(){
-  const el = document.getElementById('inv-special-view');
-  el.innerHTML=`<div style="font-size:12px;color:var(--txt3)">Loading credit notes…</div>`;
-
-  const [allInvs, allActs] = await Promise.all([dAll('invoices'), dAll('activity')]);
-  const cns = allInvs.filter(i=>i.status==='Credit Note'||i.isCreditNote);
-
-  const totalLoss = cns.reduce((s,cn)=>s+calcInvTotal(cn).grand, 0);
-  const byStaff = {};
-  const byClient = {};
-  cns.forEach(cn=>{
-    const staff = cn.issuedBy||cn.staff||'Unknown';
-    const client = cn.clientName||'Unknown';
-    byStaff[staff] = (byStaff[staff]||0) + calcInvTotal(cn).grand;
-    byClient[client] = (byClient[client]||0) + calcInvTotal(cn).grand;
-  });
-
-  const kpi=(val,lbl,col='var(--acc)')=>`
-    <div style="background:var(--s1);border:1px solid var(--border);border-radius:8px;padding:12px 14px">
-      <div style="font-size:20px;font-weight:900;color:${col}">${val}</div>
-      <div style="font-size:10px;color:var(--txt3);margin-top:2px;font-weight:600;text-transform:uppercase;letter-spacing:.3px">${lbl}</div>
-    </div>`;
-
-  el.innerHTML=`
-    <div style="max-width:900px">
-      <div style="font-size:15px;font-weight:800;margin-bottom:16px">↩ Credit Notes — Admin Overview</div>
-
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:20px">
-        ${kpi(cns.length,'Total credit notes','#7c3aed')}
-        ${kpi('£'+totalLoss.toFixed(2),'Total company loss','var(--red)')}
-        ${kpi(Object.keys(byStaff).length,'Staff involved','var(--yellow)')}
-        ${kpi(Object.keys(byClient).length,'Clients affected','var(--txt2)')}
-      </div>
-
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
-        <div style="background:var(--s1);border:1px solid var(--border);border-radius:8px;padding:14px">
-          <div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Loss by Staff</div>
-          ${Object.entries(byStaff).sort((a,b)=>b[1]-a[1]).map(([name,amt])=>`
-            <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px">
-              <span>${name}</span><span style="font-weight:700;color:var(--red)">£${amt.toFixed(2)}</span>
-            </div>`).join('') || '<div style="font-size:11px;color:var(--txt3)">No data</div>'}
-        </div>
-        <div style="background:var(--s1);border:1px solid var(--border);border-radius:8px;padding:14px">
-          <div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Loss by Client</div>
-          ${Object.entries(byClient).sort((a,b)=>b[1]-a[1]).map(([name,amt])=>`
-            <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px">
-              <span>${name}</span><span style="font-weight:700;color:var(--red)">£${amt.toFixed(2)}</span>
-            </div>`).join('') || '<div style="font-size:11px;color:var(--txt3)">No data</div>'}
-        </div>
-      </div>
-
-      <div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">All Credit Notes</div>
-      ${cns.sort((a,b)=>b.created-a.created).map(cn=>{
-        const amt = calcInvTotal(cn).grand;
-        const act = allActs.filter(a=>a.invId===cn.id||a.invNum===cn.number).sort((a,b)=>b.ts-a.ts)[0];
-        return`<div style="background:var(--s1);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:6px;display:flex;gap:14px;align-items:center">
-          <div style="flex:1;min-width:0">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;flex-wrap:wrap">
-              <span style="font-size:11px;font-weight:700;color:#7c3aed;font-family:monospace">${cn.number}</span>
-              <span style="font-size:11px;color:var(--txt3)">${cn.date||''}</span>
-              ${cn.issuedBy||cn.staff?`<span style="font-size:11px;color:var(--txt2)">by ${cn.issuedBy||cn.staff}</span>`:''}
-            </div>
-            <div style="font-size:12px;font-weight:600">${cn.clientName||'—'}</div>
-            <div style="font-size:11px;color:var(--txt2);margin-top:2px">${cn.reason||cn.notes||cn.description||'No reason recorded'}</div>
-            ${act?`<div style="font-size:10px;color:var(--txt3);margin-top:3px">Last activity: ${act.msg.slice(0,60)}</div>`:''}
-          </div>
-          <div style="text-align:right;flex-shrink:0">
-            <div style="font-size:16px;font-weight:900;color:var(--red)">-£${amt.toFixed(2)}</div>
-            ${cn.linkedInvId?`<div style="font-size:10px;color:var(--acc);cursor:pointer;margin-top:3px" onclick="invNavSelect('all');setTimeout(()=>viewInv('${cn.linkedInvId}'),300)">View original →</div>`:''}
-          </div>
-        </div>`;
-      }).join('') || `<div style="text-align:center;padding:30px;color:var(--txt3)">No credit notes issued</div>`}
-    </div>`;
-}
-
 async function _renderInvPayments(invId, invTotal){
   const box = document.getElementById('inv-detail-box');
   if(!box) return;
@@ -6451,7 +6208,7 @@ export function calcInvTotal(inv){
   return calcLineItemsTotal(inv.items||[], getVatRate());
 }
 
-async function viewInv(id){
+export async function viewInv(id){
   curInvId=id;
   const inv=await dGet('invoices',id);
   if(!inv)return;
@@ -7001,7 +6758,7 @@ export async function generateAndStoreInvoicePDF(id){
 
 // Fire-and-forget — a missing client email shouldn't block the payment
 // actually being recorded, so this never throws into its caller.
-function _maybeSendPaymentReceipt(inv, amount){
+export function _maybeSendPaymentReceipt(inv, amount){
   if(!inv.clientEmail) return;
   _sendEmail({
     to: inv.clientEmail,
@@ -10578,312 +10335,12 @@ async function saveOvertimeLog(){
 }
 
 // ════════════════════════════════════════════════════════════════
-//  PARTIAL PAYMENTS
-// ════════════════════════════════════════════════════════════════
-let _payInvId=null;
-
-async function openPaymentModal(invId){
-  _payInvId=invId;
-  const inv=await dGet('invoices',invId);
-  if(!inv) return;
-  const t=calcInvTotal(inv);
-  const payments=await dAll('payments');
-  const invPayments=payments.filter(p=>p.invId===invId);
-  const paid=invPayments.reduce((s,p)=>s+p.amount,0);
-  const outstanding=t.grand-paid;
-  
-  document.getElementById('payment-inv-info').innerHTML=`
-    <div style="display:flex;justify-content:space-between;align-items:center">
-      <div><strong>${inv.number}</strong> · ${inv.clientName}</div>
-      <div style="font-family:var(--fh);font-weight:700;font-size:18px">£${t.grand.toFixed(2)}</div>
-    </div>
-    <div style="margin-top:6px;font-size:11px;color:var(--txt2)">Paid: £${paid.toFixed(2)} · Outstanding: <strong style="color:${outstanding>0?'var(--yellow)':'var(--green)'}">${outstanding<=0?'FULLY PAID':'£'+outstanding.toFixed(2)}</strong></div>
-  `;
-  
-  document.getElementById('pay-amount').value=outstanding>0?outstanding.toFixed(2):'';
-  document.getElementById('pay-date').value=TODAY();
-  document.getElementById('pay-method').value='Bank Transfer';
-  document.getElementById('pay-ref').value='';
-  
-  // Progress bar
-  const pct=t.grand>0?Math.min(100,paid/t.grand*100):0;
-  document.getElementById('pay-bar').style.width=pct+'%';
-  document.getElementById('pay-progress-txt').textContent=`${pct.toFixed(0)}% paid (£${paid.toFixed(2)} of £${t.grand.toFixed(2)})`;
-  
-  // Existing payments
-  if(invPayments.length){
-    document.getElementById('existing-payments').innerHTML=`
-      <div style="font-size:10px;color:var(--txt3);letter-spacing:1px;text-transform:uppercase;font-family:var(--fh);font-weight:600;margin-bottom:6px">Payment History</div>
-      <table class="plog-table">
-        <thead><tr><th>Date</th><th>Amount</th><th>Method</th><th>Reference</th></tr></thead>
-        <tbody>${invPayments.map(p=>`<tr><td>${p.date}</td><td style="color:var(--green);font-weight:700">£${p.amount.toFixed(2)}</td><td>${p.method}</td><td style="color:var(--txt3)">${p.ref||'—'}</td></tr>`).join('')}</tbody>
-      </table>
-    `;
-  } else {
-    document.getElementById('existing-payments').innerHTML='';
-  }
-  openModal('mo-payment');
-}
-
-// M-4: savePayment() had no submit-lock at all — a double-click, or a slow
-// connection making the office wonder if the first click registered and
-// clicking again, could record the same payment twice with no warning.
-let _savingPayment=false;
-async function savePayment(){
-  if(_savingPayment) return;
-  const invId=_payInvId;
-  const amount=parseFloat(document.getElementById('pay-amount').value)||0;
-  if(amount<=0){toast('Enter a valid amount','error');return}
-  _savingPayment=true;
-  const btn=document.getElementById('btn-save-payment');
-  if(btn){ btn.disabled=true; btn.textContent='Recording…'; }
-  try{
-    const payment={
-      id:uid(),invId,
-      date:document.getElementById('pay-date').value,
-      amount,
-      method:document.getElementById('pay-method').value,
-      ref:document.getElementById('pay-ref').value,
-      created:Date.now()
-    };
-    await dPut('payments',payment);
-
-    // Check if fully paid
-    const inv=await dGet('invoices',invId);
-    const t=calcInvTotal(inv);
-    const allPmts=await dAll('payments');
-    const invPmts=allPmts.filter(p=>p.invId===invId);
-    const totalPaid=invPmts.reduce((s,p)=>s+p.amount,0);
-
-    if(totalPaid>=t.grand-0.01){
-      inv.status='Paid';
-      await dPut('invoices',inv);
-      _maybeSendPaymentReceipt(inv, totalPaid);
-      toast('Invoice fully paid! Status updated.','success');
-      const invJobId=inv.jobId||inv.linkedJobId;
-      if(invJobId) regenerateCertsForPaidJob(invJobId).catch(e=>console.warn('[DeepFlow] Cert release after payment failed',e));
-    } else {
-      toast(`Payment of £${amount.toFixed(2)} recorded. Outstanding: £${(t.grand-totalPaid).toFixed(2)}`,'success');
-    }
-    // Both branches: the stored PDF (what the Client Portal shows — it
-    // never renders its own copy) carries a Paid/Partial/Unpaid stamp, so
-    // it goes stale the moment a payment changes which of those is true,
-    // not just when it flips to fully Paid.
-    generateAndStoreInvoicePDF(invId).catch(e=>console.warn('[DeepFlow] PDF regen after payment failed',e));
-    await logActivity(`Payment £${amount.toFixed(2)} recorded for ${inv.number}`,'invoice');
-    closeModal('mo-payment');
-    renderInvList();
-    if(curInvId===invId) viewInv(invId);
-    updateBadges();
-  } finally {
-    _savingPayment=false;
-    if(btn){ btn.disabled=false; btn.textContent='Record Payment'; }
-  }
-}
-
-// ════════════════════════════════════════════════════════════════
-//  AGEING REPORT
-// ════════════════════════════════════════════════════════════════
-let _ageSelected=null;
-
-export async function renderAgeingReport(){
-  const invs=await dAll('invoices');
-  const outstanding=invs.filter(i=>i.status==='Awaiting Payment');
-  const now=new Date();
-  
-  const buckets={
-    '0–30':{label:'0–30 days',invs:[],color:'var(--green)'},
-    '31–60':{label:'31–60 days',invs:[],color:'var(--yellow)'},
-    '61–90':{label:'61–90 days',invs:[],color:'var(--orange)'},
-    '90+':{label:'Over 90 days',invs:[],color:'var(--red)'},
-  };
-  
-  outstanding.forEach(inv=>{
-    const due=inv.dueDate?new Date(inv.dueDate):new Date(inv.date);
-    const days=Math.ceil((now-due)/(1000*60*60*24));
-    if(days<=30) buckets['0–30'].invs.push({...inv,daysOver:days});
-    else if(days<=60) buckets['31–60'].invs.push({...inv,daysOver:days});
-    else if(days<=90) buckets['61–90'].invs.push({...inv,daysOver:days});
-    else buckets['90+'].invs.push({...inv,daysOver:days});
-  });
-  
-  const grid=document.getElementById('age-grid');
-  if(!grid) return;
-  
-  grid.innerHTML=Object.entries(buckets).map(([key,b])=>{
-    const total=b.invs.reduce((s,i)=>s+calcInvTotal(i).grand,0);
-    return`<div class="age-bucket" onclick="showAgeBucket('${key}')">
-      <div class="age-bucket-label">${b.label}</div>
-      <div class="age-bucket-val" style="color:${b.color}">£${total.toFixed(0)}</div>
-      <div class="age-bucket-count">${b.invs.length} invoice${b.invs.length!==1?'s':''}</div>
-    </div>`;
-  }).join('');
-  
-  // Store for bucket detail
-  window._ageBuckets=buckets;
-}
-
-function showAgeBucket(key){
-  const b=window._ageBuckets?.[key];
-  const detail=document.getElementById('age-detail');
-  if(!b||!detail) return;
-  if(_ageSelected===key){
-    _ageSelected=null;
-    detail.innerHTML='';
-    return;
-  }
-  _ageSelected=key;
-  if(!b.invs.length){detail.innerHTML='';return}
-  detail.innerHTML=`
-    <div class="age-detail">
-      <div style="font-family:var(--fh);font-weight:700;margin-bottom:12px">${b.label} — ${b.invs.length} invoices</div>
-      <table class="plog-table">
-        <thead><tr><th>Invoice</th><th>Client</th><th>Amount</th><th>Due Date</th><th>Days Over</th><th>Action</th></tr></thead>
-        <tbody>${b.invs.sort((a,c)=>c.daysOver-a.daysOver).map(inv=>{
-          const t=calcInvTotal(inv);
-          return`<tr>
-            <td style="font-family:var(--fh);font-weight:700;color:var(--acc)">${inv.number}</td>
-            <td>${inv.clientName||'—'}</td>
-            <td style="font-family:var(--fh);font-weight:700">£${t.grand.toFixed(2)}</td>
-            <td>${inv.dueDate||'—'}</td>
-            <td style="color:var(--red);font-weight:700">${inv.daysOver}d</td>
-            <td><button class="btn btn-wa btn-xs" onclick="sendOverdueWA('${inv.id}')">📱 Remind</button></td>
-          </tr>`;
-        }).join('')}</tbody>
-      </table>
-    </div>
-  `;
-}
-
-// ════════════════════════════════════════════════════════════════
 //  FUTURE JOBS TABLE
 // ════════════════════════════════════════════════════════════════
 let futureJobsVisible = true;
 
 function toggleFutureJobs(){ }
 async function renderFutureJobs(){ }
-// ════════════════════════════════════════════════════════════════
-//  INVOICE KANBAN BOARD
-// ════════════════════════════════════════════════════════════════
-let invViewMode = 'list';
-let _kanbanDragId = null;
-
-function setInvView(mode){
-  invViewMode = mode;
-  const listView = document.getElementById('inv-list-view');
-  const kanbanView = document.getElementById('inv-kanban-view');
-  const btnList = document.getElementById('btn-inv-list');
-  const btnKanban = document.getElementById('btn-inv-kanban');
-  if(mode === 'kanban'){
-    listView.style.display = 'none';
-    kanbanView.style.display = 'flex';
-    btnKanban.style.background = 'var(--acc)';btnKanban.style.color='#000';
-    btnList.style.background = '';btnList.style.color='';
-    renderKanban();
-  } else {
-    listView.style.display = '';
-    kanbanView.style.display = 'none';
-    btnList.style.background = 'var(--acc)';btnList.style.color='#000';
-    btnKanban.style.background = '';btnKanban.style.color='';
-    renderInvList();
-  }
-}
-
-async function renderKanban(){
-  const board = document.getElementById('kanban-board');
-  if(!board) return;
-
-  const cols = [
-    {key:'Draft', label:'📝 Draft', color:'var(--purple)'},
-    {key:'Awaiting Payment', label:'📤 Sent / Awaiting', color:'var(--yellow)'},
-    {key:'Paid', label:'✅ Paid', color:'var(--green)'},
-    {key:'Cancelled', label:'⊘ Cancelled', color:'var(--txt3)'},
-    {key:'Credit Note', label:'↩ Credit Notes', color:'var(--purple)'},
-  ];
-
-  const invs = await dAll('invoices');
-  const byStatus = {};
-  cols.forEach(c => byStatus[c.key] = []);
-  invs.forEach(inv => {
-    const key = inv.status || 'Draft';
-    if(byStatus[key]) byStatus[key].push(inv);
-    else byStatus['Draft'].push(inv);
-  });
-
-  board.innerHTML = cols.map(col => {
-    const cards = byStatus[col.key] || [];
-    const total = cards.reduce((s,i) => s + calcInvTotal(i).grand, 0);
-    return `<div class="kanban-col" data-status="${col.key}" ondragover="kanbanDragOver(event,this)" ondrop="kanbanDrop(event,'${col.key}')" ondragleave="this.classList.remove('drag-over')">
-      <div class="kanban-col-hd">
-        <div class="kanban-col-title" style="color:${col.color}">${col.label}</div>
-        <div class="kanban-col-count">${cards.length}</div>
-        ${total>0?`<div style="font-size:11px;font-family:var(--fh);font-weight:700;color:${col.color}">£${total.toFixed(0)}</div>`:''}
-      </div>
-      <div class="kanban-col-body">
-        ${cards.sort((a,b)=>b.created-a.created).map(inv => {
-          const t = calcInvTotal(inv);
-          return `<div class="kanban-card" draggable="true" data-id="${inv.id}"
-            ondragstart="kanbanDragStart(event,'${inv.id}')"
-            ondragend="this.classList.remove('dragging')"
-            onclick="viewInv('${inv.id}');setInvView('list')">
-            <div class="kanban-card-num">${inv.number}${(inv.isCreditNote||inv.status==='Credit Note')?` <span style="font-size:9px;color:var(--purple)">[CN]</span>`:''}</div>
-            <div class="kanban-card-client">${inv.clientName||'—'}</div>
-            <div class="kanban-card-meta">${inv.date}${inv.dueDate?' · Due: '+inv.dueDate:''}</div>
-            <div class="kanban-card-amt" style="color:${col.color}">£${t.grand.toFixed(2)}</div>
-          </div>`;
-        }).join('')}
-        ${cards.length===0?`<div style="padding:20px;text-align:center;color:var(--txt3);font-size:12px">Drop here</div>`:''}
-      </div>
-    </div>`;
-  }).join('');
-}
-
-function kanbanDragStart(e, id){
-  _kanbanDragId = id;
-  e.currentTarget.classList.add('dragging');
-  e.dataTransfer.effectAllowed = 'move';
-}
-function kanbanDragOver(e, col){
-  e.preventDefault();
-  col.classList.add('drag-over');
-}
-async function kanbanDrop(e, newStatus){
-  e.preventDefault();
-  document.querySelectorAll('.kanban-col').forEach(c=>c.classList.remove('drag-over'));
-  if(!_kanbanDragId) return;
-  const inv = await dGet('invoices', _kanbanDragId);
-  if(!inv) return;
-  inv.status = newStatus;
-  // Try full save first; if a column doesn't exist, strip it and retry
-  try{
-    await dPut('invoices', inv);
-  }catch(colErr){
-    if(colErr.message?.includes('PGRST204')||colErr.message?.includes('not find')){
-      // Extract which column is missing and strip it
-      const missingCol = (colErr.message.match(/not find the '(\w+)' column/)||[])[1];
-      if(missingCol){
-        const stripped = {...inv};
-        // Try to find the camelCase key for this DB column
-        const dbMap = Object.entries(_TO_DB.invoices||{});
-        const camelKey = dbMap.find(([k,v])=>v===missingCol)?.[0] || missingCol;
-        delete stripped[camelKey];
-        delete stripped[missingCol];
-        toast(`ℹ️ Column '${missingCol}' not in DB yet — saving without it. Run the SQL in Guide & SQL to add it.`,'warn',5000);
-        await dPut('invoices', stripped);
-      } else {
-        throw colErr;
-      }
-    } else {
-      throw colErr;
-    }
-  }
-  await logActivity(`Invoice ${inv.number} moved to ${newStatus}`, 'invoice');
-  toast(`${inv.number} → ${newStatus}`, 'success');
-  renderKanban();
-  updateBadges();
-  _kanbanDragId = null;
-}
-
 // ════════════════════════════════════════════════════════════════
 //  QUICK ADD ENGINEER (from job modal)
 // ════════════════════════════════════════════════════════════════
