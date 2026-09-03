@@ -1,7 +1,12 @@
 import { SB_URL, SB_KEY, restFetch, createSupaAuthClient, makeJwtResolver } from '@core';
 import { escHtml, escAttr, initNetworkCanvas, renderInvoicePDF } from '@ui';
 import { toDb as _toDb, fromDb as _fromDb, createRepository, TO_DB as _TO_DB } from '@data';
-import { STATUS, calcLineItemsTotal, officeVatRate, daysDiff, formatDateUK, localDateStr } from '@business';
+import {
+  STATUS, calcLineItemsTotal, officeVatRate, daysDiff, formatDateUK, localDateStr,
+  normAddr, deriveProperties, clientCreditRating, paymentReliability, fuzzyScore, highlightMatch,
+  getChangedFields, buildJobWhatsAppMessage, fillTemplate,
+} from '@business';
+import { canAccessPage, getPermission } from '@auth';
 import { createOfflineQueue } from '@offline';
 import {
   getCertTab, switchCertTab, filterCerts, clearCertFilters, renderCertTable, certPageNav,
@@ -608,19 +613,7 @@ let curPg='dash';
 // applyUserPermissions() -- not every page has a sidebar .ni entry to check
 // visibility against (Settings is only reachable via the user menu), so
 // restoring on reload needs the same real rule nav() enforces, not a DOM check.
-function _canAccessPage(pg){
-  const rolePages={
-    Admin: null, // null = all pages allowed
-    Manager: ['dash','jobs','inv','stmt','rep','req','dir','props','certs','client','set','map'],
-    Finance: ['dash','jobs','inv','stmt','rep','dir','props','set'],
-    Staff:   ['dash','jobs','inv','stmt','req','dir','props','certs','client'],
-  };
-  const allowed=rolePages[_appUser?.role];
-  if(allowed && !allowed.includes(pg)) return false;
-  if(pg==='set' && _appUser?.role !== 'Admin' && _appUser?.role !== 'Manager' && _appUser?.role !== 'Finance') return false;
-  if(pg==='audit' && _appUser?.role!=='Admin') return false;
-  return true;
-}
+function _canAccessPage(pg){ return canAccessPage(_appUser?.role, pg); }
 
 export function nav(pg){
   // SECURITY (H-5): every permission gate must run before any DOM mutation
@@ -1765,28 +1758,7 @@ function checkPinLock(){
 // login prompt is shown and what a logged-in user is allowed to do are two
 // separate questions, and conflating them previously meant turning pinLock off
 // silently granted every permission to everyone, regardless of role.
-export function getUserPerm(perm){
-  if(!_appUser) return false;
-  const u=_appUser;
-  if(u.role==='Admin') return true;              // Admin: always yes
-  if(u.role==='Viewer') return false;            // Viewer: always no for write perms
-  if(u.role==='Manager'){
-    if(perm==='canManageUsers') return false;    // Managers cannot manage users
-    return true;                                 // Managers: yes for everything else
-  }
-  // Staff: per-permission
-  if(perm==='seeLandlord')      return u.seeLandlord!==false;
-  if(perm==='seeLandlordPhone') return u.seeLandlordPhone!==false;
-  if(perm==='seeAgent')         return u.seeAgent!==false;
-  if(perm==='seeContact')       return u.seeContact!==false;
-  if(perm==='seePrice')         return u.seePrice!==false;
-  if(perm==='canEdit')          return u.canEdit===true;
-  if(perm==='canDelete')        return u.canDelete===true;
-  if(perm==='canInvoice')       return u.canInvoice===true;
-  if(perm==='canFinance')       return u.canFinance===true;
-  if(perm==='canManageUsers')   return false;
-  return true;
-}
+export function getUserPerm(perm){ return getPermission(_appUser, perm); }
 
 // Show/hide admin-only sidebar nav items based on user role. Driven by a
 // single class on <body> (see .admin-only-nav / .show-admin-nav in
@@ -4179,10 +4151,10 @@ function extractPostcode(address){
 // mismatch (when both sides have one) used to suppress false positives
 // between two different streets that just happen to read similarly.
 async function _checkDuplicateProperty(addr){
-  const key=_normAddr(addr);
+  const key=normAddr(addr);
   const postcode=extractPostcode(addr);
   await _refreshAllProps();
-  if(allProps.some(p=>_normAddr(p.address)===key)) return{proceed:true}; // already the same property, nothing to ask
+  if(allProps.some(p=>normAddr(p.address)===key)) return{proceed:true}; // already the same property, nothing to ask
   // Score on the normalized strings, not the raw ones — fuzzyScore's greedy
   // single-pass subsequence match is direction-sensitive to WHERE punctuation
   // falls (a comma right after the house number derails it far more than one
@@ -4190,10 +4162,10 @@ async function _checkDuplicateProperty(addr){
   // very differently depending on which address happened to be typed first
   // vs already on file. Comparing the punctuation-stripped forms fixes that.
   let candidate=null;
-  if(postcode) candidate=allProps.find(p=>p.postcode&&p.postcode===postcode&&fuzzyScore(key,_normAddr(p.address))>0.4);
+  if(postcode) candidate=allProps.find(p=>p.postcode&&p.postcode===postcode&&fuzzyScore(key,normAddr(p.address))>0.4);
   if(!candidate){
     const scored=allProps
-      .map(p=>({p,s:fuzzyScore(key,_normAddr(p.address))}))
+      .map(p=>({p,s:fuzzyScore(key,normAddr(p.address))}))
       .filter(r=>r.s>0.6&&(!postcode||!r.p.postcode||r.p.postcode===postcode))
       .sort((a,b)=>b.s-a.s);
     candidate=scored[0]?.p||null;
@@ -4202,7 +4174,7 @@ async function _checkDuplicateProperty(addr){
   const jobsHere=[...(candidate._jobs||[])].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const recent=jobsHere[0];
   const allCerts=await dAll('certs');
-  const certsHere=allCerts.filter(c=>_normAddr(c.address||'')===_normAddr(candidate.address));
+  const certsHere=allCerts.filter(c=>normAddr(c.address||'')===normAddr(candidate.address));
   let msg=`A similar property already exists:\n"${candidate.address}"\n`;
   if(recent){
     msg+=`\nLast job: ${recent.date||'—'} · ${recent.trade||'—'} · ${recent.status||'—'}`;
@@ -4631,61 +4603,8 @@ async function deleteCurrentJob(){
 // words (e.g. a dropped county name) — that's not a punctuation difference,
 // it needs the fuzzy duplicate-property check in saveJob() instead, not a
 // stricter exact-match key that risks merging two genuinely different streets.
-function _normAddr(a){ return (a||'').trim().toLowerCase().replace(/[,.]/g,' ').replace(/\s+/g,' ').trim(); }
-
-function _deriveProperties(jobs,manualProps){
-  const byAddr=new Map();
-  for(const j of jobs){
-    if(!j.address) continue;
-    const key=_normAddr(j.address);
-    if(!byAddr.has(key)) byAddr.set(key,{address:j.address,jobs:[]});
-    byAddr.get(key).jobs.push(j);
-  }
-  const manualByAddr=new Map();
-  for(const p of (manualProps||[])){
-    if(p.address) manualByAddr.set(_normAddr(p.address),p);
-  }
-  const allKeys=new Set([...byAddr.keys(),...manualByAddr.keys()]);
-  return [...allKeys].map(key=>{
-    const auto=byAddr.get(key);
-    const manual=manualByAddr.get(key);
-    const jobsAtAddr=auto?.jobs||[];
-    const llMap=new Map();
-    // Agency-referred and landlord-referred jobs are tracked in separate
-    // maps — this used to fold both into one "landlord" name/date map, so
-    // selectAddr() below had no way to tell whether the most recent
-    // referrer on a property was actually an agency (needs the linked
-    // Agency Name field, which resolves to the real agencies-table record
-    // and AGN- invoice series) or a real landlord (needs the free-text
-    // Referrer field). It always treated it as the latter, so re-selecting
-    // an agency-referred property from the address autocomplete silently
-    // dropped the agency link — same failure mode as the bogus-duplicate-
-    // person bug already fixed in _autoInvoiceInner(), reached via this
-    // separate path instead.
-    const agMap=new Map();
-    for(const j of jobsAtAddr){
-      if(j.landlordName&&(!llMap.has(j.landlordName)||(j.date||'')>llMap.get(j.landlordName))) llMap.set(j.landlordName,j.date||'');
-      if(j.agencyName&&(!agMap.has(j.agencyName)||(j.date||'')>agMap.get(j.agencyName))) agMap.set(j.agencyName,j.date||'');
-    }
-    const landlordHistory=[...llMap.entries()].sort((a,b)=>(b[1]||'').localeCompare(a[1]||'')).map(([n])=>n);
-    const agencyHistory=[...agMap.entries()].sort((a,b)=>(b[1]||'').localeCompare(a[1]||'')).map(([n])=>n);
-    return{
-      id:manual?.id||('auto_'+key.replace(/[^a-z0-9]/g,'').slice(0,32)),
-      address:manual?.address||auto?.address||'',
-      landlord:manual?.landlord||landlordHistory[0]||agencyHistory[0]||'',
-      landlordHistory,
-      agency:agencyHistory[0]||'',
-      agencyHistory,
-      postcode:manual?.postcode||jobsAtAddr.find(j=>j.postcode)?.postcode||'',
-      type:manual?.type||'',beds:manual?.beds||'',notes:manual?.notes||'',
-      _jobs:jobsAtAddr,
-      _isAuto:!manual,
-    };
-  }).sort((a,b)=>(a.address||'').localeCompare(b.address||''));
-}
-
 async function _refreshAllProps(){
-  allProps=_deriveProperties(await dAll('jobs'),S.properties||[]);
+  allProps=deriveProperties(await dAll('jobs'),S.properties||[]);
 }
 
 // Payment reliability — derived from this app's own invoice/payment
@@ -4732,22 +4651,6 @@ function _paymentReliability(clientName,allInvoices,allPayments){
 // ── Fuzzy Address Search ──
 async function initProps(){await _refreshAllProps();}
 
-function fuzzyScore(q,h){
-  q=q.toLowerCase();h=h.toLowerCase();
-  if(h.includes(q))return 1;
-  let s=0,j=0;
-  for(let i=0;i<q.length&&j<h.length;i++){
-    while(j<h.length&&h[j]!==q[i])j++;
-    if(j<h.length){s++;j++}
-  }
-  return s/Math.max(q.length,1);
-}
-function hlMatch(t,q){
-  const tl=t.toLowerCase(),ql=q.toLowerCase(),i=tl.indexOf(ql);
-  if(i===-1)return t;
-  return t.slice(0,i)+`<span class="fmatch">${t.slice(i,i+q.length)}</span>`+t.slice(i+q.length);
-}
-
 function fuzzyAddr(inp){
   const q=inp.value.trim();
   const dd=document.getElementById('addr-drop');
@@ -4756,7 +4659,7 @@ function fuzzyAddr(inp){
   if(!res.length){closeAddrDrop();return}
   dd.innerHTML=res.map(r=>`
     <div class="fdi" onclick="selectAddr('${r.p.id}')">
-      <span>${hlMatch(r.p.address,q)}</span>
+      <span>${highlightMatch(r.p.address,q)}</span>
       <span class="fmeta">${r.p.landlord||''} · ${Math.round(r.s*100)}%</span>
     </div>`).join('');
   const rect=inp.getBoundingClientRect();
@@ -5045,7 +4948,7 @@ async function smartAutofill(type, val, context){
 // field, typed before any record is necessarily selected), so this fallback
 // stays. Call sites that DO already have a properly id-scoped invoice list
 // (e.g. Client View, which resolves a specific person/agency id before
-// rendering) should use _clientStarsFromInvoices() directly instead — this
+// rendering) should use clientCreditRating() (@business) directly instead — this
 // name-only match conflates any two directory records that happen to share
 // a display name (a real, live case: "Wentworth Estates" exists as both a
 // landlord and an unrelated agency), showing one entity's payment history
@@ -5055,26 +4958,7 @@ async function _calcClientStars(clientName){
   const nl=clientName.toLowerCase();
   const [allInvs]=await Promise.all([dAll('invoices')]);
   const invs=allInvs.filter(i=>(i.clientName||i.billToName||'').toLowerCase()===nl||(i.landlordName||'').toLowerCase()===nl||(i.agencyName||'').toLowerCase()===nl);
-  return _clientStarsFromInvoices(invs);
-}
-
-function _clientStarsFromInvoices(invs){
-  if(!invs||!invs.length) return null;
-  const now=new Date();
-  const unpaid=invs.filter(i=>i.status!=='Paid'&&i.status!==STATUS.CANCELLED);
-  const overdue=unpaid.filter(i=>i.dueDate&&new Date(i.dueDate)<now);
-  const paid=invs.filter(i=>i.status==='Paid');
-  const veryOverdue=overdue.filter(i=>Math.floor((now-new Date(i.dueDate))/86400000)>60);
-  let stars=5;
-  if(veryOverdue.length>3) stars-=3; else if(veryOverdue.length>0) stars-=2;
-  else if(overdue.length>3) stars-=2; else if(overdue.length>0) stars-=1;
-  const avg=invs.length>0?invs.reduce((s,i)=>s+calcInvTotal(i).grand,0)/invs.length:0;
-  const unpaidAmt=unpaid.reduce((s,i)=>s+calcInvTotal(i).grand,0);
-  if(unpaidAmt>avg*5) stars-=2; else if(unpaidAmt>avg*3) stars-=1;
-  if(paid.length>unpaid.length&&paid.length>3) stars+=1;
-  stars=Math.max(1,Math.min(5,stars));
-  const C={1:'#e05252',2:'#f59e0b',3:'#f0c030',4:'#a3e635',5:'#25d58e'};
-  return{stars,color:C[stars],risk:stars<=2?'HIGH RISK':stars===3?'MEDIUM RISK':'LOW RISK',invCount:invs.length,paid:paid.length,overdue:overdue.length,unpaidAmt};
+  return clientCreditRating(invs,getVatRate());
 }
 
 function _starsHtml(stars,color,risk,compact=false){
@@ -5093,7 +4977,7 @@ export async function _renderRatingStrip(containerId,clientName,preFilteredInvs)
   if(!el||(!clientName&&!preFilteredInvs))return;
   el.innerHTML=`<div style="font-size:10px;color:var(--txt3);padding:6px 0">⏳ Loading…</div>`;
   try{
-    const r=preFilteredInvs?_clientStarsFromInvoices(preFilteredInvs):await _calcClientStars(clientName);
+    const r=preFilteredInvs?clientCreditRating(preFilteredInvs,getVatRate()):await _calcClientStars(clientName);
     if(!r){el.innerHTML=`<div style="font-size:10px;color:var(--txt3);padding:6px 0">No invoice history</div>`;return;}
     el.innerHTML=`
       <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:8px;border:1.5px solid ${r.color}50;background:${r.color}09;${r.stars<=2?`border-left:3px solid ${r.color};`:''}">
@@ -5486,25 +5370,7 @@ async function sendLandlordWA(){
 //  WHATSAPP — JOB DISPATCH
 // ════════════════════════════════════════════════════════════════
 function buildJobWAMsg(jobs, engName){
-  const tpl = S.waJobTpl || '';
-  const jobLines = jobs.map((j,i)=>{
-    const num = i+1;
-    const ordinals=['1st','2nd','3rd','4th','5th','6th','7th','8th','9th','10th'];
-    const ord = ordinals[i]||`${num}th`;
-    // FIX 20: Access code and contact person are now on separate labelled lines.
-    // Previously merged as "🔑 access · contact" which was ambiguous.
-    const accessPart = j.access ? `\n🔑 *Access:* ${j.access}` : '';
-    const contactPart = j.contact ? `\n👤 *Contact:* ${j.contact}` : '';
-    return `*${ord} Job — ${j.timeSlot||'Time TBC'}*\n📍 *Address:* ${j.address}\n👤 *Referrer:* ${j.referrer||'—'}\n🔧 *Work:* ${j.description||'—'}${accessPart}${contactPart}\n📝 *Notes:* ${j.notes||'—'}`;
-  }).join('\n\n─────────────────\n\n');
-
-  if(tpl.includes('{jobs_list}')){
-    return tpl
-      .replace('{company_name}', S.coName||'Your Company')
-      .replace('{engineer_name}', engName)
-      .replace('{jobs_list}', jobLines);
-  }
-  return `*${S.coName||'Job Dispatch'}* 📋\n\nHi *${engName}*, here are your jobs for today:\n\n${jobLines}\n\n✅ Please confirm receipt.`;
+  return buildJobWhatsAppMessage(jobs, engName, S.waJobTpl||'', S.coName);
 }
 
 async function showWaPanel(){
@@ -6439,10 +6305,6 @@ async function exportInvsCSV(){
 
 // ── Send all overdue reminders via WhatsApp at once ──
 // ── WhatsApp template preview & copy ────────────────────────────────────────
-function _fillWaTpl(tpl, vars){
-  return tpl.replace(/\{(\w+)\}/g, (m,k)=>vars[k]||m);
-}
-
 function previewWaTemplate(type){
   const tpls={job:S.waJobTpl,inv:S.waInvTpl,overdue:S.waOverdueTpl,tenant:S.waTenantTpl,landlord:S.waLandlordTpl};
   const tpl=tpls[type]||'(No template saved)';
@@ -6457,7 +6319,7 @@ function previewWaTemplate(type){
     tenant_name:'John Smith', date:'Wednesday 18 Mar', engineer:'Izhar Ahmed',
     landlord_name:'Mandeep Singh',
   };
-  const filled=_fillWaTpl(tpl,vars);
+  const filled=fillTemplate(tpl,vars);
   const existing=document.getElementById('wa-preview-modal');
   if(existing) existing.remove();
   const div=document.createElement('div');
@@ -6489,7 +6351,7 @@ async function copyWaTemplate(type){
     engineer:j.engineer||'—', description:j.description||'—',
     company_name:S.coName||'Your Company', company_phone:S.coPhone||'',
   };
-  const msg=_fillWaTpl(tpl,vars);
+  const msg=fillTemplate(tpl,vars);
   await navigator.clipboard.writeText(msg);
   toast('📋 Template copied with job data — paste into WhatsApp','success',3000);
 }
@@ -10561,18 +10423,6 @@ async function handleRealtimeChange(payload){
   }
 }
 
-// Compare two job objects and return list of changed field names
-function getChangedFields(prev, curr){
-  if(!prev || !curr) return ['all'];
-  // _sortOrder (drag-to-reorder within the same day) was missing from this
-  // list entirely, so a same-day reorder produced zero detected changes on
-  // every OTHER open session — handleRealtimeChange saw updatedFields.length
-  // === 0 and returned without doing anything. The row only updated once
-  // that session navigated away and back, forcing a fresh fetch. Cross-day
-  // drags worked because they change `date`, which was already tracked.
-  const fields = ['status','priority','date','engineer','timeSlot','address','price','description','jobNum','_sortOrder'];
-  return fields.filter(f => prev[f] !== curr[f]);
-}
 
 // Update a single row in-place without re-rendering the entire list
 function updateRowInPlace(row, prev, job, changedFields){
@@ -13583,46 +13433,21 @@ async function showClientCreditCheck(clientName){
       return;
     }
     
-    // FIX BUG5: removed shadow calcInvTotal that applied VAT to ALL items regardless of item.vat flag.
-    // The outer calcInvTotal (defined at line 7652) is correct — it respects per-item VAT flags.
-    // Using it directly here so credit check totals match invoice totals shown everywhere else.
-    
     const now=new Date();
     const unpaid=clientInvs.filter(inv=>(inv.status||'Draft')!=='Paid'&&(inv.status||'Draft')!==STATUS.CANCELLED);
-    const unpaidAmount=unpaid.reduce((sum,inv)=>sum+calcInvTotal(inv).grand,0);
     const overdue=unpaid.filter(inv=>inv.dueDate&&new Date(inv.dueDate)<now);
     const paid=clientInvs.filter(inv=>(inv.status||'')==='Paid').sort((a,b)=>new Date(b.date||0)-new Date(a.date||0));
-    
-    // ═══ STAR CALCULATION - Based on Payment Behavior ═══
-    let stars=5;
-    
-    // Deduct for significantly overdue invoices (time-based, not amount)
-    const veryOverdue = overdue.filter(inv => {
-      if(!inv.dueDate) return false;
-      const daysPast = Math.floor((now - new Date(inv.dueDate)) / (1000*60*60*24));
-      return daysPast > 60; // More than 60 days overdue
-    });
-    
-    // Deduct for overdue COUNT and severity
-    if(veryOverdue.length > 3) stars -= 3; // Chronic late payer
-    else if(veryOverdue.length > 0) stars -= 2; // Some very late invoices
-    else if(overdue.length > 3) stars -= 2; // Many overdue (but less than 60 days)
-    else if(overdue.length > 0) stars -= 1; // Some overdue
-    
-    // Deduct for high unpaid amount RELATIVE to invoice count
-    const avgInvoiceValue = clientInvs.length > 0 ? clientInvs.reduce((sum, inv) => sum + calcInvTotal(inv).grand, 0) / clientInvs.length : 0;
-    if(unpaidAmount > avgInvoiceValue * 5) stars -= 2; // 5x average = problematic
-    else if(unpaidAmount > avgInvoiceValue * 3) stars -= 1; // 3x average = concerning
-    
-    // Bonus: Give back star if paid invoices > unpaid (good history)
-    if(paid.length > unpaid.length && paid.length > 3) stars += 1;
-    
-    stars=Math.max(1,Math.min(5,stars));
-    
-    // ═══ COLORS ═══
+
+    // Star/risk math now shared with _renderRatingStrip's rating strip
+    // (@business's clientCreditRating) — this used to be an independent
+    // reimplementation of the exact same thresholds, verified byte-for-byte
+    // identical before consolidating (see the Phase 5a plan).
+    const r=clientCreditRating(clientInvs,getVatRate());
+    const stars=r.stars;
+    const unpaidAmount=r.unpaidAmt;
     const starColors={1:'#e05252',2:'#f59e0b',3:'#f0c030',4:'#a3e635',5:'#25d58e'};
-    const starColor=starColors[stars];
-    const riskLevel=stars<=2?'HIGH RISK':stars==3?'MEDIUM RISK':'LOW RISK';
+    const starColor=r.color;
+    const riskLevel=r.risk;
     const riskColor=starColors[stars<=2?1:stars==3?3:5];
     
     // ═══ RENDER STARS ═══
