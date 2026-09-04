@@ -16,9 +16,8 @@
 // directory.js: safe because every cross-module reference is used only
 // inside function bodies, never at module-evaluation time.
 
-import { SB_URL, SB_KEY } from '@core';
 import { escHtml } from '@ui';
-import { S, toast, TODAY, _sb, _getJWT, _fix, getAppUser } from './main.js';
+import { S, toast, TODAY, _sb, _fix, getAppUser, _commProvider } from './main.js';
 import { _portalBaseUrl } from './client-portal-admin.js';
 
 let _auditTab='all';
@@ -70,8 +69,9 @@ export async function sendNotificationWebhook(eventType, payload){
 //    PHASE6B_PUSH_EDGE_FUNCTION.md. Off by default; needs the Edge Function
 //    deployed before this does anything (fails silently/logged if not —
 //    same "off until set up" fallback used everywhere else in this app).
-export function _pushFunctionUrl(){ return SB_URL+'/functions/v1/send-push'; }
-
+//    Routed through @comms's communicationProvider (Phase B) — same
+//    fetch/auth/fire-and-forget behaviour as before, now behind the
+//    transport swap point.
 export async function sendPushNotification(eventType, payload){
   if(!S.notifPushEnabled) return;
   if(eventType==='job_status_change' && S.notifOnStatusChange===false) return;
@@ -97,13 +97,8 @@ export async function sendPushNotification(eventType, payload){
   }
 
   try{
-    const jwt=await _getJWT();
-    await fetch(_pushFunctionUrl(),{
-      method:'POST',
-      headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+jwt},
-      body: JSON.stringify({title,message,url:_portalBaseUrl(),
-        landlordName:payload.landlordName||'',agencyName:payload.agencyName||'',agentName:payload.agentName||''})
-    });
+    await _commProvider.send({channel:'PUSH', content:{title,message,url:_portalBaseUrl(),
+      landlordName:payload.landlordName||'',agencyName:payload.agencyName||'',agentName:payload.agentName||''}});
   }catch(e){ console.warn('[Push]',e); }
 }
 
@@ -116,16 +111,11 @@ export async function sendPushNotification(eventType, payload){
 export async function sendEngineerAssignedPush(job){
   if(!job?.engineer) return;
   try{
-    const jwt=await _getJWT();
-    await fetch(_pushFunctionUrl(),{
-      method:'POST',
-      headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+jwt},
-      body: JSON.stringify({
-        title:'New job assigned',
-        message:`${job.address||'A job'} on ${job.date||'today'}${job.timeSlot?' — '+job.timeSlot:''}`,
-        staffName:job.engineer,
-      })
-    });
+    await _commProvider.send({channel:'PUSH', content:{
+      title:'New job assigned',
+      message:`${job.address||'A job'} on ${job.date||'today'}${job.timeSlot?' — '+job.timeSlot:''}`,
+      staffName:job.engineer,
+    }});
   }catch(e){ console.warn('[Push]',e); }
 }
 

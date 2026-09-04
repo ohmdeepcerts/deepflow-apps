@@ -136,9 +136,36 @@ export async function saveCreditNote(){
     reason: document.getElementById('cn-reason').value,
     created: Date.now()
   };
-  await dPut('invoices', cn);
-  // Full audit log
+  // Captured before the original is mutated below, so the audit log's
+  // before/after figures reflect the actual before/after — not the
+  // already-reduced total read back a second time.
+  const oldTotal = calcInvTotal(origInv||{}).grand;
   const cnAmt = calcInvTotal(cn).grand;
+
+  await dPut('invoices', cn);
+
+  // Actually reduce what the original invoice is worth — previously this
+  // only ever created the separate credit-note row above. calcInvTotal()
+  // computes purely from an invoice's own items[], so every "outstanding"/
+  // "owed" figure that reads it (the payment modal, the dashboard's
+  // Awaiting-Payment KPI, the invoice list's per-row "owed" badge, the
+  // client-sort-by-owed comparator) kept showing the ORIGINAL invoice's
+  // full pre-credit amount forever — only the printed Client Statement
+  // (statements.js) separately nets credit notes off, so office and the
+  // client saw two different, disagreeing "amount owed" figures. Appending
+  // the credited items back onto the original, negated, makes its own
+  // calcInvTotal() reflect the reduction everywhere that already reads it,
+  // with the same per-line vat flag the credit itself used — no new call
+  // sites needed. If the original was already Paid, this can correctly
+  // take its total below what was paid, surfacing a refund-due situation
+  // via the existing outstanding = grand - paid math, not a new mechanism.
+  if(origInv){
+    origInv.items = [...(origInv.items||[]), ...JSON.parse(JSON.stringify(_cnItems)).map(it=>({...it, unit:-(Number(it.unit)||0), creditNoteRef:cnNumber}))];
+    origInv.modified = Date.now();
+    await dPut('invoices', origInv);
+  }
+
+  // Full audit log
   await logActivity(
     `Credit note ${cn.number} issued · £${cnAmt.toFixed(2)} reduction · Client: ${origInv?.clientName||'—'} · Reason: ${cn.reason||cn.notes||'not stated'}`,
     'credit',
@@ -149,8 +176,8 @@ export async function saveCreditNote(){
       jobNum: origInv?.jobNum||'',
       amount: cnAmt,
       staff: S.currentUser||S.adminName||'Admin',
-      oldVal: `£${calcInvTotal(origInv||{}).grand.toFixed(2)}`,
-      newVal: `£${(calcInvTotal(origInv||{}).grand - cnAmt).toFixed(2)} (after credit)`
+      oldVal: `£${oldTotal.toFixed(2)}`,
+      newVal: `£${(oldTotal - cnAmt).toFixed(2)} (after credit)`
     }
   );
   toast(`Credit note ${cn.number} issued`, 'success');
