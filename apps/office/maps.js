@@ -350,7 +350,13 @@ export function _buildAndShowMap(points, centLat, centLng, zoom, routeCoords) {
     + '<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></sc' + 'ript>'
     + '<script>'
     + 'var map=L.map("m").setView([' + lat + ',' + lng + '],' + z + ');'
-    + 'L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",{attribution:"\u00a9 OpenStreetMap \u00a9 CARTO",maxZoom:19,subdomains:"abcd"}).addTo(map);'
+    // CARTO's anonymous basemap tiles (Voyager) now require an API key \u2014
+    // confirmed live 2026-09-04, every request came back stamped "API KEY
+    // REQUIRED" across the tile instead of the actual map. Esri's World
+    // Street Map demo tiles are free, keyless, and still work: clean,
+    // modern styling, no watermark. Note the {z}/{y}/{x} order \u2014 ArcGIS
+    // REST tile services use that order, not Leaflet's usual {z}/{x}/{y}.
+    + 'L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",{attribution:"Esri, HERE, Garmin, \u00a9 OpenStreetMap contributors",maxZoom:19}).addTo(map);'
     + routeJs
     + markersJs
     + '</sc' + 'ript></body></html>';

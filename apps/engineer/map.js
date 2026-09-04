@@ -59,10 +59,14 @@ async function _getRoute(pts){
 }
 
 function _showMap(pts,cLat,cLng,zoom,route,container){
-  // Use OpenTopoMap for terrain tiles (free, no key, looks great)
-  // Falls back to standard OSM if unavailable
-  const tileUrl='https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png';
-  const tileAttr='© OpenTopoMap (CC-BY-SA)';
+  // Esri World Street Map — free demo tiles, no key, clean modern styling.
+  // Was OpenTopoMap (a hillshade/contour relief style) until 2026-09-04;
+  // that's a genuine cartographic tool for terrain work, not what a job
+  // location map for an electrical services business needs, and read as
+  // dated rather than premium. Falls back to standard OSM if unavailable,
+  // same defensive pattern as before.
+  const tileUrl='https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}';
+  const tileAttr='Esri, HERE, Garmin, © OpenStreetMap contributors';
   const markers=pts.map((p,i)=>{
     const col=p.priority==='Emergency'?'#f04444':(p.status==='Completed'||p.status==='Engineer Completed')?'#22c55e':p.status==='Cannot Access'?'#f97316':'#4f8fff';
     const lbl=(p.label||'').replace(/'/g,"\\'").replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -84,8 +88,8 @@ function _showMap(pts,cLat,cLng,zoom,route,container){
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>
 <script>
 var map=L.map("m",{zoomControl:true}).setView([${cLat},${cLng}],${zoom});
-// Try terrain tiles first, fallback to standard OSM
-var terrain=L.tileLayer("${tileUrl}",{attribution:"${tileAttr}",maxZoom:17});
+// Try Esri tiles first, fallback to standard OSM
+var terrain=L.tileLayer("${tileUrl}",{attribution:"${tileAttr}",maxZoom:19});
 var osm=L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OpenStreetMap",maxZoom:19});
 terrain.on("tileerror",function(){if(!map._fallback){map._fallback=true;map.removeLayer(terrain);osm.addTo(map);}});
 terrain.addTo(map);
