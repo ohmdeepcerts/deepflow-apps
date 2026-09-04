@@ -118,7 +118,7 @@ async function loadPastRequests(d){
   const el=document.getElementById('past-requests-list');
   if(!el)return;
   try{
-    const rows=await sb(`rpc/portal_get_requests`,{method:'POST',body:{p_name:d.name||''}}).catch(()=>[]);
+    const rows=await sb(`rpc/portal_get_requests`,{method:'POST',body:{}}).catch(()=>[]);
     if(!rows||!rows.length){
       el.innerHTML=`<div style="text-align:center;padding:24px;color:var(--text-tertiary);font-size:13px">No previous requests found.</div>`;
       return;
@@ -227,6 +227,9 @@ export async function submitReq(){
     }catch(e){ ref='CR-'+String(Date.now()).slice(-4); }
     const detail=`Service: ${svc}\nPriority: ${priority}\nAddress: ${addr}`+(date?`\nPreferred date: ${date}`:'')+(access?`\nAccess: ${access}`:'')+(notes?`\nNotes: ${notes}`:'')+(_reqFiles.length?`\nAttachments: ${_reqFiles.length} file(s)`:'');
 
+    // entity_table/entity_id let portal_get_requests() (session-scoped) find
+    // this again without the old engineer_name ILIKE match — see the
+    // Client Portal V2 Phase 1 migration notes on engineer_requests.
     await sb('engineer_requests',{
       method:'POST',
       body:{
@@ -235,7 +238,9 @@ export async function submitReq(){
         type:'portal_request',
         notes: `[${ref}] ${detail}`,
         status:'pending',
-        created: Math.floor(Date.now()/1000)
+        created: Math.floor(Date.now()/1000),
+        entity_table: _d.type==='agency'?'agencies':_d.type==='agent'?'agents':'persons',
+        entity_id: _d.entity?.id||null
       },
       prefer:'return=minimal'
     });

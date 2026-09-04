@@ -258,10 +258,49 @@ function _startPortalInviteCanvas(){
   draw();
 }
 
-function showPortalInviteModal(id, name, type, agentName){
-  const url=_buildPortalUrl(id, type, agentName);
+// Client Portal V2 Phase 1: the invite card now issues a real one-time
+// activation link (portal_create_activation → ?activate=<token>, expires in
+// 7 days, single use) instead of the old permanent ?id=&type= link — that
+// old link is still what portal_bridge_login upgrades on its own the first
+// time an existing client uses it, so nothing already sent out breaks.
+// A short loading card covers the round-trip before the real card (with its
+// QR/copy/WhatsApp/email buttons, unchanged from before) renders.
+async function showPortalInviteModal(id, name, type, agentName){
   closePortalInviteModal();
+  const safeName0=name.replace(/'/g,"\\'");
+  const loading=document.createElement('div');
+  loading.id='portal-invite-overlay';
+  loading.className='portal-invite-overlay';
+  loading.innerHTML=`
+    <button onclick="closePortalInviteModal()" class="portal-vcard-close">✕</button>
+    <div style="width:100%;max-width:640px;aspect-ratio:16/9;min-height:340px;border-radius:20px;overflow:hidden;
+      display:flex;align-items:center;justify-content:center;box-shadow:0 24px 80px rgba(0,0,0,.5);
+      background:linear-gradient(155deg,#0d1f3c,#1e3a5f,#0a1628);color:rgba(255,255,255,.6);font-family:'Inter',-apple-system,sans-serif;font-size:13px">
+      Generating secure invite link for ${escHtml(name)}…
+    </div>`;
+  loading.addEventListener('click',e=>{if(e.target===loading)closePortalInviteModal();});
+  document.body.appendChild(loading);
 
+  let url;
+  try{
+    const rows=await _sb('rpc/portal_create_activation',{method:'POST',body:{p_table:_portalPinTableFor(type),p_id:id}});
+    const res=Array.isArray(rows)?rows[0]:rows;
+    if(!res?.token) throw new Error('no token returned');
+    url=`${_portalBaseUrl()}?activate=${encodeURIComponent(res.token)}`;
+  }catch(e){
+    console.error('[DeepFlow] portal_create_activation failed:',e);
+    if(document.getElementById('portal-invite-overlay')===loading){
+      closePortalInviteModal();
+      toast('Could not generate invite link: '+(e.message||'').slice(0,100),'error',6000);
+    }
+    return;
+  }
+  if(document.getElementById('portal-invite-overlay')!==loading) return; // closed while we were waiting
+  closePortalInviteModal();
+  _renderPortalInviteCard(id, name, type, url);
+}
+
+function _renderPortalInviteCard(id, name, type, url){
   const safeName=name.replace(/'/g,"\\'");
   const safeUrl=url.replace(/'/g,"\\'");
 

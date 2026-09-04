@@ -13,8 +13,29 @@ import { previewInv, downloadCurrentInv, closeModal, payInvoice } from './invoic
 import { vProperties, setPropSearch, setPropSort } from './properties.js';
 import { vCerts, certCard, previewCertPdf, closeCertPdfPreview, preFillRenewal, getPreviewCert, setCertView, setCertSort, setCertDir, showCertLockedPopup, closeCertLockModal } from './certs.js';
 
+// Real server-side Portal sessions (Client Portal V2 Phase 1) — mirrors the
+// Engineer app's own x-engineer-token pattern (apps/engineer/main.js) exactly.
+// A session token, once established (see establishSession() below), is sent
+// as this custom header on every request; is_valid_portal_session() /
+// current_portal_client_user() resolve identity from it server-side, so the
+// portal_get_*() RPCs stop trusting a client-supplied id at all. Kept as a
+// plain module-level variable rather than re-reading storage on every call —
+// establishSession() is the only place that ever sets it.
+let _sessionToken=null;
+const SESSION_STORAGE_KEY='df_portal_session';
+export function _loadSavedSession(){
+  try{ return JSON.parse(localStorage.getItem(SESSION_STORAGE_KEY)||'null'); }catch(err){ return null; }
+}
+function _saveSession(sessionToken,clientUserId){
+  try{ localStorage.setItem(SESSION_STORAGE_KEY,JSON.stringify({token:sessionToken,clientUserId})); }catch(err){}
+}
+function _clearSavedSession(){
+  try{ localStorage.removeItem(SESSION_STORAGE_KEY); }catch(err){}
+}
+
 export async function sb(path,opts={}){
-  const r=await restFetch(path,opts,SB_KEY);
+  const headers=_sessionToken?{...(opts.headers||{}),'x-portal-session':_sessionToken}:opts.headers;
+  const r=await restFetch(path,{...opts,headers},SB_KEY);
   if(!r.ok){
     const t=await r.text();
     throw new Error(t||`HTTP ${r.status}`);
@@ -138,23 +159,33 @@ function _computeChangesSinceLastVisit(jobs, certs, invoices, token){
   try{ localStorage.setItem(key, JSON.stringify(snapshot)); }catch(err){}
   return changes;
 }
-export const token=P.get('id'), ptype=P.get('type')||'landlord';
+// `let`, not `const`: for a session-based visit (new activation link, a
+// returning ?u= link, or a legacy ?id= link once it's bridged) neither value
+// comes straight from the URL any more — establishSession() below resolves
+// them from the session itself (client_id/client_table, via
+// portal_session_whoami()) and overwrites these before any data loads. Every
+// other module that reads them (certs.js, invoice-pdf.js, request-wizard.js)
+// already imports them as live bindings, so this needs no changes there —
+// they just see the resolved value once it lands. This intentionally keeps
+// their existing meaning (the real persons/agencies/agents id + landlord/
+// agency/agent type) rather than ever holding a client_user_id, so the
+// Stripe payment flow (invoice-pdf.js sends token as portalId) and every
+// other existing consumer keeps working completely unchanged.
+export let token=P.get('id'), ptype=P.get('type')||'landlord';
+function _tableToPtype(t){ return t==='agencies'?'agency':t==='agents'?'agent':'landlord'; }
 
 // ── LIVE UPDATES (poll) ──────────────────────────────────────────────────────
-// The Portal has no session/JWT at all (see docs/architecture/08-
-// authentication-and-roles.md) — access is resolved server-side purely from
-// (type, id) via SECURITY DEFINER RPCs (portal_get_jobs etc.), specifically
-// so an anonymous visitor can never get direct RLS-filtered table access —
-// that's the exact wildcard-enumeration gap the Production Readiness Audit's
-// C-2 finding fixed. Supabase Realtime subscriptions are filtered through
-// RLS the same way a direct SELECT is, so wiring one up here would mean
-// either reopening that same gap (granting anon RLS access to jobs/certs/
-// invoices) or a much larger identity-and-channel-security redesign —
-// neither is a "next" for what was asked (live updates), so this polls
-// through the exact same safe RPC path already used for the initial load
-// instead. Same interval/visibility-pause shape as this file's own PIN
-// watchdog below (_startPinWatchdog) and the Engineer app's job poll
-// (apps/engineer/main.js).
+// Portal has a real server-side session now (Client Portal V2 Phase 1 — see
+// establishSession() above), but still no Supabase Auth JWT, so RLS itself
+// still can't scope a direct SELECT or a Realtime subscription — access is
+// resolved server-side via SECURITY DEFINER RPCs (portal_get_jobs etc.)
+// reading the session header, same as before this migration just with a
+// session instead of a trusted client-supplied id. Wiring up Realtime would
+// mean either granting anon RLS access to jobs/certs/invoices directly or a
+// much larger channel-security redesign — neither is a "next" for what was
+// asked (live updates), so this polls through the exact same RPC path
+// already used for the initial load instead. Same interval/visibility-pause
+// shape as the Engineer app's job poll (apps/engineer/main.js).
 const _POLL_INTERVAL_MS=45000;
 let _pollInFlight=false;
 
@@ -168,14 +199,13 @@ async function _fetchPortalJobData(entity){
   const jobs=await fetchJobs(jobType,entity.id);
   let attachments=[],certs=[],invoices=[];
   // Same unconditional fetch as init() — see the comment there.
-  const notifications=((await sb(`rpc/portal_get_notifications`,{method:'POST',body:{p_type:ptype,p_id:token}}).catch(()=>[]))||[]);
+  const notifications=((await sb(`rpc/portal_get_notifications`,{method:'POST',body:{}}).catch(()=>[]))||[]);
   if(jobs.length){
-    const jobIds=jobs.map(j=>j.id);
     const [ra,rc,ri,rp]=await Promise.all([
-      sb(`rpc/portal_get_attachments`,{method:'POST',body:{p_job_ids:jobIds}}).catch(()=>[]),
-      sb(`rpc/portal_get_certs`,{method:'POST',body:{p_job_ids:jobIds}}).catch(()=>[]),
+      sb(`rpc/portal_get_attachments`,{method:'POST',body:{}}).catch(()=>[]),
+      sb(`rpc/portal_get_certs`,{method:'POST',body:{}}).catch(()=>[]),
       fetchInvoices(ptype,token),
-      sb(`rpc/portal_get_payment_totals`,{method:'POST',body:{p_type:ptype,p_id:token}}).catch(()=>[]),
+      sb(`rpc/portal_get_payment_totals`,{method:'POST',body:{}}).catch(()=>[]),
     ]);
     attachments=(ra||[]).map(_fix);
     certs=(rc||[]).map(_fix);
@@ -293,7 +323,6 @@ async function enablePushNotifications(){
     });
     const j=sub.toJSON();
     await sb('rpc/portal_push_subscribe',{method:'POST',body:{
-      p_table:_pinTableFor(), p_id:token,
       p_endpoint:j.endpoint, p_p256dh:j.keys.p256dh, p_auth:j.keys.auth
     }});
     const row=document.getElementById('notif-push-row');
@@ -313,7 +342,6 @@ export const _INV_STORE=new Map();
 // 6-digit PIN on top: the office can reset it (never reveal it — it's
 // hashed) which forces the client to set a fresh one on their next visit.
 function _pinTableFor(){ return ptype==='agency'?'agencies':(ptype==='agent'?'agents':'persons'); }
-function _pinSessionKey(){ return 'df_portal_pin_ok_'+token; }
 
 // Same network+star canvas as the Office App login and this app's own
 // "no link" landing screen — previously this shell was the one dark-navy
@@ -356,129 +384,147 @@ function _pinInputHtml(id){
     oninput="this.value=this.value.replace(/[^0-9]/g,'').slice(0,6)">`;
 }
 
-async function _pinRenderEntry(){
-  _pinGateShell(`
-    <div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:6px">Enter your PIN</div>
-    <div style="font-size:12px;color:rgba(255,255,255,.5);margin-bottom:18px">Enter the 6-digit PIN for this portal</div>
-    ${_pinInputHtml('pin-entry')}
-    <div id="pin-err" style="font-size:12px;color:#f87171;min-height:16px;margin-bottom:10px"></div>
-    <button onclick="_pinSubmitEntry()" style="width:100%;padding:12px;border:none;border-radius:10px;background:#38bdf8;color:#0a1628;font-weight:700;font-size:14px;cursor:pointer">Unlock</button>
-  `);
-  const el=document.getElementById('pin-entry');
-  el.focus();
-  el.addEventListener('keydown',ev=>{ if(ev.key==='Enter') _pinSubmitEntry(); });
-}
-
-async function _pinSubmitEntry(){
-  const pin=document.getElementById('pin-entry').value;
-  const errEl=document.getElementById('pin-err');
-  if(!/^[0-9]{6}$/.test(pin)){ errEl.textContent='Enter all 6 digits'; return; }
-  try{
-    const ok=await sb('rpc/portal_pin_verify',{method:'POST',body:{p_table:_pinTableFor(),p_id:token,p_pin:pin}});
-    if(ok===true){
-      sessionStorage.setItem(_pinSessionKey(),'1');
-      location.reload();
-    } else {
-      errEl.textContent='Incorrect PIN — please try again';
-      document.getElementById('pin-entry').value='';
-      document.getElementById('pin-entry').focus();
-    }
-  }catch(e){
-    errEl.textContent='Could not verify PIN — please try again or contact your service provider';
-  }
-}
-
-async function _pinRenderSetup(){
-  _pinGateShell(`
-    <div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:6px">Set your PIN</div>
-    <div style="font-size:12px;color:rgba(255,255,255,.5);margin-bottom:18px">Choose a 6-digit PIN to protect your portal. You'll need it each time you open this link.</div>
-    ${_pinInputHtml('pin-new')}
-    ${_pinInputHtml('pin-confirm')}
-    <div id="pin-err" style="font-size:12px;color:#f87171;min-height:16px;margin-bottom:10px"></div>
-    <button onclick="_pinSubmitSetup()" style="width:100%;padding:12px;border:none;border-radius:10px;background:#38bdf8;color:#0a1628;font-weight:700;font-size:14px;cursor:pointer">Set PIN</button>
-  `);
-  document.getElementById('pin-new').focus();
-}
-
-async function _pinSubmitSetup(){
-  const pin=document.getElementById('pin-new').value;
-  const confirm=document.getElementById('pin-confirm').value;
-  const errEl=document.getElementById('pin-err');
-  if(!/^[0-9]{6}$/.test(pin)){ errEl.textContent='PIN must be exactly 6 digits'; return; }
-  if(pin!==confirm){ errEl.textContent='PINs don’t match'; return; }
-  try{
-    await sb('rpc/portal_pin_set',{method:'POST',body:{p_table:_pinTableFor(),p_id:token,p_pin:pin}});
-    sessionStorage.setItem(_pinSessionKey(),'1');
-    location.reload();
-  }catch(e){
-    errEl.textContent='Could not set PIN — please try again or contact your service provider';
-  }
-}
-
-function _pinRenderLocked(lockedUntil){
-  const mins=Math.max(1,Math.ceil((new Date(lockedUntil)-new Date())/60000));
-  _pinGateShell(`
-    <div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:6px">Too many attempts</div>
-    <div style="font-size:12px;color:rgba(255,255,255,.5)">Please try again in about ${mins} minute${mins!==1?'s':''}, or contact your service provider.</div>
-  `);
-}
-
-// Returns true if the caller may proceed to load the real portal. Otherwise
-// it has already rendered the PIN screen in place of the page.
-async function ensurePortalPin(){
-  if(sessionStorage.getItem(_pinSessionKey())==='1') return true;
-
-  let status;
-  try{
-    const rows=await sb('rpc/portal_pin_status',{method:'POST',body:{p_table:_pinTableFor(),p_id:token}});
-    status=Array.isArray(rows)?rows[0]:rows;
-  }catch(e){
-    // RPC not deployed yet (SQL not run) — fail OPEN so existing links keep
-    // working exactly as before, rather than locking everyone out.
-    console.warn('[Portal] PIN status check failed, allowing through',e);
-    return true;
-  }
-
-  if(!status || status.has_pin===false){ await _pinRenderSetup(); return false; }
-  if(status.locked_until && new Date(status.locked_until) > new Date()){ _pinRenderLocked(status.locked_until); return false; }
-  await _pinRenderEntry();
+// ── SESSION (Client Portal V2 Phase 1) ──────────────────────────────────────
+// Resolves who's visiting into a real server-side session before any data
+// loads, via whichever of three URL shapes is present:
+//  - ?activate=<token>   a fresh, one-time invite link from Office.
+//  - ?u=<client_user_id> a bookmarked link from a previous session — tries a
+//    saved session token first (silent), falls back to asking for the PIN
+//    they already set.
+//  - ?id=<id>&type=<type> an old, pre-session bookmarked link — the "bridge":
+//    asks for the same entity-level PIN the client already knows, once, and
+//    upgrades it directly into a real session in that same step
+//    (portal_bridge_login), reusing that PIN as their new one so there's
+//    nothing new to learn. A second bridge visit (lost their new link,
+//    different device) reuses the same client_user rather than duplicating.
+// On success every path ends in a real navigation (never an inline resume),
+// so the next load always starts clean with a resolvable session — matching
+// how the pre-existing PIN flow already behaves (reload on success).
+async function establishSession(){
+  const activateToken=P.get('activate');
+  const clientUserId=P.get('u');
+  if(activateToken) return await _activateFlow(activateToken);
+  if(clientUserId) return await _sessionLoginFlow(clientUserId);
+  if(token) return await _bridgeFlow();
   return false;
 }
 
-// A reset in the office only clears the PIN server-side — an already-open
-// tab has no way to find that out on its own, since ensurePortalPin() above
-// only ever checks once, at load, and then trusts sessionStorage for the
-// rest of the tab's life. Without this, "reset PIN" wouldn't take effect
-// until the client happened to close and reopen their link. Poll instead of
-// a realtime channel to match how lightweight the rest of this anon-only
-// page is kept — a client viewing jobs/certs doesn't need a websocket open
-// for this, and a 20s window is more than tight enough for a portal that
-// isn't guarding anything transactional.
-function _startPinWatchdog(){
-  if(sessionStorage.getItem(_pinSessionKey())!=='1') return;
+// Resolves the just-established (or just-loaded) session token into the
+// entity id/type the rest of this app already expects, overwriting the
+// module-level token/ptype in place. Never exposes client_user_id beyond
+// this module — everything downstream keeps working against the same
+// persons/agencies/agents id it always has.
+async function _resolveWhoami(){
+  try{
+    const rows=await sb('rpc/portal_session_whoami',{method:'POST',body:{}});
+    const who=Array.isArray(rows)?rows[0]:rows;
+    if(!who || !who.client_user_id) return false;
+    token=who.client_id;
+    ptype=_tableToPtype(who.client_table);
+    return true;
+  }catch(err){ return false; }
+}
 
-  async function check(){
-    if(sessionStorage.getItem(_pinSessionKey())!=='1') return; // already logged out
-    let status;
-    try{
-      const rows=await sb('rpc/portal_pin_status',{method:'POST',body:{p_table:_pinTableFor(),p_id:token}});
-      status=Array.isArray(rows)?rows[0]:rows;
-    }catch(e){
-      return; // transient network issue — don't punish the client for it
-    }
-    if(status && status.has_pin===false){
-      sessionStorage.removeItem(_pinSessionKey());
-      await _pinRenderSetup();
-    }
+async function _sessionLoginFlow(clientUserId){
+  const saved=_loadSavedSession();
+  if(saved && saved.clientUserId===clientUserId && saved.token){
+    _sessionToken=saved.token;
+    if(await _resolveWhoami()) return true;
+    _sessionToken=null; // saved session is stale/revoked — fall through to a fresh login
   }
+  return await _loginRenderEntry(clientUserId);
+}
 
-  setInterval(check,20000);
-  document.addEventListener('visibilitychange',()=>{ if(!document.hidden) check(); });
+function _sessionScreenButton(id,label){
+  return `<button id="${id}" style="width:100%;padding:12px;border:none;border-radius:10px;background:#38bdf8;color:#0a1628;font-weight:700;font-size:14px;cursor:pointer">${label}</button>`;
+}
+
+async function _loginRenderEntry(clientUserId){
+  _pinGateShell(`
+    <div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:6px">Enter your PIN</div>
+    <div style="font-size:12px;color:rgba(255,255,255,.5);margin-bottom:18px">Enter the 6-digit PIN for this portal</div>
+    ${_pinInputHtml('login-pin')}
+    <div id="pin-err" style="font-size:12px;color:#f87171;min-height:16px;margin-bottom:10px"></div>
+    ${_sessionScreenButton('login-btn','Unlock')}
+  `);
+  const el=document.getElementById('login-pin'), errEl=document.getElementById('pin-err');
+  const submit=async()=>{
+    const pin=el.value;
+    if(!/^[0-9]{6}$/.test(pin)){ errEl.textContent='Enter all 6 digits'; return; }
+    try{
+      const rows=await sb('rpc/portal_client_login',{method:'POST',body:{p_client_user_id:clientUserId,p_pin:pin}});
+      const res=Array.isArray(rows)?rows[0]:rows;
+      if(res?.ok){ _saveSession(res.session_token,clientUserId); location.reload(); }
+      else{ errEl.textContent=res?.error_msg||'Incorrect PIN — please try again'; el.value=''; el.focus(); }
+    }catch(err){ errEl.textContent='Could not verify PIN — please check your connection and try again'; }
+  };
+  document.getElementById('login-btn').addEventListener('click',submit);
+  el.addEventListener('keydown',ev=>{ if(ev.key==='Enter') submit(); });
+  el.focus();
+  return false;
+}
+
+async function _activateFlow(activateToken){
+  _pinGateShell(`
+    <div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:6px">Welcome — set up your access</div>
+    <div style="font-size:12px;color:rgba(255,255,255,.5);margin-bottom:14px">Enter your name and choose a 6-digit PIN. You'll use this PIN each time you open your portal link.</div>
+    <input id="activate-name" type="text" placeholder="Your name" autocomplete="name"
+      style="width:100%;box-sizing:border-box;font-size:14px;text-align:center;padding:12px 0;border-radius:10px;border:1px solid rgba(125,211,252,.25);background:rgba(255,255,255,.05);color:#fff;margin-bottom:12px">
+    ${_pinInputHtml('activate-pin')}
+    ${_pinInputHtml('activate-pin-confirm')}
+    <div id="pin-err" style="font-size:12px;color:#f87171;min-height:16px;margin-bottom:10px"></div>
+    ${_sessionScreenButton('activate-btn','Set up my portal')}
+  `);
+  const errEl=document.getElementById('pin-err');
+  const submit=async()=>{
+    const name=(document.getElementById('activate-name').value||'').trim();
+    const pin=document.getElementById('activate-pin').value;
+    const confirmPin=document.getElementById('activate-pin-confirm').value;
+    if(!name){ errEl.textContent='Please enter your name'; return; }
+    if(!/^[0-9]{6}$/.test(pin)){ errEl.textContent='PIN must be exactly 6 digits'; return; }
+    if(pin!==confirmPin){ errEl.textContent='PINs don’t match'; return; }
+    try{
+      const rows=await sb('rpc/portal_activate',{method:'POST',body:{p_token:activateToken,p_name:name,p_pin:pin}});
+      const res=Array.isArray(rows)?rows[0]:rows;
+      if(res?.ok){ _saveSession(res.session_token,res.client_user_id); location.href=location.pathname+'?u='+encodeURIComponent(res.client_user_id); }
+      else{ errEl.textContent=res?.error_msg||'Could not activate — please contact your service provider'; }
+    }catch(err){ errEl.textContent='Something went wrong — please try again or contact your service provider'; }
+  };
+  document.getElementById('activate-btn').addEventListener('click',submit);
+  document.getElementById('activate-pin-confirm').addEventListener('keydown',ev=>{ if(ev.key==='Enter') submit(); });
+  document.getElementById('activate-name').focus();
+  return false;
+}
+
+async function _bridgeFlow(){
+  const table=_pinTableFor();
+  _pinGateShell(`
+    <div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:6px">We've upgraded Portal security</div>
+    <div style="font-size:12px;color:rgba(255,255,255,.5);margin-bottom:18px">Please confirm your existing 6-digit PIN once to continue — you won't need to do this again.</div>
+    ${_pinInputHtml('bridge-pin')}
+    <div id="pin-err" style="font-size:12px;color:#f87171;min-height:16px;margin-bottom:10px"></div>
+    ${_sessionScreenButton('bridge-btn','Continue')}
+  `);
+  const el=document.getElementById('bridge-pin'), errEl=document.getElementById('pin-err');
+  const submit=async()=>{
+    const pin=el.value;
+    if(!/^[0-9]{6}$/.test(pin)){ errEl.textContent='Enter all 6 digits'; return; }
+    try{
+      const rows=await sb('rpc/portal_bridge_login',{method:'POST',body:{p_table:table,p_id:token,p_pin:pin}});
+      const res=Array.isArray(rows)?rows[0]:rows;
+      if(res?.ok){ _saveSession(res.session_token,res.client_user_id); location.href=location.pathname+'?u='+encodeURIComponent(res.client_user_id); }
+      else{ errEl.textContent=res?.error_msg||'Incorrect PIN — please try again'; el.value=''; el.focus(); }
+    }catch(err){ errEl.textContent='Could not verify PIN — please check your connection and try again, or contact your service provider'; }
+  };
+  document.getElementById('bridge-btn').addEventListener('click',submit);
+  el.addEventListener('keydown',ev=>{ if(ev.key==='Enter') submit(); });
+  el.focus();
+  return false;
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
 async function init(){
-  if(!token){
+  if(!token && !P.get('u') && !P.get('activate')){
     document.title = 'DeepFlow — Client Portal';
     document.body.innerHTML = `
     <div style="position:fixed;inset:0;overflow:hidden;font-family:'Inter',-apple-system,sans-serif;display:flex;align-items:stretch">
@@ -597,8 +643,7 @@ async function init(){
     return;
   }
   try{
-    if(!(await ensurePortalPin())) return;
-    _startPinWatchdog();
+    if(!(await establishSession())) return; // already rendered activate/login/bridge — that screen reloads on success
 
     let entity,jobs=[];
 
@@ -608,10 +653,9 @@ async function init(){
     }catch(e){ console.warn('[Portal] settings load failed',e); }
 
     if(ptype==='agency'){
-      // Was a direct, unscoped `agencies?id=eq...` read — now a narrow
-      // SECURITY DEFINER function that only ever returns the one row asked
-      // for, matched server-side. See docs/history/sql-migration-notes/PHASE1_PORTAL_RPC_SQL.md.
-      const rows=await sb(`rpc/portal_get_agency`,{method:'POST',body:{p_id:token}});
+      // Session-scoped: resolves the row from the session itself (see
+      // establishSession() above), not from a client-supplied id.
+      const rows=await sb(`rpc/portal_get_agency`,{method:'POST',body:{}});
       if(!rows?.length){showErr('Not Found','This link is invalid or has expired.');return;}
       entity=_fix(rows[0]);
       document.getElementById('portal-badge').textContent='Agency';
@@ -620,7 +664,7 @@ async function init(){
 
       // Load ALL agents under this agency for the filter bar
       try{
-        const agentRows=await sb(`rpc/portal_get_agency_agents`,{method:'POST',body:{p_agency_id:token}}).catch(()=>[]);
+        const agentRows=await sb(`rpc/portal_get_agency_agents`,{method:'POST',body:{}}).catch(()=>[]);
         if(agentRows?.length) entity._agents=agentRows.map(_fix);
       }catch(e){}
 
@@ -630,22 +674,21 @@ async function init(){
         if(agentNames.length) entity._agentNames=agentNames;
       }
     } else if(ptype==='agent'){
+      // agentName (?name=) only ever existed to cover legacy links from
+      // before agents had a real portal_get_agent row — a valid session
+      // always resolves the row itself now, so that URL param is just a
+      // last-resort fallback if the RPC genuinely finds nothing.
+      const agentRows=await sb(`rpc/portal_get_agent`,{method:'POST',body:{}}).catch(()=>[]);
       const agentName=P.get('name');
-      if(!agentName){showErr('Invalid Link','Please regenerate this link from the office.');return;}
-      // Was a synthesized {name,type,id} object with no real DB fields at
-      // all — agents had no portal_get_* fetch before this, since nothing
-      // needed a real agent field on this side previously. Falls back to
-      // the URL name if the row genuinely isn't found, so an existing
-      // agent link some office member already sent out doesn't break.
-      const agentRows=await sb(`rpc/portal_get_agent`,{method:'POST',body:{p_id:token}}).catch(()=>[]);
+      if(!agentRows?.[0] && !agentName){showErr('Invalid Link','Please regenerate this link from the office.');return;}
       entity=agentRows?.[0]?_fix(agentRows[0]):{name:decodeURIComponent(agentName),type:'agent',id:token};
-      entity.name=entity.name||decodeURIComponent(agentName);
+      entity.name=entity.name||(agentName?decodeURIComponent(agentName):'');
       entity.type='agent';
       document.getElementById('portal-badge').textContent='Agent';
       document.title=`${e(entity.name)} — Portal`;
       jobs=await fetchJobs('agent',entity.id);
     } else {
-      const rows=await sb(`rpc/portal_get_person`,{method:'POST',body:{p_id:token}});
+      const rows=await sb(`rpc/portal_get_person`,{method:'POST',body:{}});
       if(!rows?.length){showErr('Not Found','This link is invalid or has expired. Contact your service provider.');return;}
       entity=_fix(rows[0]);
       document.getElementById('portal-badge').textContent='Landlord';
@@ -662,22 +705,19 @@ async function init(){
     // back to its existing live-computed items exactly as before. That's the
     // deliberate, documented shape of this phase: real infra now, real
     // content once Phase D emits it, not something to fake in the meantime.
-    const notifications=((await sb(`rpc/portal_get_notifications`,{method:'POST',body:{p_type:ptype,p_id:token}}).catch(()=>[]))||[]);
+    const notifications=((await sb(`rpc/portal_get_notifications`,{method:'POST',body:{}}).catch(()=>[]))||[]);
 
     if(jobs.length){
-      // jobIds passed as a plain array to the RPCs below — replaces the old
-      // hand-built `"id1","id2"` string used for a raw `jobid=in.(...)` filter.
-      const jobIds=jobs.map(j=>j.id);
       const [ra,rc,ri,rr,rp]=await Promise.all([
-        sb(`rpc/portal_get_attachments`,{method:'POST',body:{p_job_ids:jobIds}}).catch(()=>[]),
-        sb(`rpc/portal_get_certs`,{method:'POST',body:{p_job_ids:jobIds}}).catch(()=>[]),
+        sb(`rpc/portal_get_attachments`,{method:'POST',body:{}}).catch(()=>[]),
+        sb(`rpc/portal_get_certs`,{method:'POST',body:{}}).catch(()=>[]),
         fetchInvoices(ptype,token),
         Promise.resolve([]), // no `ratings` table exists in the live database — this call always failed before; removed rather than left silently broken
         // Per-invoice payment sums only — never the underlying payment rows
         // (method/ref/notes stay office-only). Same identity resolution as
         // portal_get_invoices, so this doesn't expose anything the client
         // couldn't already infer invoice-by-invoice from PAID/OUTSTANDING.
-        sb(`rpc/portal_get_payment_totals`,{method:'POST',body:{p_type:ptype,p_id:token}}).catch(()=>[]),
+        sb(`rpc/portal_get_payment_totals`,{method:'POST',body:{}}).catch(()=>[]),
       ]);
       attachments=(ra||[]).map(_fix);
       certs=(rc||[]).map(_fix);
@@ -749,14 +789,12 @@ async function init(){
 }
 
 async function fetchInvoices(type,id){
-  // Was matched by a client-supplied name (ILIKE across five columns) --
-  // anyone with the anon key could pass a wildcard and read every invoice
-  // in the business. portal_get_invoices now resolves the real
-  // landlord/agency/agent identity server-side from p_id alone; the client
-  // no longer supplies or controls the match value. See the Production
-  // Readiness Audit, finding C-2.
+  // Session-scoped: portal_get_invoices resolves identity from the session
+  // header (establishSession() above), never from a client-supplied id —
+  // type/id are kept as params only because every call site still passes
+  // them (still used elsewhere, e.g. the Stripe checkout flow).
   try{
-    const raw=await sb(`rpc/portal_get_invoices`,{method:'POST',body:{p_type:type,p_id:id?String(id).trim():null}});
+    const raw=await sb(`rpc/portal_get_invoices`,{method:'POST',body:{}});
     if(Array.isArray(raw)){
       const seen=new Set();
       return raw.map(_fix).filter(inv=>{
@@ -770,26 +808,21 @@ async function fetchInvoices(type,id){
 }
 
 async function fetchJobs(type,id){
-  // Was matched by a client-supplied name with p_id only as a fallback --
-  // anyone with the anon key could pass a wildcard and read every job in
-  // the business. portal_get_jobs now resolves the real landlord/agency/
-  // agent identity server-side from p_id alone. See the Production
-  // Readiness Audit, finding C-2.
+  // Session-scoped: portal_get_jobs resolves identity from the session
+  // header (establishSession() above), never from a client-supplied id.
   try{
-    const raw=await sb(`rpc/portal_get_jobs`,{method:'POST',body:{p_type:type,p_id:id?String(id).trim():null}});
+    const raw=await sb(`rpc/portal_get_jobs`,{method:'POST',body:{}});
     if(Array.isArray(raw)) return raw.map(_fix);
   }catch(e){console.warn('[Portal] jobs fetch failed',e);}
   return [];
 }
 
 // The `deepflow` bucket is private — every stored .url/.pdf_url is a dead
-// public-style link now. Portal has no session at all (see
-// docs/architecture/08-authentication-and-roles.md), so it can't sign a
-// URL itself; the portal-sign-url Edge Function re-resolves this same
-// (type, id) identity server-side — exactly like portal_get_certs/
-// portal_get_attachments/portal_get_invoices already do — and only signs a
-// path if it's genuinely found among that identity's own records. Called
-// once at load with every path this visit will need, then overwrites
+// public-style link now. Portal can't sign a URL itself; the
+// portal-sign-url Edge Function re-resolves identity from the same session
+// header as every portal_get_* RPC (see establishSession() above) and only
+// signs a path if it's genuinely found among that identity's own records.
+// Called once at load with every path this visit will need, then overwrites
 // .url/.pdf_url in place so every existing render site (job photos, cert
 // cards, invoice preview/download/share) keeps reading the same field
 // names unchanged and just gets a working link instead of a dead one.
@@ -802,8 +835,8 @@ async function _resolveFileUrls(type,id,attachments,certs,invoices){
   try{
     const res=await fetch(`${SB_URL}/functions/v1/portal-sign-url`,{
       method:'POST',
-      headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY},
-      body:JSON.stringify({type,id,paths:[...paths]})
+      headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'x-portal-session':_sessionToken||''},
+      body:JSON.stringify({paths:[...paths]})
     });
     const data=await res.json();
     const urls=data?.urls||{};
@@ -939,7 +972,7 @@ function renderNotifPanel(){
 // several are unread.
 export async function markNotificationRead(id){
   try{
-    await sb(`rpc/portal_mark_notification_read`,{method:'POST',body:{p_type:ptype,p_id:token,p_notification_id:id}});
+    await sb(`rpc/portal_mark_notification_read`,{method:'POST',body:{p_notification_id:id}});
     if(_d?.notifications) _d.notifications=_d.notifications.map(n=>n.id===id?{...n,read_at:new Date().toISOString()}:n);
     renderNotifPanel();
   }catch(err){ console.warn('[Portal] Failed to mark notification read',err); }
@@ -1470,7 +1503,7 @@ init();
 // actual top-level declarations) — preserving the exact global availability
 // every one of these already had before this migration, no more and no less.
 Object.assign(window, {
-  _pinSubmitEntry, _pinSubmitSetup, closeCertLockModal, closeCertPdfPreview, closeContactModal,
+  closeCertLockModal, closeCertPdfPreview, closeContactModal,
   closeHelpModal, closeLb, closeModal, closeSearch, copyToClipboard,
   downloadCurrentInv, enablePushNotifications, exportCSV, go, handleFiles,
   markNotificationRead, openContactModal, openSearch, payInvoice, performSearch, preFillRenewal,
