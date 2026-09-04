@@ -167,6 +167,8 @@ async function _fetchPortalJobData(entity){
   const jobType=ptype==='agency'?'agency':ptype==='agent'?'agent':'landlord';
   const jobs=await fetchJobs(jobType,entity.id);
   let attachments=[],certs=[],invoices=[];
+  // Same unconditional fetch as init() — see the comment there.
+  const notifications=((await sb(`rpc/portal_get_notifications`,{method:'POST',body:{p_type:ptype,p_id:token}}).catch(()=>[]))||[]);
   if(jobs.length){
     const jobIds=jobs.map(j=>j.id);
     const [ra,rc,ri,rp]=await Promise.all([
@@ -194,7 +196,7 @@ async function _fetchPortalJobData(entity){
       }
     });
   }
-  return {jobs,attachments,certs,invoices};
+  return {jobs,attachments,certs,invoices,notifications};
 }
 
 async function _pollPortalUpdates(){
@@ -204,22 +206,24 @@ async function _pollPortalUpdates(){
   if(_pollInFlight||!_d||!_d.entity)return;
   _pollInFlight=true;
   try{
-    const {jobs,attachments,certs,invoices}=await _fetchPortalJobData(_d.entity);
+    const {jobs,attachments,certs,invoices,notifications}=await _fetchPortalJobData(_d.entity);
     // Reuses the exact same diff _computeChangesSinceLastVisit already
     // does for "what changed since you last opened this link" — calling
     // it again here just diffs against the snapshot from the previous
     // poll (or the initial load) instead, and overwrites it the same way.
     const changes=_computeChangesSinceLastVisit(jobs,certs,invoices,token);
-    _d.jobs=jobs; _d.attachments=attachments; _d.certs=certs; _d.invoices=invoices;
+    const newUnreadCount=notifications.filter(n=>!n.read_at).length - (_d.notifications||[]).filter(n=>!n.read_at).length;
+    _d.jobs=jobs; _d.attachments=attachments; _d.certs=certs; _d.invoices=invoices; _d.notifications=notifications;
     invoices.forEach(inv=>{ if(inv.id) _INV_STORE.set(inv.id,inv); });
-    if(changes.length){
+    if(changes.length||newUnreadCount>0){
       // Prepend so the newest changes lead the notification list, without
       // discarding anything from earlier this same visit still unread.
       _d.changesSinceLastVisit=[...changes,...(_d.changesSinceLastVisit||[])];
       const nb=document.getElementById('notif-btn'),nd=document.getElementById('notif-dot');
       if(nb)nb.style.display='flex'; if(nd)nd.style.display='block';
       rerenderCurrentTab();
-      toast(changes.length===1?'Updated — 1 change':`Updated — ${changes.length} changes`);
+      const total=changes.length+Math.max(0,newUnreadCount);
+      if(total>0) toast(total===1?'Updated — 1 change':`Updated — ${total} changes`);
     }
   }catch(e){ console.warn('[Portal] Live-update poll failed',e); }
   finally{ _pollInFlight=false; }
@@ -642,6 +646,15 @@ async function init(){
     }
 
     let attachments=[],certs=[],invoices=[],ratings=[];
+    // Persisted notifications (docs/communications/08-IMPLEMENTATION-PLAN.md
+    // Phase C) — fetched unconditionally, unlike attachments/certs/invoices
+    // below, since a notification isn't derived from having jobs. Nothing
+    // writes to this table yet (Phase D's event engine does that) — so this
+    // currently always returns an empty list, and the bell panel below falls
+    // back to its existing live-computed items exactly as before. That's the
+    // deliberate, documented shape of this phase: real infra now, real
+    // content once Phase D emits it, not something to fake in the meantime.
+    const notifications=((await sb(`rpc/portal_get_notifications`,{method:'POST',body:{p_type:ptype,p_id:token}}).catch(()=>[]))||[]);
 
     if(jobs.length){
       // jobIds passed as a plain array to the RPCs below — replaces the old
@@ -694,13 +707,14 @@ async function init(){
     document.getElementById('footer-co').textContent=coName;
 
     const changesSinceLastVisit=_computeChangesSinceLastVisit(jobs,certs,invoices,token);
-    const hasAlerts=certs.some(c=>!c.noExpiry&&c.expiryDate&&dd(c.expiryDate)<=30) || invoices.some(i=>i.status!=='Paid'&&i.status!=='Cancelled') || changesSinceLastVisit.length>0;
+    const hasUnreadNotifications=notifications.some(n=>!n.read_at);
+    const hasAlerts=certs.some(c=>!c.noExpiry&&c.expiryDate&&dd(c.expiryDate)<=30) || invoices.some(i=>i.status!=='Paid'&&i.status!=='Cancelled') || changesSinceLastVisit.length>0 || hasUnreadNotifications;
     if(hasAlerts){
       const nb=document.getElementById('notif-btn');const nd=document.getElementById('notif-dot');
       if(nb)nb.style.display='flex';if(nd)nd.style.display='block';
     }
 
-    _d={name:entity.name,type:ptype,jobs,attachments,certs,invoices,ratings:ratings||[],token,coName,entity,changesSinceLastVisit};
+    _d={name:entity.name,type:ptype,jobs,attachments,certs,invoices,ratings:ratings||[],token,coName,entity,changesSinceLastVisit,notifications};
     _d._activeAgents=new Set(); // empty = all agents (agency view)
     document.getElementById('nav').style.display='flex';
     document.querySelectorAll('.tab').forEach(tab=>{
@@ -868,6 +882,15 @@ function toggleNotif(){
   p.style.display=show?'block':'none';
   if(show&&_d)renderNotifPanel();
 }
+// Icon/color per notifications.type — falls back to a generic bell for any
+// type this hasn't been taught yet, since Phase D (the event engine that
+// actually writes rows here) will introduce types incrementally.
+const _NOTIF_TYPE_STYLE={
+  job_status:{icon:'refresh-cw',color:'var(--accent)'},
+  cert_ready:{icon:'award',color:'var(--success)'},
+  invoice:{icon:'receipt',color:'var(--warning)'},
+  payment:{icon:'receipt',color:'var(--success)'},
+};
 function renderNotifPanel(){
   const items=[...(_d.changesSinceLastVisit||[])];
   _d.certs.filter(c=>!c.noExpiry&&c.expiryDate&&dd(c.expiryDate)<=30).forEach(c=>{
@@ -877,9 +900,41 @@ function renderNotifPanel(){
   _d.invoices.filter(i=>i.status!=='Paid'&&i.status!=='Cancelled').forEach(i=>{
     items.push({icon:'receipt',color:'var(--warning)',text:`Invoice <strong>${e(i.number||'—')}</strong> is outstanding`,action:()=>go('invoices'),time:'Invoice'});
   });
-  const html=items.length?items.map(n=>`<div class="notif-item" onclick="(${typeof n.action==='function'?n.action.toString():''})();toggleNotif()"><div class="notif-icon" style="background:${n.color}15;color:${n.color}"><i data-lucide="${n.icon}" style="width:16px;height:16px"></i></div><div style="flex:1"><div style="font-size:12px;line-height:1.4">${n.text}</div><div style="font-size:10px;color:var(--text-tertiary);margin-top:2px">${n.time}</div></div></div>`).join(''):`<div class="empty" style="padding:20px"><div class="es">No new notifications</div></div>`;
+  const liveHtml=items.map(n=>`<div class="notif-item" onclick="(${typeof n.action==='function'?n.action.toString():''})();toggleNotif()"><div class="notif-icon" style="background:${n.color}15;color:${n.color}"><i data-lucide="${n.icon}" style="width:16px;height:16px"></i></div><div style="flex:1"><div style="font-size:12px;line-height:1.4">${n.text}</div><div style="font-size:10px;color:var(--text-tertiary);margin-top:2px">${n.time}</div></div></div>`).join('');
+  // Persisted notifications (Phase C) — separate markup from the live-
+  // computed items above since these carry a real id to mark read via
+  // portal_mark_notification_read, so they use a parameterized onclick
+  // rather than the stringified-closure trick the items above rely on
+  // (that trick only works when the closure captures nothing besides
+  // window-exposed globals — n.id here would be undefined once re-run
+  // outside this render's scope).
+  const unread=(_d.notifications||[]).filter(n=>!n.read_at);
+  const persistedHtml=unread.map(n=>{
+    const style=_NOTIF_TYPE_STYLE[n.type]||{icon:'bell',color:'var(--accent)'};
+    // n.created_at is a full timestamptz ("2026-09-04T13:30:00+00:00"),
+    // not the plain YYYY-MM-DD date fd() expects (it appends its own
+    // T12:00:00 — doing that to an already-full timestamp parses as
+    // Invalid Date), so this formats it directly instead of reusing fd().
+    const when=n.created_at?new Date(n.created_at).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
+    return `<div class="notif-item" onclick="markNotificationRead('${n.id}')"><div class="notif-icon" style="background:${style.color}15;color:${style.color}"><i data-lucide="${style.icon}" style="width:16px;height:16px"></i></div><div style="flex:1"><div style="font-size:12px;line-height:1.4"><strong>${e(n.title||'Update')}</strong>${n.body?' — '+e(n.body):''}</div><div style="font-size:10px;color:var(--text-tertiary);margin-top:2px">${when}</div></div></div>`;
+  }).join('');
+  const html=(persistedHtml+liveHtml)||`<div class="empty" style="padding:20px"><div class="es">No new notifications</div></div>`;
   document.getElementById('notif-list').innerHTML=html;
   refreshIcons();
+}
+
+// Marks one persisted notification read (Phase C) — server-side via the
+// same token+PIN-scoped RPC every other Portal write uses, so this can
+// only ever touch this visitor's own entity's rows (see the RPC's own
+// WHERE clause in the migration). Re-renders in place rather than closing
+// the panel, so marking one item read doesn't lose the visitor's place if
+// several are unread.
+export async function markNotificationRead(id){
+  try{
+    await sb(`rpc/portal_mark_notification_read`,{method:'POST',body:{p_type:ptype,p_id:token,p_notification_id:id}});
+    if(_d?.notifications) _d.notifications=_d.notifications.map(n=>n.id===id?{...n,read_at:new Date().toISOString()}:n);
+    renderNotifPanel();
+  }catch(err){ console.warn('[Portal] Failed to mark notification read',err); }
 }
 
 // ── KEYBOARD & OFFLINE ────────────────────────────────────────────────────────
@@ -1410,7 +1465,7 @@ Object.assign(window, {
   _pinSubmitEntry, _pinSubmitSetup, closeCertLockModal, closeCertPdfPreview, closeContactModal,
   closeHelpModal, closeLb, closeModal, closeSearch, copyToClipboard,
   downloadCurrentInv, enablePushNotifications, exportCSV, go, handleFiles,
-  openContactModal, openSearch, payInvoice, performSearch, preFillRenewal,
+  markNotificationRead, openContactModal, openSearch, payInvoice, performSearch, preFillRenewal,
   previewCertPdf, setCertDir, setCertSort, setCertView, setPropSearch,
   setPropSort, shareCert, shareCurrentPreviewCert, showCertLockedPopup, submitReq, toast,
   toggleAgentFilter, toggleNotif, toggleReqDetail, toggleTheme,

@@ -5,23 +5,23 @@ things raised in conversation don't get lost. Newest first within each section.
 
 ## Open
 
-- **Editing an already-`Paid` invoice's line items doesn't reopen it for payment.**
-  Nothing in the invoice editor blocks adding/changing items on an invoice whose
-  `status` is already `'Paid'`, and doing so does not revert that status. The invoice
-  keeps showing as fully-paid revenue everywhere (dashboard, invoice list, aging
-  report) while the real new/updated amount owed goes untracked, until someone
-  happens to reopen that specific invoice's payment modal and notices the mismatch
-  between `calcInvTotal()` and what was actually paid.
-  **Correct behavior today** (not a bug, a workflow requirement office needs to know):
-  once an invoice is `Paid`, a genuinely new charge (e.g. extra work agreed after the
-  original job/invoice was already settled) should go on a **new** invoice — a
-  Disposable Invoice or a proforma linked to the same job — not be added as a line
-  item on the closed one. Raised 2026-09-04 while explaining a real pre-payment
-  scenario (client pays for an EICR upfront, extra work found and charged separately
-  mid-job). No fix scoped yet — options would be either a hard UI guard (block/warn on
-  editing a Paid invoice's items) or an explicit "reopen for amendment" action that
-  visibly reverts status first. Deferred at the owner's request — not urgent, revisit
-  when convenient.
+*(nothing open right now)*
+
+## Investigated further — not actually a gap
+
+- **~~Editing an already-`Paid` invoice's line items doesn't reopen it for payment~~ —
+  correction: it already can't.** Logged 2026-09-04 based on reading only
+  `addInvItem()`/`renderInvItems()` in isolation, which really don't guard anything.
+  Tracing the actual save path they feed into (`saveInv()` → `saveInvWithJobSync()`,
+  `apps/office/main.js:8242`) found a hard block already in place: saving any edit
+  while `existingInv.status==='Paid'` is rejected outright with *"This invoice has a
+  recorded payment — use 'Unlock for correction' (admin only) before editing."* That
+  points at `unlockPaidInv()` (`main.js:5783`) — admin-only, confirms via a dialog that
+  warns it's audit-logged, explicitly reverts `status` to `'Awaiting Payment'`, and
+  only then does editing proceed normally. So both halves of what a real fix would
+  need — a hard guard, and an explicit reopen-for-amendment action that visibly
+  reverts status first — already exist and already work together correctly. No code
+  change needed; this entry stays only as a record of the correction.
 
 ## Fixed
 
