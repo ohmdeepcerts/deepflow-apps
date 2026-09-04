@@ -63,6 +63,7 @@ import {
 import { openCreditNoteModal, addCreditItem, fillCreditNote, saveCreditNote, creditNote, updateCreditItem, removeCreditItem } from './credit-notes.js';
 import { renderInvCustomTexts, addInvCustomText, removeInvCustomText } from './invoice-custom-text.js';
 import { renderSqlSnippets, copySql } from './sql-guide.js';
+import { renderCommsLog } from './comms-dryrun-log.js';
 import { renderPlanner, initPlanner } from './planner-board.js';
 import { openProjectPicker } from './planner-projects.js';
 import {
@@ -712,7 +713,7 @@ export function _commEntityFor(rec){
 // ════════════════════════════════════════════════════════════════
 //  NAVIGATION
 // ════════════════════════════════════════════════════════════════
-const PTITLES={dash:'Dashboard',jobs:'Job Management',inv:'Invoices',stmt:'Statements',exp:'Expenses & Materials',ts:'Timesheets',rep:'Reports',req:'Job Requests',dir:'Directories',props:'Properties',certs:'Certificates',client:'Client View',set:'Settings',map:'Live Maps & Engineer Tracking',team:'Team',engrep:'Engineer Reports',audit:'Audit Log'};
+const PTITLES={dash:'Dashboard',jobs:'Job Management',inv:'Invoices',stmt:'Statements',exp:'Expenses & Materials',ts:'Timesheets',rep:'Reports',req:'Job Requests',dir:'Directories',props:'Properties',certs:'Certificates',client:'Client View',set:'Settings',map:'Live Maps & Engineer Tracking',team:'Team',engrep:'Engineer Reports',audit:'Audit Log',commslog:'Communications Log'};
 let curPg='dash';
 
 
@@ -737,7 +738,7 @@ export function nav(pg){
   // briefly saw the forbidden page's actual content before the toast fired
   // and the early return kicked in.
   if(!_canAccessPage(pg)){
-    toast(pg==='audit'?'❌ Admin only':pg==='set'?'❌ Settings is restricted':'❌ You do not have access to this page','error');
+    toast((pg==='audit'||pg==='commslog')?'❌ Admin only':pg==='set'?'❌ Settings is restricted':'❌ You do not have access to this page','error');
     return;
   }
 
@@ -775,6 +776,7 @@ export function nav(pg){
   if(pg==='rep') renderReports();
   if(pg==='engrep'){initEngReport();renderEngReport();}
   if(pg==='audit') initAuditLog();
+  if(pg==='commslog') renderCommsLog();
   // Finance: read-only jobs
   if(pg==='jobs' && _appUser?.role==='Finance'){
     // Allow but will be read-only — handled in applyUserPermissions
@@ -9660,7 +9662,7 @@ Object.assign(window, {
   toggleArchivePerson,
   openPropModal, openRenewCertModal, openStandaloneProformaModal, openWhatsApp, postComment, previewCertPdf,
   previewWaTemplate, printFilteredInvoices, printProforma, quickConfirm, quickEditPrice, quickEditTime, quickStatus,
-  removeApplianceRow, removeCertPdf, removeCreditItem, removeInvCustomText, renderAgentsSection, renderAuditLog, renderCertMissing, renderCertStats, renderCertTable, renderClientPicker,
+  removeApplianceRow, removeCertPdf, removeCreditItem, removeInvCustomText, renderAgentsSection, renderAuditLog, renderCertMissing, renderCertStats, renderCertTable, renderClientPicker, renderCommsLog,
   renderExpiringPanel, setMissingFilter, clearExpiringFilters, goExpiryWindow,
   renderDash, renderDirSection, renderEngReport, renderExpenses, renderInvItems, renderInvList, renderJobs, renderMapPage,
   renderNotifPreview, renderPLDashboard, renderProps, renderReports, renderRequests, renderSettings, renderStmt,

@@ -24,6 +24,12 @@ export function canAccessPage(role, pg){
   if(allowed && !allowed.includes(pg)) return false;
   if(pg==='set' && role !== 'Admin' && role !== 'Manager' && role !== 'Finance') return false;
   if(pg==='audit' && role!=='Admin') return false;
+  // commslog (Communications dry-run log, docs/communications/08-
+  // IMPLEMENTATION-PLAN.md Phase D) exposes per-client automation-decision
+  // history — same sensitivity level as audit, same explicit gate; without
+  // this, the "role absent from rolePages" quirk below would silently grant
+  // full access to it (see tests/unit/auth.test.js's QUIRK case).
+  if(pg==='commslog' && role!=='Admin') return false;
   return true;
 }
 

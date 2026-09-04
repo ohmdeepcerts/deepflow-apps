@@ -9,41 +9,44 @@ import { describe, it, expect } from 'vitest';
 import { canAccessPage, getPermission } from '../../packages/auth/index.js';
 
 describe('canAccessPage — role/page access gate', () => {
-  it('Admin: every page allowed, including set and audit', () => {
-    for (const pg of ['dash', 'jobs', 'inv', 'stmt', 'rep', 'req', 'dir', 'props', 'certs', 'client', 'set', 'map', 'audit', 'anything-else']) {
+  it('Admin: every page allowed, including set, audit and commslog', () => {
+    for (const pg of ['dash', 'jobs', 'inv', 'stmt', 'rep', 'req', 'dir', 'props', 'certs', 'client', 'set', 'map', 'audit', 'commslog', 'anything-else']) {
       expect(canAccessPage('Admin', pg)).toBe(true);
     }
   });
 
-  it('Manager: allowed for every page in its list, including set; blocked from audit and pages outside its list', () => {
+  it('Manager: allowed for every page in its list, including set; blocked from audit, commslog, and pages outside its list', () => {
     const allowed = ['dash', 'jobs', 'inv', 'stmt', 'rep', 'req', 'dir', 'props', 'certs', 'client', 'set', 'map'];
     for (const pg of allowed) expect(canAccessPage('Manager', pg)).toBe(true);
     expect(canAccessPage('Manager', 'audit')).toBe(false);
+    expect(canAccessPage('Manager', 'commslog')).toBe(false);
     expect(canAccessPage('Manager', 'not-a-real-page')).toBe(false);
   });
 
-  it('Finance: allowed for its list including set; blocked from audit, and blocked from pages outside its list (e.g. certs, map, req)', () => {
+  it('Finance: allowed for its list including set; blocked from audit and commslog, and blocked from pages outside its list (e.g. certs, map, req)', () => {
     const allowed = ['dash', 'jobs', 'inv', 'stmt', 'rep', 'dir', 'props', 'set'];
     for (const pg of allowed) expect(canAccessPage('Finance', pg)).toBe(true);
     expect(canAccessPage('Finance', 'audit')).toBe(false);
+    expect(canAccessPage('Finance', 'commslog')).toBe(false);
     expect(canAccessPage('Finance', 'certs')).toBe(false);
     expect(canAccessPage('Finance', 'map')).toBe(false);
     expect(canAccessPage('Finance', 'req')).toBe(false);
   });
 
-  it('Staff: allowed for its list; blocked from set and audit; blocked from pages outside its list (e.g. rep, map)', () => {
+  it('Staff: allowed for its list; blocked from set, audit and commslog; blocked from pages outside its list (e.g. rep, map)', () => {
     const allowed = ['dash', 'jobs', 'inv', 'stmt', 'req', 'dir', 'props', 'certs', 'client'];
     for (const pg of allowed) expect(canAccessPage('Staff', pg)).toBe(true);
     expect(canAccessPage('Staff', 'set')).toBe(false);
     expect(canAccessPage('Staff', 'audit')).toBe(false);
+    expect(canAccessPage('Staff', 'commslog')).toBe(false);
     expect(canAccessPage('Staff', 'rep')).toBe(false);
     expect(canAccessPage('Staff', 'map')).toBe(false);
   });
 
-  it('QUIRK: a role with no entry in the page-access map (Viewer, or an unrecognized role) gets full default access to every page except set and audit', () => {
+  it('QUIRK: a role with no entry in the page-access map (Viewer, or an unrecognized role) gets full default access to every page except set, audit and commslog', () => {
     // rolePages['Viewer'] is undefined, so the "allowed && !allowed.includes(pg)"
     // guard never triggers — the function falls straight through to true,
-    // for every page except the two that have their own explicit checks.
+    // for every page except the ones that have their own explicit checks.
     for (const pg of ['dash', 'jobs', 'inv', 'stmt', 'rep', 'req', 'dir', 'props', 'certs', 'client', 'map']) {
       expect(canAccessPage('Viewer', pg)).toBe(true);
       expect(canAccessPage('made-up-role', pg)).toBe(true);
@@ -51,6 +54,7 @@ describe('canAccessPage — role/page access gate', () => {
     }
     expect(canAccessPage('Viewer', 'set')).toBe(false);
     expect(canAccessPage('Viewer', 'audit')).toBe(false);
+    expect(canAccessPage('Viewer', 'commslog')).toBe(false);
   });
 });
 
