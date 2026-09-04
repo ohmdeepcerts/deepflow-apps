@@ -19,6 +19,7 @@ import {
   S, dAll, dGet, dPut, TODAY, toast, confirm2, logActivity, closeModal, openModal,
   _getJWT, _sb, saveCertExpiry, skipCertExpiry, setPendCertJob, _sendEmail,
   _certReadyEmailHtml, _blobToBase64, resolveCompanyProfile, signedUrl, _certLockedEmailHtml,
+  emitCommEvent, _commEntityFor,
 } from './main.js';
 import { _certFilename, sbStorage } from './certs-core.js';
 import { filterCerts, getCertTab, renderCertTable } from './certs-list.js';
@@ -301,6 +302,7 @@ async function _maybeEmailCertReady(certId, {manual=false}={}){
     });
     if(result.ok){
       logActivity(`Locked-certificate notice emailed to ${email} for ${c.address||'certificate'} (invoice unpaid)`,'cert');
+      emitCommEvent('CERTIFICATE_LOCKED',{..._commEntityFor(job), certId:c.id, certType:c.type, jobId:c.jobId, address:c.address});
       return {sent:true};
     }
     logActivity(`Locked-certificate email FAILED for ${c.address||'certificate'} (${email}): ${(result.error||'unknown error').slice(0,120)}`,'cert');
@@ -333,6 +335,7 @@ async function _maybeEmailCertReady(certId, {manual=false}={}){
   });
   if(result.ok){
     logActivity(`Certificate emailed to ${email} for ${c.address||'certificate'}`,'cert');
+    emitCommEvent('CERTIFICATE_READY',{..._commEntityFor(job), certId:c.id, certType:c.type, jobId:c.jobId, address:c.address});
     return {sent:true};
   }
   logActivity(`Certificate email FAILED for ${c.address||'certificate'} (${email}): ${(result.error||'unknown error').slice(0,120)}`,'cert');

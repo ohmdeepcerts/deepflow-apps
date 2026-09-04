@@ -672,6 +672,43 @@ export async function logActivity(msg, type='info', refs={}){
   await dPut('activity',{id:uid(), msg, type, ts:Date.now(), ...refs}).catch(()=>{});
 }
 
+// Communications Phase D (docs/communications/08-IMPLEMENTATION-PLAN.md) — the
+// event queue business code plugs into. A client-side call, but the row is
+// inert until the scheduled server-side processor (process_comm_events(),
+// pg_cron) picks it up — no browser timer sends anything from this, matching
+// docs/communications/02-COMMUNICATIONS-ARCHITECTURE.md §5. Currently
+// DRY-RUN globally: the processor logs what it would have done to
+// comm_suppressions rather than dispatching, per that phase's own rule.
+//
+// Keys written match the real snake_case comm_events columns directly
+// (event_type/entity_table/entity_id/dedupe_key) rather than going through
+// dPut's usual camelCase mapping layer — @data's TO_DB has no entry for this
+// table (it's new, additive, Phase-A-only so far), so an unmapped store
+// passes keys through unchanged; camelCase keys here would silently try to
+// write columns that don't exist under those names.
+export async function emitCommEvent(eventType, {entityTable, entityId, dedupeKey, ...payload}={}){
+  await dPut('comm_events',{
+    id: uid(),
+    event_type: eventType,
+    entity_table: entityTable||null,
+    entity_id: entityId||null,
+    payload,
+    dedupe_key: dedupeKey||null,
+  }).catch(e=>console.warn('[DeepFlow] emitCommEvent failed:',eventType,e));
+}
+
+// Resolves the client_comm_preferences-style {entityTable, entityId} for a
+// job or invoice — both carry the same clientAgencyId/clientPersonId real FK
+// columns (see @data's TO_DB), so one helper covers both record types.
+// Agency takes priority over person, matching autoInvoice()'s existing
+// billing-name precedence (agency/agent-referred work bills the agency).
+export function _commEntityFor(rec){
+  if(!rec) return {};
+  if(rec.clientAgencyId) return {entityTable:'agencies', entityId:rec.clientAgencyId};
+  if(rec.clientPersonId) return {entityTable:'persons', entityId:rec.clientPersonId};
+  return {};
+}
+
 // ════════════════════════════════════════════════════════════════
 //  NAVIGATION
 // ════════════════════════════════════════════════════════════════
@@ -3641,6 +3678,15 @@ async function saveJob(){
     // defeating the same agency-link-on-repeat-booking safeguard as the
     // fuzzyAddr/selectAddr fix above, just via stale data instead of a wrong field.
     _refreshAllProps();
+    // Communications Phase D — docs/communications/04-NOTIFICATION-EVENT-
+    // CATALOGUE.md's Jobs section. isNew/status/date/timeSlot are exactly
+    // the signals that section defines JOB_CREATED/JOB_COMPLETED/
+    // APPOINTMENT_CANCELLED/JOB_SCHEDULE_CHANGED around, so checked here
+    // right alongside the existing status-change block rather than as a
+    // separate pass over the same j/existingJob.
+    if(isNew){
+      emitCommEvent('JOB_CREATED',{..._commEntityFor(j), jobId:j.id, jobNum:j.jobNum, address:j.address});
+    }
     if(existingJob&&existingJob.status!==j.status){
       logAudit('job_status_change',{jobId:j.id,jobNum:j.jobNum,address:j.address,oldStatus:existingJob.status,newStatus:j.status});
       logStatusRevertIfNeeded({jobId:j.id,jobNum:j.jobNum,address:j.address,oldStatus:existingJob.status,newStatus:j.status,staffName:_appUser?.name||''});
@@ -3649,7 +3695,26 @@ async function saveJob(){
         agencyName:j.agencyName||'',agentName:j.agentName||'',agentPhone:j.agentPhone||''};
       sendNotificationWebhook('job_status_change',notifPayload);
       sendPushNotification('job_status_change',notifPayload);
-      if(j.status===STATUS.COMPLETED) notifyNextTenantEta(j);
+      if(j.status===STATUS.COMPLETED){
+        notifyNextTenantEta(j);
+        emitCommEvent('JOB_COMPLETED',{..._commEntityFor(j), jobId:j.id, jobNum:j.jobNum, address:j.address});
+      }
+      // "Cancelled with a prior scheduled date" per the catalogue — a job
+      // cancelled before ever being scheduled (no date/timeSlot set yet)
+      // isn't the "we're cancelling your booked appointment" case this
+      // event means.
+      if(j.status===STATUS.CANCELLED && (existingJob.date||existingJob.timeSlot)){
+        emitCommEvent('APPOINTMENT_CANCELLED',{..._commEntityFor(j), jobId:j.id, jobNum:j.jobNum, address:j.address, date:existingJob.date, timeSlot:existingJob.timeSlot});
+      }
+    }
+    // Distinct from the status-change block above — a reschedule doesn't
+    // have to change status, and a status change doesn't imply a
+    // reschedule. Skipped for a brand-new job (isNew already covers that
+    // via JOB_CREATED above; there's no "previous" date/slot to compare
+    // against on first save).
+    if(existingJob && (existingJob.date!==j.date || existingJob.timeSlot!==j.timeSlot)){
+      emitCommEvent('JOB_SCHEDULE_CHANGED',{..._commEntityFor(j), jobId:j.id, jobNum:j.jobNum, address:j.address,
+        oldDate:existingJob.date, oldTimeSlot:existingJob.timeSlot, date:j.date, timeSlot:j.timeSlot});
     }
     // Independent of status — a job can get (re)assigned to an engineer
     // without its status changing (e.g. reassigning a still-Pending job).
@@ -5676,6 +5741,7 @@ async function sendInvEmail(){
   }
   inv.status='Awaiting Payment';await dPut('invoices',inv);
   await _sb('invoice_audit',{method:'POST',body:{invoiceId:id,action:'sent',details:`Emailed to ${inv.clientEmail}${inv.agentCC?' (CC: '+inv.agentCC+')':''}`,to:inv.clientEmail,user:_appUser?.name||'System',timestamp:Date.now()}}).catch(()=>{});
+  emitCommEvent('INVOICE_SENT',{..._commEntityFor(inv), invId:id, invNum:inv.number, amount:t.grand});
   _storeInvoicePDF(inv,doc).catch(e=>console.warn('[DeepFlow] Background PDF store failed for',inv.number,e));
   renderInvList();viewInv(id);updateBadges();
   closeModal('mo-inv-send');
@@ -5698,6 +5764,7 @@ async function sendInvWA(){
 
   const waNum=(document.getElementById('inv-send-wa').value||inv.clientWA||'').replace(/[^0-9]/g,'');
   inv.status='Awaiting Payment';await dPut('invoices',inv);
+  emitCommEvent('INVOICE_SENT',{..._commEntityFor(inv), invId:id, invNum:inv.number, amount:t.grand, channel:'whatsapp-manual'});
   renderInvList();viewInv(id);updateBadges();
   closeModal('mo-inv-send');
   sendToWA(waNum,msg);
@@ -5747,6 +5814,7 @@ async function markInvPaid(id){
   await dPut('invoices',inv);
   await logActivity(`Invoice ${inv.number} marked Paid (£${t.grand.toFixed(2)})`,'invoice');
   _maybeSendPaymentReceipt(inv, t.grand);
+  emitCommEvent('PAYMENT_RECEIVED',{..._commEntityFor(inv), invId:id, invNum:inv.number, amount:t.grand});
   toast('Invoice marked as Paid','success');
   renderInvList();viewInv(id);updateBadges();
   generateAndStoreInvoicePDF(id).catch(e=>console.warn('[DeepFlow] PDF regen after markInvPaid failed',e));
