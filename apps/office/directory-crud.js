@@ -17,6 +17,7 @@ import {
 } from './main.js';
 import { getCurDirSection, renderDir, renderDirSection } from './directory-sections.js';
 import { showAutosaveBanner, wireAutoSave } from './directory-matching.js';
+import { _lockedCertsForEntity, _releaseLockedCertsForEntity } from './certs-pdf.js';
 
 let editPid=null, editAgencyId=null, editAgentId=null;
 
@@ -80,6 +81,35 @@ export async function fillFromMatch(store, id){
   showAutosaveBanner(`Loaded existing record — edit and it will auto-save`);
 }
 
+// Shared by saveAgency/saveAgent/savePerson below for the per-client
+// certificate-lock toggle (turning "hold until paid" off, per client —
+// see certs-pdf.js's _lockCertsForJob/_isJobPaid, which this is the
+// counterpart to). When the toggle genuinely transitions true->false and
+// there are certs actually being held back right now, this confirms the
+// batch email before anything saves — turning it off is what makes those
+// certs release immediately, invoice paid or not, so office should see
+// that consequence spelled out before it happens, not discover it after.
+// Any other case (turning it on, no real transition, or nothing currently
+// locked) just proceeds straight to save.
+async function _saveWithLockToggleCheck(entityType,entityId,entityName,oldLock,newLock,proceed){
+  if(oldLock!==false && newLock===false){
+    const {jobs,lockedCerts}=await _lockedCertsForEntity(entityType,entityId,entityName);
+    if(lockedCerts.length){
+      confirm2(
+        'Release locked certificates now?',
+        `Turning this off will immediately email ${lockedCerts.length} currently-held certificate${lockedCerts.length!==1?'s':''} to ${entityName} right now, regardless of whether their invoice is paid.\n\nThis can't be undone. Continue?`,
+        async()=>{
+          await proceed();
+          await _releaseLockedCertsForEntity([...new Set(jobs.map(j=>j.id))]);
+          toast(`Released ${lockedCerts.length} certificate${lockedCerts.length!==1?'s':''} to ${entityName}`,'success');
+        }
+      );
+      return;
+    }
+  }
+  await proceed();
+}
+
 //  AGENCY CRUD
 // ════════════════════════════════════════════════════════════════
 
@@ -101,8 +131,10 @@ export async function openAgencyModal(id){
     document.getElementById('agf-bank-acc').value = a.bankAcc||'';
     document.getElementById('agf-bank-sort').value = a.bankSort||'';
     document.getElementById('agf-bank-ref').value = a.bankRef||'';
+    document.getElementById('agf-lock-certs').checked = a.lockCertsUntilPaid!==false;
   } else {
     ['agf-name','agf-phone','agf-email','agf-wa','agf-addr','agf-web','agf-notes','agf-bank-name','agf-bank-acc','agf-bank-sort','agf-bank-ref'].forEach(x=>{const el=document.getElementById(x);if(el)el.value='';});
+    document.getElementById('agf-lock-certs').checked = true;
   }
   openModal('mo-agency'); setTimeout(()=>wireAutoSave('agencies'),100);
 }
@@ -114,6 +146,8 @@ export async function saveAgency(silent=false){
   try{
   const name = document.getElementById('agf-name').value.trim();
   if(!name){if(!silent)toast('Agency name required','error');return}
+  const newLock = document.getElementById('agf-lock-certs').checked;
+  const existing = editAgencyId ? await dGet('agencies',editAgencyId) : null;
   const a = {
     id: editAgencyId||uid(),
     name,
@@ -127,13 +161,16 @@ export async function saveAgency(silent=false){
     bankAcc: document.getElementById('agf-bank-acc').value.trim(),
     bankSort: document.getElementById('agf-bank-sort').value.trim(),
     bankRef: document.getElementById('agf-bank-ref').value.trim(),
+    lockCertsUntilPaid: newLock,
     modified: Date.now()
   };
   if(!editAgencyId){ a.created = Date.now(); editAgencyId=a.id; }
-  await dPut('agencies',a);
-  await logActivity(`${a.created?'Added':'Updated'} agency: ${name}`,'agency');
-  if(!silent){ closeModal('mo-agency'); renderDirSection('agencies'); toast('Agency saved','success'); }
-  else { renderDirSection('agencies'); }
+  await _saveWithLockToggleCheck('agencies',a.id,name,existing?.lockCertsUntilPaid,newLock,async()=>{
+    await dPut('agencies',a);
+    await logActivity(`${a.created?'Added':'Updated'} agency: ${name}`,'agency');
+    if(!silent){ closeModal('mo-agency'); renderDirSection('agencies'); toast('Agency saved','success'); }
+    else { renderDirSection('agencies'); }
+  });
   } finally { _agencySaving=false; }
 }
 
@@ -182,9 +219,11 @@ export async function openAgentModal(id){
     document.getElementById('agt-email').value = ag.email||'';
     document.getElementById('agt-title').value = ag.title||'';
     document.getElementById('agt-notes').value = ag.notes||'';
+    document.getElementById('agt-lock-certs').checked = ag.lockCertsUntilPaid!==false;
   } else {
     ['agt-name','agt-phone','agt-wa','agt-email','agt-title','agt-notes'].forEach(x=>{const el=document.getElementById(x);if(el)el.value='';});
     agtSel.value='';
+    document.getElementById('agt-lock-certs').checked = true;
   }
   openModal('mo-agent'); setTimeout(()=>wireAutoSave('agents'),100);
 }
@@ -196,6 +235,8 @@ export async function saveAgent(silent=false){
   try{
   const name = document.getElementById('agt-name').value.trim();
   if(!name){if(!silent)toast('Agent name required','error');return}
+  const newLock = document.getElementById('agt-lock-certs').checked;
+  const existing = editAgentId ? await dGet('agents',editAgentId) : null;
   const ag = {
     id: editAgentId||uid(),
     name,
@@ -205,13 +246,21 @@ export async function saveAgent(silent=false){
     email: document.getElementById('agt-email').value.trim(),
     title: document.getElementById('agt-title').value.trim(),
     notes: document.getElementById('agt-notes').value.trim(),
+    lockCertsUntilPaid: newLock,
     modified: Date.now()
   };
   if(!editAgentId){ ag.created = Date.now(); editAgentId=ag.id; }
-  await dPut('agents',ag);
-  await logActivity(`${ag.created?'Added':'Updated'} agent: ${name}`,'agent');
-  if(!silent){ closeModal('mo-agent'); renderDirSection('agents'); toast('Agent saved','success'); }
-  else { renderDirSection('agents'); }
+  // Jobs match this agent by name (agents have no real FK on jobs today —
+  // see certs-pdf.js's _lockCertsForJob), so the release lookup must use
+  // whatever name jobs are actually tagged with right now — the existing
+  // record's name, not a new one being typed in this same save if this is
+  // also a rename.
+  await _saveWithLockToggleCheck('agents',ag.id,existing?.name||name,existing?.lockCertsUntilPaid,newLock,async()=>{
+    await dPut('agents',ag);
+    await logActivity(`${ag.created?'Added':'Updated'} agent: ${name}`,'agent');
+    if(!silent){ closeModal('mo-agent'); renderDirSection('agents'); toast('Agent saved','success'); }
+    else { renderDirSection('agents'); }
+  });
   } finally { _agentSaving=false; }
 }
 
@@ -274,6 +323,7 @@ export async function openPersonModal(id){
     // Show agency field only when this person is classified as an agent
     const agGrp = document.getElementById('pf-agency-grp');
     if(agGrp) agGrp.style.display = (p.roles||[]).includes('agent') ? '' : 'none';
+    document.getElementById('pf-lock-certs').checked = p.lockCertsUntilPaid!==false;
     document.getElementById('btn-del-person').style.display='';
     document.getElementById('btn-wa-person').style.display=p.wa?'':'none';
     const archBtn=document.getElementById('btn-archive-person');
@@ -286,6 +336,7 @@ export async function openPersonModal(id){
     document.getElementById('mo-person-title').textContent='👤 Add Person';
     ['pf-name','pf-phone','pf-email','pf-wa','pf-addr','pf-notes','pf-rate'].forEach(x=>document.getElementById(x).value='');
     ['pf-ll','pf-cl','pf-sc','pf-agent'].forEach(x=>document.getElementById(x).checked=false);
+    document.getElementById('pf-lock-certs').checked=true;
     document.getElementById('pf-eng-extra').style.display='none';
     if(agSel) agSel.value='';
     const agGrp = document.getElementById('pf-agency-grp');
@@ -334,6 +385,8 @@ export async function savePerson(silent=false){
   if(document.getElementById('pf-cl').checked)roles.push('client');
   if(document.getElementById('pf-sc').checked)roles.push('subcontractor');
   if(document.getElementById('pf-agent').checked)roles.push('agent');
+  const newLock=document.getElementById('pf-lock-certs').checked;
+  const existing=editPid?await dGet('persons',editPid):null;
   const p={
     id:editPid||uid(),name,
     phone:document.getElementById('pf-phone').value.trim(),
@@ -348,25 +401,28 @@ export async function savePerson(silent=false){
     bankAcc:document.getElementById('pf-bank-acc')?.value.trim()||'',
     bankSort:document.getElementById('pf-bank-sort')?.value.trim()||'',
     bankRef:document.getElementById('pf-bank-ref')?.value.trim()||'',
+    lockCertsUntilPaid:newLock,
     roles
   };
   if(!editPid){ editPid=p.id; }
-  await dPut('persons',p);
-  // Sync subcontractors into the job-assignment dropdown data (S.engineers)
-  // -- "engineer" used to be pushable here too via a Person-form checkbox,
-  // duplicating the real Team/phone+PIN system with a phantom, unlinked
-  // name entry that vanished on the next Team sync. Checkbox removed;
-  // subcontractor behaviour here is unchanged.
-  if(roles.includes('subcontractor')){
-    const engs=S.engineers||[];
-    const idx=engs.findIndex(e=>e.name===name);
-    const engObj={name,phone:p.phone,rate:p.rate,wa:p.wa,trade:p.trade};
-    if(idx>=0)engs[idx]=engObj;else engs.push(engObj);
-    await saveSetting('engineers',engs);
-  }
-  await logActivity(`${p.id===editPid&&!silent?'Updated':'Added'} person: ${name}`,'person');
-  if(!silent){ closeModal('mo-person');renderDir();renderDirSection(getCurDirSection());toast('Saved','success'); }
-  else { renderDir();renderDirSection(getCurDirSection()); }
+  await _saveWithLockToggleCheck('persons',p.id,name,existing?.lockCertsUntilPaid,newLock,async()=>{
+    await dPut('persons',p);
+    // Sync subcontractors into the job-assignment dropdown data (S.engineers)
+    // -- "engineer" used to be pushable here too via a Person-form checkbox,
+    // duplicating the real Team/phone+PIN system with a phantom, unlinked
+    // name entry that vanished on the next Team sync. Checkbox removed;
+    // subcontractor behaviour here is unchanged.
+    if(roles.includes('subcontractor')){
+      const engs=S.engineers||[];
+      const idx=engs.findIndex(e=>e.name===name);
+      const engObj={name,phone:p.phone,rate:p.rate,wa:p.wa,trade:p.trade};
+      if(idx>=0)engs[idx]=engObj;else engs.push(engObj);
+      await saveSetting('engineers',engs);
+    }
+    await logActivity(`${p.id===editPid&&!silent?'Updated':'Added'} person: ${name}`,'person');
+    if(!silent){ closeModal('mo-person');renderDir();renderDirSection(getCurDirSection());toast('Saved','success'); }
+    else { renderDir();renderDirSection(getCurDirSection()); }
+  });
   } finally { _personSaving=false; }
 }
 

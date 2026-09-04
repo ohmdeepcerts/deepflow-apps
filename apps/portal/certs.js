@@ -47,6 +47,13 @@ function _certInvoices(c,d){
 }
 function _isCertLocked(c,d){
   if(!c.jobId) return false;
+  // Per-client toggle (Directory → Edit → "Hold certificates until the
+  // invoice is paid") — off means this client's certs are never held back
+  // on payment status at all. Mirrors Office's own _lockCertsForJob
+  // (apps/office/certs-pdf.js); d.entity is the real persons/agencies/
+  // agents row (portal_get_person/_agency/_agent, SELECT *), so the raw
+  // column is already here with no extra fetch needed.
+  if(d.entity?.lockcertsuntilpaid===false) return false;
   const invs=_certInvoices(c,d);
   return !invs.length || !invs.every(i=>i.status==='Paid');
 }

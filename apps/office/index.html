@@ -6402,6 +6402,8 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS last_accuracy integer;</div>
       <div class="fg"><label class="fl">Default Trade</label><select id="pf-trade" class="fs"></select></div>
     </div>
   </div>
+  <div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin:12px 0 6px;padding-top:10px;border-top:1px solid var(--border)">📜 Certificates</div>
+  <label class="fcheck"><input type="checkbox" id="pf-lock-certs" checked> Hold certificates until the invoice is paid <span style="font-weight:400;color:var(--txt3)">(default — turning this off releases certificates immediately, invoice paid or not)</span></label>
   <div class="modal-actions">
     <button class="btn btn-red btn-sm" id="btn-del-person" style="display:none;margin-right:auto" onclick="deleteCurrentPerson()">Delete</button>
     <button class="btn btn-ghost btn-sm" id="btn-archive-person" style="display:none" onclick="toggleArchivePerson()">🗄 Archive</button>
@@ -6434,6 +6436,8 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS last_accuracy integer;</div>
     <div class="fg"><label class="fl">Sort Code</label><input type="text" id="agf-bank-sort" class="fi" placeholder="12-34-56"></div>
   </div>
   <div class="fg"><label class="fl">IBAN / Reference Link</label><input type="text" id="agf-bank-ref" class="fi" placeholder="IBAN, payment link or bank transfer reference"></div>
+  <div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin:12px 0 6px;padding-top:10px;border-top:1px solid var(--border)">📜 Certificates</div>
+  <label class="fcheck"><input type="checkbox" id="agf-lock-certs" checked> Hold certificates until the invoice is paid <span style="font-weight:400;color:var(--txt3)">(default — turning this off releases certificates immediately, invoice paid or not)</span></label>
   <div class="modal-actions">
     <button class="btn btn-red btn-sm" id="btn-del-agency" style="display:none;margin-right:auto" onclick="deleteCurrentAgency()">Delete</button>
     <button class="btn btn-ghost" onclick="closeModal('mo-agency')">Cancel</button>
@@ -6464,6 +6468,8 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS last_accuracy integer;</div>
   <div class="fg"><label class="fl">Email</label><input type="email" id="agt-email" class="fi" placeholder="agent@agency.com"></div>
   <div class="fg"><label class="fl">Job Title</label><input type="text" id="agt-title" class="fi" placeholder="e.g. Property Manager, Lettings Manager"></div>
   <div class="fg"><label class="fl">Notes</label><input type="text" id="agt-notes" class="fi" placeholder="Any notes about this agent"></div>
+  <div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin:12px 0 6px;padding-top:10px;border-top:1px solid var(--border)">📜 Certificates</div>
+  <label class="fcheck"><input type="checkbox" id="agt-lock-certs" checked> Hold certificates until the invoice is paid <span style="font-weight:400;color:var(--txt3)">(default — turning this off releases certificates immediately, invoice paid or not)</span></label>
   <div class="modal-actions">
     <button class="btn btn-red btn-sm" id="btn-del-agent" style="display:none;margin-right:auto" onclick="deleteCurrentAgent()">Delete</button>
     <button class="btn btn-ghost" onclick="closeModal('mo-agent')">Cancel</button>

@@ -128,15 +128,48 @@ export function renderCertPdfSection(certId,path){
   }
 }
 
+// Resolves whether the client actually being billed for this job wants
+// certificates held until payment at all — the per-client toggle. Mirrors
+// autoInvoice()'s own billing precedence (agency > agent > landlord), since
+// that's who "paid" really refers to. Agents have no real FK on jobs today
+// (only agencyId/personId are resolved at save time — see saveJob()), so
+// this matches by name against the agents table, the same rigor the rest
+// of this codebase already applies to agent lookups elsewhere. Defaults to
+// true (locked) whenever nothing resolves, matching the always-locked
+// behavior this feature replaces — so a client nobody has touched behaves
+// exactly as before.
+async function _lockCertsForJob(job){
+  if(!job) return true;
+  if(job.clientAgencyId){
+    const ag=await dGet('agencies',job.clientAgencyId);
+    if(ag) return ag.lockCertsUntilPaid!==false;
+  }
+  if(job.agentName){
+    const agents=await dAll('agents');
+    const agent=agents.find(a=>a.name===job.agentName);
+    if(agent) return agent.lockCertsUntilPaid!==false;
+  }
+  if(job.clientPersonId){
+    const p=await dGet('persons',job.clientPersonId);
+    if(p) return p.lockCertsUntilPaid!==false;
+  }
+  return true;
+}
+
 // True once every invoice linked to this job is Paid — the same "before
 // the invoice is paid" test the watermark itself gates on (see
-// packages/ui/pat-template.js). No job link at all (a manually-added
+// packages/ui/pat-template.js) — OR once the responsible client's own
+// lockCertsUntilPaid toggle is off, in which case payment status never
+// gates release for them at all. No job link at all (a manually-added
 // cert, never tied to a job/invoice) counts as paid: there's no invoice
 // to gate on, so watermarking one would just permanently withhold it.
 // A job link with no invoice raised yet, or an invoice not yet Paid,
-// counts as unpaid.
+// counts as unpaid — unless the toggle says this client's certs were
+// never meant to wait on payment in the first place.
 async function _isJobPaid(jobId){
   if(!jobId) return true;
+  const job=await dGet('jobs',jobId);
+  if(!(await _lockCertsForJob(job))) return true;
   const invs=await dAll('invoices');
   const linked=invs.filter(i=>i.jobId===jobId||i.linkedJobId===jobId);
   if(!linked.length) return false;
@@ -225,6 +258,47 @@ export async function regenerateCertsForPaidJob(jobId){
       }
       _maybeEmailCertReady(cert.id).catch(e=>console.warn('[DeepFlow] Certificate release email failed for',cert.id,e));
     }catch(e){ console.warn('[DeepFlow] Cert regeneration after payment failed for',cert.id,e); }
+  }
+}
+
+// ── Per-client certificate-lock toggle: the "release now" batch action ──
+// Jobs a given landlord/agency/agent's toggle actually governs — the exact
+// same resolution _lockCertsForJob() uses to decide whose toggle applies,
+// kept in sync deliberately: a job this wouldn't find is a job that toggle
+// was never going to affect in the first place.
+export async function _jobsGovernedByEntity(entityType,entityId,entityName){
+  const allJobs=await dAll('jobs');
+  if(entityType==='agencies') return allJobs.filter(j=>j.clientAgencyId===entityId);
+  if(entityType==='persons') return allJobs.filter(j=>j.clientPersonId===entityId);
+  if(entityType==='agents') return allJobs.filter(j=>j.agentName===entityName);
+  return [];
+}
+
+// Certs that are ACTUALLY locked right now (raw invoice-paid check, not
+// _isJobPaid — that function already reads the toggle, so by the time a
+// caller has flipped it off, it would report everything unlocked and this
+// count would always come back zero). This is "how many were held back
+// under the old rule", asked before the new rule takes effect.
+export async function _lockedCertsForEntity(entityType,entityId,entityName){
+  const jobs=await _jobsGovernedByEntity(entityType,entityId,entityName);
+  const jobIds=new Set(jobs.map(j=>j.id));
+  const [allCerts,allInvoices]=await Promise.all([dAll('certs'),dAll('invoices')]);
+  const relevant=allCerts.filter(c=>c.jobId&&jobIds.has(c.jobId)&&c.pdfPath);
+  const locked=relevant.filter(c=>{
+    const linked=allInvoices.filter(i=>i.jobId===c.jobId||i.linkedJobId===c.jobId);
+    return !linked.length||!linked.every(i=>i.status==='Paid');
+  });
+  return {jobs,lockedCerts:locked};
+}
+
+// Call AFTER the toggle has actually been saved off — reuses
+// regenerateCertsForPaidJob() per job, which now resolves _isJobPaid()
+// (toggle-aware) as true for these jobs, so it regenerates each cert
+// unlocked and sends the real "ready" email instead of the "payment
+// required" notice, exactly as if the invoice had just been paid.
+export async function _releaseLockedCertsForEntity(jobIds){
+  for(const jobId of jobIds){
+    await regenerateCertsForPaidJob(jobId).catch(e=>console.warn('[DeepFlow] Release-now regen failed for job',jobId,e));
   }
 }
 

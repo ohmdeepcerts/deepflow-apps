@@ -632,7 +632,15 @@ async function init(){
     } else if(ptype==='agent'){
       const agentName=P.get('name');
       if(!agentName){showErr('Invalid Link','Please regenerate this link from the office.');return;}
-      entity={name:decodeURIComponent(agentName),type:'agent',id:token};
+      // Was a synthesized {name,type,id} object with no real DB fields at
+      // all — agents had no portal_get_* fetch before this, since nothing
+      // needed a real agent field on this side previously. Falls back to
+      // the URL name if the row genuinely isn't found, so an existing
+      // agent link some office member already sent out doesn't break.
+      const agentRows=await sb(`rpc/portal_get_agent`,{method:'POST',body:{p_id:token}}).catch(()=>[]);
+      entity=agentRows?.[0]?_fix(agentRows[0]):{name:decodeURIComponent(agentName),type:'agent',id:token};
+      entity.name=entity.name||decodeURIComponent(agentName);
+      entity.type='agent';
       document.getElementById('portal-badge').textContent='Agent';
       document.title=`${e(entity.name)} — Portal`;
       jobs=await fetchJobs('agent',entity.id);
