@@ -66,7 +66,16 @@ export function createRepository(sbFetch, { localTables = new Set(), uid } = {})
       }
     }
     const mapped = allRows.map((r) => fromDb(store, r));
-    _cache.set(store, { rows: mapped, ts: Date.now() });
+    // Don't cache a zero-row result. A genuinely empty table is cheap to
+    // re-check next call; a WRONGLY empty result — e.g. the very first
+    // request after login racing the JWT resolver and momentarily going out
+    // as the anon key, which RLS silently filters to zero rows rather than
+    // rejecting outright — is not an error dAll()'s caller can catch, so
+    // caching it "successfully" for CACHE_TTL_MS previously froze real data
+    // out of view for a full 30s (the actual cause of the office Dashboard
+    // showing all-zero stats with no error on a fresh login/hard refresh
+    // until something unrelated happened to outlast the cache window).
+    if (mapped.length > 0) _cache.set(store, { rows: mapped, ts: Date.now() });
     return mapped.slice();
   }
 
