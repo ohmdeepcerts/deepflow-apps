@@ -8,6 +8,7 @@ import {
 } from '@business';
 import { canAccessPage, getPermission } from '@auth';
 import { createOfflineQueue } from '@offline';
+import { createCommunicationProvider } from '@comms';
 import {
   getCertTab, switchCertTab, filterCerts, clearCertFilters, renderCertTable, certPageNav,
   toggleAllCerts, bulkNRToggle, bulkDeleteCerts, editCertRecord, goExpiryWindow,
@@ -454,6 +455,11 @@ export const TODAY = () => localDateStr();
 // wrapper as deliberately different (sync-state tracking here, none in the
 // other two apps).
 export const { dGet, dAll, dPut, dDel } = createRepository(_sb, { localTables: _LOCAL });
+
+// communicationProvider (Phase B, docs/communications/08-IMPLEMENTATION-PLAN.md) —
+// EMAIL/PUSH transport swap point. Bound to this app's own _getJWT, same
+// dependency-injection convention as the repository above.
+export const _commProvider = createCommunicationProvider({ sbUrl: SB_URL, sbKey: SB_KEY, getJWT: _getJWT });
 
 // ── Settings cache ──
 export let S = {

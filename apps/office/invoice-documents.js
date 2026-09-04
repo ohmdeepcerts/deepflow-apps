@@ -13,7 +13,7 @@ import { escHtml, renderInvoicePDF } from '@ui';
 import { formatDateUK } from '@business';
 import {
   S, TODAY, dAll, dGet, _sb, toast, logActivity, calcInvTotal, getVatRate,
-  _getJWT, _blobToBase64, _invalidateCache,
+  _getJWT, _blobToBase64, _invalidateCache, _commProvider,
 } from './main.js';
 
 // group messages into one thread by matching subject line, so every email
@@ -25,17 +25,15 @@ export function _invEmailSubject(inv){
 
 // Low-level send — every automatic-email call site (overdue reminders,
 // invoice-ready, payment receipts, cert-ready) goes through this so the
-// fetch/auth/error-shape logic exists in exactly one place.
+// fetch/auth/error-shape logic exists in exactly one place. Routed through
+// @comms's communicationProvider (Phase B) — same fetch/auth/error-shape
+// behaviour as before, now behind the transport swap point.
 export async function _sendEmail({to, cc, subject, html, attachments, replyTo}){
   try{
-    const jwt = await _getJWT();
-    const res = await fetch(`${SB_URL}/functions/v1/send-email`,{
-      method:'POST',
-      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+jwt,'Content-Type':'application/json'},
-      body:JSON.stringify({to, cc, subject, html, attachments, replyTo: replyTo===undefined?(S.coEmail||undefined):replyTo})
+    return await _commProvider.send({
+      channel: 'EMAIL',
+      content: {to, cc, subject, html, attachments, replyTo: replyTo===undefined?(S.coEmail||undefined):replyTo},
     });
-    if(res.ok) return {ok:true};
-    return {ok:false, error:(await res.json().catch(()=>({}))).error||'Email send failed'};
   }catch(e){ return {ok:false, error:e.message}; }
 }
 

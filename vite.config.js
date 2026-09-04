@@ -63,6 +63,7 @@ export default defineConfig({
       '@data': resolve(__dirname, 'packages/data'),
       '@auth': resolve(__dirname, 'packages/auth'),
       '@business': resolve(__dirname, 'packages/business'),
+      '@comms': resolve(__dirname, 'packages/comms'),
       '@ui': resolve(__dirname, 'packages/ui'),
       '@pdf': resolve(__dirname, 'packages/pdf'),
       '@offline': resolve(__dirname, 'packages/offline'),
