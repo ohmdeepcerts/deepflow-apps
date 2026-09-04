@@ -710,6 +710,19 @@ export function _commEntityFor(rec){
   return {};
 }
 
+// Stops payment_chase_state tracking once an invoice is actually paid —
+// sweep_comm_events() only ever advances/initializes chase state for
+// invoices still Awaiting Payment, so this is the one place a chase row
+// needs updating from the paid side rather than the sweep. A no-op if no
+// chase row exists yet (never chased, or paid before Phase D existed).
+export async function _stopPaymentChase(invId){
+  try{
+    await _sb(`payment_chase_state?invoice_id=eq.${encodeURIComponent(invId)}`,{
+      method:'PATCH', body:{status:'stopped', updated_at:new Date().toISOString()}, prefer:'return=minimal',
+    });
+  }catch(e){ console.warn('[DeepFlow] _stopPaymentChase failed',e); }
+}
+
 // ════════════════════════════════════════════════════════════════
 //  NAVIGATION
 // ════════════════════════════════════════════════════════════════
@@ -5517,6 +5530,12 @@ export async function viewInv(id){
       <div style="font-size:10px;font-weight:700;color:var(--txt3);margin-bottom:6px">PAYMENT STATUS</div>
     </div>
 
+    <!-- PAYMENT CHASE (Communications — payment_chase_state, dry-run only) -->
+    ${inv.status==='Awaiting Payment'&&inv.type!=='proforma'?`<div style="padding:12px 18px;border-top:1px solid var(--border)" id="inv-chase-status-${id}">
+      <div style="font-size:10px;font-weight:700;color:var(--txt3);margin-bottom:6px">PAYMENT CHASE</div>
+      <div style="font-size:11px;color:var(--txt3)">Loading…</div>
+    </div>`:''}
+
     <!-- AUDIT TRAIL -->
     <div style="padding:12px 18px;border-top:1px solid var(--border)" id="inv-audit-trail-${id}">
       <div style="font-size:10px;font-weight:700;color:var(--txt3);margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">
@@ -5529,6 +5548,85 @@ export async function viewInv(id){
 
   _renderInvPayments(id,t);
   _renderInvAuditTrail(id, inv);
+  if(inv.status==='Awaiting Payment'&&inv.type!=='proforma') _renderChaseStatus(id, inv);
+}
+
+// ── Payment Chase status control (dry-run — see process_comm_events()'s
+// PAYMENT_CHASE_STAGE handling) ─────────────────────────────────────────
+// Office's only way to actually exercise the suppression states the SQL
+// sweep respects (promised/claimed/disputed/paused) — without this,
+// payment_chase_state.status would only ever be 'active' or 'stopped',
+// making the whole promise/claim/dispute suppression path in the sweep
+// dead code with nothing to ever set it.
+const CHASE_STATUS_LABEL={
+  active:{label:'Active',color:'var(--txt3)'},
+  paused:{label:'Paused',color:'var(--yellow)'},
+  promised:{label:'Promised to pay',color:'var(--blue)'},
+  claimed:{label:'Payment claimed — awaiting verification',color:'var(--blue)'},
+  disputed:{label:'Disputed',color:'var(--red)'},
+  escalated:{label:'Escalated — accounts',color:'var(--red)'},
+  stopped:{label:'Stopped',color:'var(--txt3)'},
+};
+async function _renderChaseStatus(id, inv){
+  const el=document.getElementById('inv-chase-status-'+id);
+  if(!el) return;
+  try{
+    const rows=await _sb(`payment_chase_state?invoice_id=eq.${encodeURIComponent(id)}&limit=1&select=*`);
+    const cs=rows?.[0];
+    const status=cs?.status||'active';
+    const st=CHASE_STATUS_LABEL[status]||{label:status,color:'var(--txt3)'};
+    const stageInfo=cs?.stage?` · stage ${cs.stage}`:'';
+    const promiseInfo=status==='promised'&&cs?.promise_date?` (by ${new Date(cs.promise_date+'T12:00:00').toLocaleDateString('en-GB')})`:'';
+    const controls=['active','paused'].includes(status)
+      ? `<button class="btn btn-ghost btn-xs" onclick="_chasePromptPromise('${id}')">🤝 Promise to Pay</button>
+         <button class="btn btn-ghost btn-xs" onclick="setChaseStatus('${id}','claimed')">💬 Payment Claimed</button>
+         <button class="btn btn-ghost btn-xs" onclick="setChaseStatus('${id}','disputed')">⚠ Dispute</button>
+         ${status==='active'?`<button class="btn btn-ghost btn-xs" onclick="setChaseStatus('${id}','paused')">⏸ Pause</button>`:`<button class="btn btn-ghost btn-xs" onclick="setChaseStatus('${id}','active')">▶ Resume</button>`}`
+      : `<button class="btn btn-ghost btn-xs" onclick="setChaseStatus('${id}','active')">▶ Resume Chasing</button>`;
+    el.innerHTML=`
+      <div style="font-size:10px;font-weight:700;color:var(--txt3);margin-bottom:6px">PAYMENT CHASE <span style="font-weight:400;opacity:.7">(dry-run — logged, nothing sent yet)</span></div>
+      <div id="chase-controls-${id}" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="background:${st.color}15;color:${st.color};padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700">${st.label}${promiseInfo}</span>
+        <span style="font-size:10px;color:var(--txt3)">${stageInfo}</span>
+        <span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">${controls}</span>
+      </div>`;
+  }catch(e){
+    console.warn('[DeepFlow] _renderChaseStatus failed',e);
+    el.innerHTML='<div style="font-size:11px;color:var(--txt3)">Chase status unavailable</div>';
+  }
+}
+
+function _chasePromptPromise(invId){
+  const row=document.getElementById('chase-controls-'+invId);
+  if(!row) return;
+  const d=new Date(); d.setDate(d.getDate()+3);
+  const def=localDateStr(d);
+  row.innerHTML=`
+    <span style="font-size:11px">Promise date:</span>
+    <input type="date" id="chase-promise-date-${invId}" value="${def}" class="fi" style="width:150px;font-size:11px">
+    <button class="btn btn-blue btn-xs" onclick="setChaseStatus('${invId}','promised',{promise_date:document.getElementById('chase-promise-date-${invId}').value})">Confirm</button>
+    <button class="btn btn-ghost btn-xs" onclick="_renderChaseStatus('${invId}',{status:'Awaiting Payment',type:'invoice'})">Cancel</button>`;
+}
+
+export async function setChaseStatus(invId, status, extra={}){
+  try{
+    const inv=await dGet('invoices',invId);
+    const now=new Date().toISOString();
+    const body={
+      invoice_id:invId, status,
+      promise_date: status==='promised'?(extra.promise_date||null):null,
+      last_contact_at: now,
+      paused_reason: status==='paused'?(extra.reason||null):null,
+      updated_at: now,
+    };
+    await _sb('payment_chase_state',{method:'POST',body,prefer:'resolution=merge-duplicates,return=minimal'});
+    await logActivity(`Payment chase for ${inv?.number||invId} set to ${status}${extra.promise_date?' (promised '+extra.promise_date+')':''}`,'invoice');
+    toast('Chase status updated','success');
+    _renderChaseStatus(invId, inv||{status:'Awaiting Payment',type:'invoice'});
+  }catch(e){
+    console.error('[DeepFlow] setChaseStatus failed',e);
+    toast('Failed to update chase status','error');
+  }
 }
 
 // ── Live invoice editing helpers ──────────────────────────────────────────────
@@ -5817,6 +5915,7 @@ async function markInvPaid(id){
   await logActivity(`Invoice ${inv.number} marked Paid (£${t.grand.toFixed(2)})`,'invoice');
   _maybeSendPaymentReceipt(inv, t.grand);
   emitCommEvent('PAYMENT_RECEIVED',{..._commEntityFor(inv), invId:id, invNum:inv.number, amount:t.grand});
+  _stopPaymentChase(id);
   toast('Invoice marked as Paid','success');
   renderInvList();viewInv(id);updateBadges();
   generateAndStoreInvoicePDF(id).catch(e=>console.warn('[DeepFlow] PDF regen after markInvPaid failed',e));
@@ -9662,6 +9761,7 @@ Object.assign(window, {
   toggleArchivePerson,
   openPropModal, openRenewCertModal, openStandaloneProformaModal, openWhatsApp, postComment, previewCertPdf,
   previewWaTemplate, printFilteredInvoices, printProforma, quickConfirm, quickEditPrice, quickEditTime, quickStatus,
+  setChaseStatus, _chasePromptPromise,
   removeApplianceRow, removeCertPdf, removeCreditItem, removeInvCustomText, renderAgentsSection, renderAuditLog, renderCertMissing, renderCertStats, renderCertTable, renderClientPicker, renderCommsLog,
   renderExpiringPanel, setMissingFilter, clearExpiringFilters, goExpiryWindow,
   renderDash, renderDirSection, renderEngReport, renderExpenses, renderInvItems, renderInvList, renderJobs, renderMapPage,

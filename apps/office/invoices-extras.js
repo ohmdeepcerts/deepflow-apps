@@ -12,7 +12,7 @@ import { regenerateCertsForPaidJob } from './certs-pdf.js';
 import {
   dAll, dGet, dPut, calcInvTotal, toast, openModal, closeModal, TODAY, uid,
   curInvId, viewInv, renderInvList, updateBadges, logActivity,
-  generateAndStoreInvoicePDF, _maybeSendPaymentReceipt, emitCommEvent, _commEntityFor,
+  generateAndStoreInvoicePDF, _maybeSendPaymentReceipt, emitCommEvent, _commEntityFor, _stopPaymentChase,
 } from './main.js';
 
 // ── Credit Notes Admin Panel ──────────────────────────────────────────────────
@@ -174,6 +174,7 @@ export async function savePayment(){
       await dPut('invoices',inv);
       _maybeSendPaymentReceipt(inv, totalPaid);
       emitCommEvent('PAYMENT_RECEIVED',{..._commEntityFor(inv), invId, invNum:inv.number, amount:totalPaid});
+      _stopPaymentChase(invId);
       toast('Invoice fully paid! Status updated.','success');
       const invJobId=inv.jobId||inv.linkedJobId;
       if(invJobId) regenerateCertsForPaidJob(invJobId).catch(e=>console.warn('[DeepFlow] Cert release after payment failed',e));
