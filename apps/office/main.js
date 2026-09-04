@@ -5910,7 +5910,7 @@ async function mergeJobsInvoice(){
 // ════════════════════════════════════════════════════════════════
 //  DASHBOARD
 // ════════════════════════════════════════════════════════════════
-async function renderDash(){
+export async function renderDash(){
   const h=new Date().getHours();
   const greet=h<12?'Good morning':h<17?'Good afternoon':'Good evening';
   document.getElementById('dg-greet').innerHTML=`${greet}, <span id="dg-name">${_appUser?.name||S.owner||'Boss'}</span>`;
@@ -5935,9 +5935,42 @@ async function renderDash(){
     if(el) el.innerHTML=[1,2,3].map(()=>`<div style="padding:8px 0;border-bottom:1px solid var(--border)">${_skel('60%','14px')}<br style="margin:4px 0">${_skel('40%','11px')}</div>`).join('');
   });
 
-  const allJobs=await dAll('jobs');
-  const allInvs=await dAll('invoices');
-  const allCerts=await dAll('certs');
+  // BUG FIX: this used to await dAll('jobs')/dAll('invoices')/dAll('certs')
+  // with no error handling at all. On a fresh browser/hard refresh, the very
+  // first request can lose a race against auth/session setup (a real,
+  // observed failure mode — see the retry loop below) and throw. Since this
+  // whole function was one unbroken chain of awaits with nothing after it to
+  // catch a rejection, that throw left the skeleton placeholders above frozen
+  // on-screen forever — no error, no retry, nothing distinguishing "still
+  // loading" from "gave up silently". Clicking any other nav item worked
+  // purely because it happened to retry the same fetch later, by which point
+  // whatever was racing had resolved.
+  let allJobs, allInvs, allCerts;
+  for(let attempt=1; attempt<=3; attempt++){
+    try{
+      [allJobs, allInvs, allCerts] = await Promise.all([dAll('jobs'), dAll('invoices'), dAll('certs')]);
+      break;
+    }catch(e){
+      console.warn(`[DeepFlow] Dashboard load failed (attempt ${attempt}/3):`,e);
+      if(attempt===3){
+        const retryHtml=`<div class="empty" style="padding:16px 0">
+          <div class="ei" style="font-size:28px">⚠</div>
+          <p style="font-size:12px">Couldn't load — <span style="color:var(--acc);cursor:pointer;text-decoration:underline" onclick="renderDash()">tap to retry</span></p>
+        </div>`;
+        ['dp-pending','dp-activity','dp-certs','dp-invs'].forEach(id=>{
+          const el=document.getElementById(id);
+          if(el) el.innerHTML=retryHtml;
+        });
+        ['kv-jobs','kv-earn','kv-await','kv-certs','kv-drafts'].forEach(id=>{
+          const el=document.getElementById(id);
+          if(el) el.textContent='—';
+        });
+        toast('⚠️ Dashboard couldn\'t load — tap any stat panel to retry','warn',5000);
+        return;
+      }
+      await new Promise(r=>setTimeout(r, attempt*1000)); // 1s, then 2s before the final attempt
+    }
+  }
   const now=new Date(),d30=new Date();d30.setDate(d30.getDate()+30);
   const thisMonth=new Date();thisMonth.setDate(1);thisMonth.setHours(0,0,0,0);
 
@@ -6934,7 +6967,8 @@ async function init(){
   })();
   // ─────────────────────────────────────────────────────────────────────────
   
-  renderDash();updateBadges();
+  renderDash().catch(e=>console.warn('[DeepFlow] renderDash failed',e));
+  updateBadges().catch(e=>console.warn('[DeepFlow] updateBadges failed',e));
   loadDashNotes();
   updateOnlinePanel();
   // _loadColPrefs() removed with legacy COL_DEFS system (ISSUE 5) — JOB_COLS handles its own state
@@ -9554,7 +9588,7 @@ Object.assign(window, {
   previewWaTemplate, printFilteredInvoices, printProforma, quickConfirm, quickEditPrice, quickEditTime, quickStatus,
   removeApplianceRow, removeCertPdf, removeCreditItem, removeInvCustomText, renderAgentsSection, renderAuditLog, renderCertMissing, renderCertStats, renderCertTable, renderClientPicker,
   renderExpiringPanel, setMissingFilter, clearExpiringFilters, goExpiryWindow,
-  renderDirSection, renderEngReport, renderExpenses, renderInvItems, renderInvList, renderJobs, renderMapPage,
+  renderDash, renderDirSection, renderEngReport, renderExpenses, renderInvItems, renderInvList, renderJobs, renderMapPage,
   renderNotifPreview, renderPLDashboard, renderProps, renderReports, renderRequests, renderSettings, renderStmt,
   requestNotifPermission, resetColWidths, resetPortalPin, resolveMergeField, saveAgency, saveAgencyFromJob, 
   saveAgent, saveAgentFromJob, saveAndSendInv, saveCertExpiry, saveCertForm,
