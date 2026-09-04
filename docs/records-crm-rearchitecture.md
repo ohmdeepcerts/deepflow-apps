@@ -1,12 +1,36 @@
 # Records/CRM Rearchitecture — Clients, Properties, Compliance
 
-**Status:** Scoping only. Nothing in this document has been built — no schema
-changes, no new tables, no UI changes. This exists so a decision to proceed can be
-made deliberately, against verified facts about the current codebase, not against
-assumptions. Raised 2026-09-04 from an owner-supplied ChatGPT proposal to rethink
-Directories/Properties/Certificates/Client View as one connected system; the audit
-below verified that proposal's factual claims against the real code before any
-architecture recommendation was made.
+**Status:** Phase 1 (Properties) shipped 2026-09-04. Clients/contact_roles and
+Compliance (requirement-vs-certificate) are still scoping only — deliberately
+deferred, not started. Raised 2026-09-04 from an owner-supplied ChatGPT proposal to
+rethink Directories/Properties/Certificates/Client View as one connected system;
+the audit in §2 verified that proposal's factual claims against the real code
+before any architecture recommendation was made.
+
+## Phase 1 — Properties (done)
+
+Properties are now a real `properties` table (id, address, normalized_address,
+postcode, landlord_name, agency_name, property_type, bedrooms, notes,
+manual_override), not the `app_settings` JSON blob described as the biggest gap in
+§2's audit below. `jobs.property_id` links every job to its property.
+
+- **Backfilled from live data**, not a fresh-install-only migration: 4,096 jobs with
+  an address → 3,428 distinct properties, verified zero left unlinked, zero
+  duplicate `normalized_address` values, spot-checked against real records before
+  being called done.
+- `saveJob()` now resolves-or-creates the property on every save
+  (`_resolvePropertyForJob`), respecting a manually-edited property's
+  landlord/agency (won't silently overwrite office's own correction) while still
+  filling in a missing postcode automatically.
+- The Properties page, its Add/Edit modal, CSV export, and the Certificates
+  dashboard's property-compliance grid all read/write the real table now — no
+  UI surface was left pointed at the old blob.
+- **Deliberately excluded from this phase**: UPRN / paid address-validation (no new
+  vendor/cost decision was needed or made — this uses the same free postcode data
+  already on job records); the Clients/contact_roles rearchitecture below (a
+  separate, larger, still-open decision).
+
+## What's still open (unchanged from the original scoping below)
 
 ---
 

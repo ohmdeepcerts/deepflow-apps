@@ -3684,6 +3684,7 @@ async function saveJob(){
       const _agr = await _resolveAgency(j.agencyName, j.agencyPhone, j.agencyEmail, j.agencyNotes);
       j.clientAgencyId = _agr.id;
     }
+    j.propertyId = await _resolvePropertyForJob(j.address, j.postcode, j.landlordName, j.agencyName);
     await dPut('jobs',j);
     _invalidateJobCache();
     // allProps (address-history autocomplete) is otherwise only refreshed on
@@ -3993,8 +3994,57 @@ async function deleteCurrentJob(){
 // words (e.g. a dropped county name) — that's not a punctuation difference,
 // it needs the fuzzy duplicate-property check in saveJob() instead, not a
 // stricter exact-match key that risks merging two genuinely different streets.
+// Records/CRM rearchitecture Phase 1 (docs/records-crm-rearchitecture.md) —
+// properties are now a real table (`properties`, backfilled 2026-09-04
+// from every distinct address already on jobs), not the job-derived-plus-
+// settings-blob merge this used to compute on every call. allProps keeps
+// its existing shape's compatible fields (id/address/postcode) so
+// jobs-address-autofill.js and _checkDuplicateProperty below — which only
+// ever read those three — need zero changes. Field names otherwise match
+// the real snake_case columns directly (landlord_name, agency_name,
+// property_type, bedrooms, manual_override), not the old shape's
+// landlord/type/beds — same convention already used this session for
+// comm_events/payment_chase_state, since dAll()'s camelCase mapping layer
+// has no entry for this new table either.
 async function _refreshAllProps(){
-  allProps=deriveProperties(await dAll('jobs'),S.properties||[]);
+  allProps=await dAll('properties');
+}
+
+// Resolves the property a job's address belongs to — creates the row on
+// first sight (a new address, or a legacy job saved before this table
+// existed and only just got edited/re-saved), or updates the existing
+// one's cached landlord/agency/postcode to match deriveProperties()'s old
+// "most recent job wins" precedent, now persisted instead of recomputed on
+// every render. Respects a manually-edited property's landlord/agency
+// (manual_override) — a new job carrying a stale or wrong referrer name
+// must not silently overwrite a correction office already made directly
+// on the property; postcode is treated as safe to fill in regardless
+// since it's rarely wrong and often just missing.
+async function _resolvePropertyForJob(address,postcode,landlordName,agencyName){
+  if(!address) return null;
+  const key=normAddr(address);
+  const props=await dAll('properties');
+  const existing=props.find(p=>p.normalized_address===key);
+  if(existing){
+    const patch={};
+    if(!existing.manual_override){
+      if(landlordName&&landlordName!==existing.landlord_name) patch.landlord_name=landlordName;
+      if(agencyName&&agencyName!==existing.agency_name) patch.agency_name=agencyName;
+    }
+    if(postcode&&!existing.postcode) patch.postcode=postcode;
+    if(Object.keys(patch).length){
+      patch.updated_at=new Date().toISOString();
+      await dPut('properties',{...existing,...patch});
+    }
+    return existing.id;
+  }
+  const id=uid();
+  await dPut('properties',{
+    id,address,normalized_address:key,postcode:postcode||null,
+    landlord_name:landlordName||null,agency_name:agencyName||null,
+    manual_override:false,updated_at:new Date().toISOString(),
+  });
+  return id;
 }
 
 // Payment reliability — derived from this app's own invoice/payment
@@ -7194,13 +7244,21 @@ async function seedDemo(){
   ];
   for(const p of persons) await dPut('persons',p);
 
+  // Real properties table now (Records/CRM rearchitecture Phase 1) — was
+  // S.properties/saveSetting, which nothing reads anymore. Jobs below are
+  // written via a raw dPut (not saveJob(), which is what actually calls
+  // _resolvePropertyForJob for a real UI-driven save), so propertyId is
+  // set explicitly here to keep demo data internally consistent with the
+  // new schema rather than seeding jobs with no property link at all.
   const props=[
-    {id:uid(),address:'12 Main St, London E1 1AA',landlord:'John Doe',postcode:'E1 1AA',notes:''},
-    {id:uid(),address:'47 Oak Road, Manchester M1 1BB',landlord:'John Doe',postcode:'M1 1BB',notes:''},
-    {id:uid(),address:'8 Park Lane, Birmingham B1 1CC',landlord:'Sarah Smith',postcode:'B1 1CC',notes:''},
-    {id:uid(),address:'33 High Street, London N1 1DD',landlord:'John Doe',postcode:'N1 1DD',notes:''},
+    {id:uid(),address:'12 Main St, London E1 1AA',normalized_address:normAddr('12 Main St, London E1 1AA'),landlord_name:'John Doe',postcode:'E1 1AA'},
+    {id:uid(),address:'47 Oak Road, Manchester M1 1BB',normalized_address:normAddr('47 Oak Road, Manchester M1 1BB'),landlord_name:'John Doe',postcode:'M1 1BB'},
+    {id:uid(),address:'8 Park Lane, Birmingham B1 1CC',normalized_address:normAddr('8 Park Lane, Birmingham B1 1CC'),landlord_name:'Sarah Smith',postcode:'B1 1CC'},
+    {id:uid(),address:'33 High Street, London N1 1DD',normalized_address:normAddr('33 High Street, London N1 1DD'),landlord_name:'John Doe',postcode:'N1 1DD'},
   ];
-  S.properties=props;await saveSetting('properties',props);allProps=props;
+  for(const p of props) await dPut('properties',p);
+  await _refreshAllProps();
+  const propIdByAddr=Object.fromEntries(props.map(p=>[p.address,p.id]));
 
   const now=Date.now();
   const jobs=[
@@ -7210,7 +7268,7 @@ async function seedDemo(){
     {id:uid(),date:TODAY(),address:'33 High Street, London N1 1DD',referrer:'John Doe',trade:'General',engineer:'Mike',description:'Door Lock Replacement',timeSlot:'4:30 – 5:30 PM',access:'Key Safe',contact:'Code: 5678 | Front door',hours:1,price:75,notes:'',priority:'Normal',status:STATUS.PENDING,created:now,modified:now},
     {id:uid(),date:TODAY(),address:'22 Victoria Rd, London SW1 2EE',referrer:'John Doe',trade:'Gas',engineer:'Dave',description:'Gas Leak — Emergency',timeSlot:'ASAP',access:'Tenant Home',contact:'07700 400001',hours:0,price:0,notes:'Tenant reported smell of gas',priority:'Emergency',status:STATUS.PENDING,created:now+1,modified:now},
   ];
-  for(const j of jobs) await dPut('jobs',j);
+  for(const j of jobs){ j.propertyId=propIdByAddr[j.address]||null; await dPut('jobs',j); }
 
   // Draft invoice
   const inv={id:uid(),number:'INV-1001',clientId:persons[0].id,clientName:'John Doe',clientEmail:'john@example.com',clientAddr:'1 Landlord Ave, London',clientWA:'447700100001',
@@ -7369,13 +7427,13 @@ async function renderProps(){
   const search=(document.getElementById('prop-search')?.value||'').toLowerCase();
   const llFilter=document.getElementById('prop-ll-filter')?.value||'';
 
-  // allProps is the derived+merged list (real job addresses, not a manual
-  // list someone forgot to fill in) — see _deriveProperties/_refreshAllProps.
+  // allProps is the real properties table now (Records/CRM rearchitecture
+  // Phase 1) — see _refreshAllProps's own comment.
   await _refreshAllProps();
   const props=allProps;
 
   // Populate landlord filter
-  const lls=[...new Set(props.map(p=>p.landlord).filter(Boolean))];
+  const lls=[...new Set(props.map(p=>p.landlord_name).filter(Boolean))];
   const llSel=document.getElementById('prop-ll-filter');
   if(llSel){
     const cur=llSel.value;
@@ -7383,9 +7441,10 @@ async function renderProps(){
   }
 
   let filtered=props;
-  if(search) filtered=filtered.filter(p=>(p.address+p.landlord+p.postcode).toLowerCase().includes(search));
-  if(llFilter) filtered=filtered.filter(p=>p.landlord===llFilter);
+  if(search) filtered=filtered.filter(p=>(p.address+(p.landlord_name||'')+(p.postcode||'')).toLowerCase().includes(search));
+  if(llFilter) filtered=filtered.filter(p=>p.landlord_name===llFilter);
 
+  const allJobs=await dAll('jobs');
   const allCerts=await dAll('certs');
   const allInvoices=await dAll('invoices');
   const allPayments=await dAll('payments');
@@ -7403,7 +7462,7 @@ async function renderProps(){
   // and the cards below read from the same computed numbers instead of
   // scanning allCerts/allInvoices/allPayments twice.
   const enriched=filtered.map(p=>{
-    const propJobs=p._jobs||[];
+    const propJobs=allJobs.filter(j=>j.propertyId===p.id);
     const jobIds=new Set(propJobs.map(j=>j.id));
     // Cert match: precise (by jobId) with an address-substring fallback for
     // any older cert rows that predate jobId being reliably set.
@@ -7423,7 +7482,7 @@ async function renderProps(){
       return bal>0.01?sum+bal:sum;
     },0);
     const photoCount=allAttachments.filter(a=>jobIds.has(a.jobId)&&(a.type==='photo'||(a.mime||'').startsWith('image/'))).length;
-    const reliability=_paymentReliability(p.landlord,allInvoices,allPayments);
+    const reliability=_paymentReliability(p.landlord_name,allInvoices,allPayments);
 
     return {p,propJobs,propCerts,expCerts,overdueCerts,openJobs,completedJobs,outstanding,photoCount,reliability};
   });
@@ -7474,12 +7533,12 @@ async function renderProps(){
           <div class="card-avatar" style="background:linear-gradient(135deg,${topCol},var(--acc))">🏠</div>
           <div class="card-info">
             <div class="card-name">${escHtml(p.address||'—')}</div>
-            <div class="card-role" style="color:var(--txt2)">${escHtml(p.landlord||'No landlord')}</div>
+            <div class="card-role" style="color:var(--txt2)">${escHtml(p.landlord_name||'No landlord')}</div>
           </div>
         </div>
         <div class="card-meta">
           ${p.postcode?`<div>📍 ${escHtml(p.postcode)}</div>`:''}
-          ${p.type?`<div>${escHtml(p.type)}${p.beds?' · '+p.beds+' bed':''}</div>`:''}
+          ${p.property_type?`<div>${escHtml(p.property_type)}${p.bedrooms?' · '+p.bedrooms+' bed':''}</div>`:''}
           ${reliability?`<div>⭐ <span style="color:${reliability.color};font-weight:700">${reliability.label}</span></div>`:''}
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
@@ -7505,18 +7564,17 @@ async function renderProps(){
 async function openPropModal(id){
   editPropId=id||null;
   if(id){
-    // allProps is the derived+merged list (_refreshAllProps), not just the
-    // manual overrides — a property with real job history but no manual
-    // record yet still needs to open here (saveProp() below then creates
-    // the override on Save, matched back to this same address).
-    const p=allProps.find(x=>x.id===id)||(S.properties||[]).find(x=>x.id===id);
+    // allProps is the real properties table (_refreshAllProps) — every
+    // property, auto-derived or manually edited, is a real row now, no
+    // more separate manual-overrides list to fall back to.
+    const p=allProps.find(x=>x.id===id);
     if(!p) return;
     document.getElementById('mo-prop-title').textContent='✎ Edit Property';
     document.getElementById('propf-addr').value=p.address||'';
-    document.getElementById('propf-ll').value=p.landlord||'';
+    document.getElementById('propf-ll').value=p.landlord_name||'';
     document.getElementById('propf-pc').value=p.postcode||'';
-    document.getElementById('propf-type').value=p.type||'Flat';
-    document.getElementById('propf-beds').value=p.beds||'';
+    document.getElementById('propf-type').value=p.property_type||'Flat';
+    document.getElementById('propf-beds').value=p.bedrooms||'';
     document.getElementById('propf-notes').value=p.notes||'';
     document.getElementById('btn-del-prop').style.display='';
     document.getElementById('btn-prop-jobs').style.display='';
@@ -7534,20 +7592,27 @@ async function openPropModal(id){
 async function saveProp(){
   const addr=document.getElementById('propf-addr').value.trim();
   if(!addr){toast('Address required','error');return}
-  const props=S.properties||[];
+  const key=normAddr(addr);
+  // A brand-new "Add Property" for an address that already has a real row
+  // (job-derived or previously saved) must update that row, not insert a
+  // second one — normalized_address is unique, so a blind insert here
+  // would fail with a conflict rather than silently duplicating.
+  const props=await dAll('properties');
+  const collision=props.find(p=>p.normalized_address===key && p.id!==editPropId);
+  const id=editPropId||collision?.id||uid();
+  const existing=props.find(p=>p.id===id);
   const obj={
-    id:editPropId||uid(),
-    address:addr,
-    landlord:document.getElementById('propf-ll').value.trim(),
-    postcode:document.getElementById('propf-pc').value.trim(),
-    type:document.getElementById('propf-type').value,
-    beds:document.getElementById('propf-beds').value,
-    notes:document.getElementById('propf-notes').value.trim()
+    id,address:addr,normalized_address:key,
+    landlord_name:document.getElementById('propf-ll').value.trim()||null,
+    postcode:document.getElementById('propf-pc').value.trim()||null,
+    property_type:document.getElementById('propf-type').value||null,
+    bedrooms:document.getElementById('propf-beds').value||null,
+    notes:document.getElementById('propf-notes').value.trim()||null,
+    agency_name:existing?.agency_name||null,
+    manual_override:true,
+    updated_at:new Date().toISOString(),
   };
-  const idx=props.findIndex(p=>p.id===obj.id);
-  if(idx>=0) props[idx]=obj; else props.push(obj);
-  S.properties=props;
-  await saveSetting('properties',props);
+  await dPut('properties',obj);
   await _refreshAllProps();
   closeModal('mo-prop');
   renderProps();
@@ -7555,16 +7620,28 @@ async function saveProp(){
 }
 
 async function deleteCurrentProp(){
-  confirm2('Delete Property','This clears any manual notes/type/beds for this address. If it still has job history it will keep showing here, just without those overrides.',async()=>{
-    S.properties=(S.properties||[]).filter(p=>p.id!==editPropId);
-    await saveSetting('properties',S.properties);
+  confirm2('Delete Property','If this property has no job history it will be removed entirely. If it does, this clears the manual notes/type/beds instead and keeps the record — jobs stay linked to their property.',async()=>{
+    try{
+      await dDel('properties',editPropId);
+      toast('Property deleted','warn');
+    }catch(e){
+      // Foreign-key restraint from jobs.property_id — expected and correct
+      // for a property with real job history, not a failure to surface as
+      // an error. Falls back to the old "reset to auto-derived" behavior:
+      // clear the manual-only fields, keep the row jobs still point to.
+      const existing=allProps.find(p=>p.id===editPropId);
+      if(existing){
+        await dPut('properties',{...existing,property_type:null,bedrooms:null,notes:null,manual_override:false,updated_at:new Date().toISOString()});
+      }
+      toast('Property has job history — manual overrides cleared instead','warn');
+    }
     await _refreshAllProps();
-    closeModal('mo-prop');renderProps();toast('Property record cleared','warn');
+    closeModal('mo-prop');renderProps();
   });
 }
 
 function viewPropJobs(){
-  const p=allProps.find(x=>x.id===editPropId)||(S.properties||[]).find(x=>x.id===editPropId);
+  const p=allProps.find(x=>x.id===editPropId);
   if(!p) return;
   closeModal('mo-prop');
   document.getElementById('j-search').value=p.address.slice(0,20);
@@ -7573,9 +7650,9 @@ function viewPropJobs(){
 }
 
 async function exportPropsCSV(){
-  const props=S.properties||[];
+  const props=await dAll('properties');
   const rows=[['Address','Landlord','Postcode','Type','Beds','Notes']];
-  props.forEach(p=>rows.push([p.address,p.landlord,p.postcode,p.type||'',p.beds||'',p.notes||'']));
+  props.forEach(p=>rows.push([p.address,p.landlord_name,p.postcode,p.property_type||'',p.bedrooms||'',p.notes||'']));
   const csv=rows.map(r=>r.map(c=>`"${String(c||'').replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob=new Blob([csv],{type:'text/csv'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);

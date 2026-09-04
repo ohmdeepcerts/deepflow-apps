@@ -196,7 +196,11 @@ export async function renderCertStats(){
 
 export async function renderCertDash(){
   const allCerts=await dAll('certs');
-  const allProps=S.properties||[];
+  // Real properties table now (Records/CRM rearchitecture Phase 1) — was
+  // S.properties, the manual-overrides-only settings blob, which never
+  // included the vast majority of properties (those only ever derived
+  // from job addresses, never manually edited).
+  const allProps=await dAll('properties');
   const now=new Date();
 
   const expired=allCerts.filter(c=>c.expiryDate&&daysDiff(c.expiryDate)<0);
@@ -405,7 +409,7 @@ export async function renderCertDash(){
           <div style="font-size:12px;font-weight:700;color:var(--txt1);line-height:1.3">${p.address||'—'}</div>
           <span style="font-size:14px;flex-shrink:0">${statusIco}</span>
         </div>
-        <div style="font-size:11px;color:var(--txt2);margin-bottom:6px">👤 ${p.landlord||'No landlord'}</div>
+        <div style="font-size:11px;color:var(--txt2);margin-bottom:6px">👤 ${p.landlord_name||'No landlord'}</div>
         <div style="display:flex;gap:4px;flex-wrap:wrap">
           ${pc.length?`<span style="font-size:10px;padding:1px 6px;border-radius:8px;background:rgba(37,213,142,.12);color:var(--green)">◈ ${pc.length} cert${pc.length===1?'':'s'}</span>`:'<span style="font-size:10px;padding:1px 6px;border-radius:8px;background:var(--s2);color:var(--txt3)">No certs</span>'}
           ${pExp.length?`<span style="font-size:10px;padding:1px 6px;border-radius:8px;background:rgba(224,82,82,.12);color:var(--red)">❌ ${pExp.length} expired</span>`:''}
