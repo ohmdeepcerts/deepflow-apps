@@ -63,7 +63,7 @@ import {
 import { openCreditNoteModal, addCreditItem, fillCreditNote, saveCreditNote, creditNote, updateCreditItem, removeCreditItem } from './credit-notes.js';
 import { renderInvCustomTexts, addInvCustomText, removeInvCustomText } from './invoice-custom-text.js';
 import { renderSqlSnippets, copySql } from './sql-guide.js';
-import { renderCommsLog } from './comms-dryrun-log.js';
+import { renderCommsLog, toggleCommsSettings, saveCommsSettings } from './comms-dryrun-log.js';
 import { renderPlanner, initPlanner } from './planner-board.js';
 import { openProjectPicker } from './planner-projects.js';
 import {
@@ -9761,7 +9761,7 @@ Object.assign(window, {
   toggleArchivePerson,
   openPropModal, openRenewCertModal, openStandaloneProformaModal, openWhatsApp, postComment, previewCertPdf,
   previewWaTemplate, printFilteredInvoices, printProforma, quickConfirm, quickEditPrice, quickEditTime, quickStatus,
-  setChaseStatus, _chasePromptPromise,
+  setChaseStatus, _chasePromptPromise, toggleCommsSettings, saveCommsSettings,
   removeApplianceRow, removeCertPdf, removeCreditItem, removeInvCustomText, renderAgentsSection, renderAuditLog, renderCertMissing, renderCertStats, renderCertTable, renderClientPicker, renderCommsLog,
   renderExpiringPanel, setMissingFilter, clearExpiringFilters, goExpiryWindow,
   renderDash, renderDirSection, renderEngReport, renderExpenses, renderInvItems, renderInvList, renderJobs, renderMapPage,

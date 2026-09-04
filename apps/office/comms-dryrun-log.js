@@ -14,7 +14,7 @@
 // read-only queries.
 
 import { escHtml } from '@ui';
-import { _sb, dAll } from './main.js';
+import { _sb, dAll, toast } from './main.js';
 
 const REASON_STYLE = {
   DRY_RUN:          {label:'Would send', color:'var(--green)'},
@@ -23,6 +23,69 @@ const REASON_STYLE = {
   CHANNEL_DISABLED: {label:'Channel off', color:'var(--txt3)'},
 };
 function reasonStyle(reason){ return REASON_STYLE[reason]||{label:reason,color:'var(--txt3)'}; }
+
+// ── Settings (quiet hours / frequency caps) ─────────────────────────────
+// Makes what process_comm_events() previously had hardcoded owner-editable
+// — see docs/communications/02-COMMUNICATIONS-ARCHITECTURE.md §8. Single
+// global row (comm_settings, id='global'), read fresh by the SQL processor
+// on every run, so a save here takes effect on the next 15-minute tick —
+// no redeploy, no migration, no asking me to change a number in SQL.
+export function toggleCommsSettings(){
+  const box=document.getElementById('commslog-settings');
+  if(!box) return;
+  const show=box.style.display==='none';
+  box.style.display=show?'block':'none';
+  if(show) renderCommsSettings();
+}
+
+export async function renderCommsSettings(){
+  const box=document.getElementById('commslog-settings');
+  if(!box) return;
+  box.innerHTML='<div style="font-size:12px;color:var(--txt3)">Loading…</div>';
+  try{
+    const rows=await _sb('comm_settings?id=eq.global&limit=1&select=*');
+    const s=rows?.[0]||{quiet_hours_start:'09:00',quiet_hours_end:'17:30',quiet_hours_weekends:true,min_gap_hours:4,max_per_day:3,max_per_week:8};
+    const t=v=>(v||'').toString().slice(0,5); // 'HH:MM:SS' -> 'HH:MM' for <input type=time>
+    box.innerHTML=`
+      <div style="font-size:11px;font-weight:700;color:var(--txt3);margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px">Quiet Hours & Frequency Caps <span style="font-weight:400;text-transform:none;opacity:.7">— applies to every automated event, effective on the next processor run (~15 min)</span></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px">
+        <div><label class="fl" style="font-size:10px">Quiet hours start</label><input type="time" id="cs-start" class="fi" value="${t(s.quiet_hours_start)}"></div>
+        <div><label class="fl" style="font-size:10px">Quiet hours end</label><input type="time" id="cs-end" class="fi" value="${t(s.quiet_hours_end)}"></div>
+        <div><label class="fl" style="font-size:10px">Min. gap between messages (hours)</label><input type="number" id="cs-gap" class="fi" min="0" value="${s.min_gap_hours}"></div>
+        <div><label class="fl" style="font-size:10px">Max per client per day</label><input type="number" id="cs-day" class="fi" min="1" value="${s.max_per_day}"></div>
+        <div><label class="fl" style="font-size:10px">Max per client per week</label><input type="number" id="cs-week" class="fi" min="1" value="${s.max_per_week}"></div>
+        <div style="display:flex;align-items:flex-end"><label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer"><input type="checkbox" id="cs-weekends" ${s.quiet_hours_weekends?'checked':''}> Suppress all weekend sends</label></div>
+      </div>
+      <div style="margin-top:12px"><button class="btn btn-acc btn-sm" onclick="saveCommsSettings()">Save Settings</button></div>`;
+  }catch(e){
+    console.warn('[DeepFlow] renderCommsSettings failed',e);
+    box.innerHTML='<div style="font-size:12px;color:var(--red)">Failed to load settings</div>';
+  }
+}
+
+export async function saveCommsSettings(){
+  const val=id=>document.getElementById(id)?.value;
+  const start=val('cs-start'), end=val('cs-end');
+  const gap=parseInt(val('cs-gap'),10), day=parseInt(val('cs-day'),10), week=parseInt(val('cs-week'),10);
+  if(!start||!end){ toast('Set both quiet-hours times','error'); return; }
+  if([gap,day,week].some(n=>Number.isNaN(n)||n<0)){ toast('Frequency values must be 0 or more','error'); return; }
+  try{
+    await _sb('comm_settings?id=eq.global',{
+      method:'PATCH',
+      body:{
+        quiet_hours_start:start, quiet_hours_end:end,
+        quiet_hours_weekends:!!document.getElementById('cs-weekends')?.checked,
+        min_gap_hours:gap, max_per_day:day, max_per_week:week,
+        updated_at:new Date().toISOString(),
+      },
+      prefer:'return=minimal',
+    });
+    toast('Communications settings saved','success');
+  }catch(e){
+    console.warn('[DeepFlow] saveCommsSettings failed',e);
+    toast('Failed to save settings','error');
+  }
+}
 
 export async function renderCommsLog(){
   const summaryEl=document.getElementById('commslog-summary');
