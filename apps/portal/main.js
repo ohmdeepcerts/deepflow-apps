@@ -200,6 +200,7 @@ async function _fetchPortalJobData(entity){
   let attachments=[],certs=[],invoices=[];
   // Same unconditional fetch as init() — see the comment there.
   const notifications=((await sb(`rpc/portal_get_notifications`,{method:'POST',body:{}}).catch(()=>[]))||[]);
+  const properties=((await sb(`rpc/portal_get_properties`,{method:'POST',body:{}}).catch(()=>[]))||[]);
   if(jobs.length){
     const [ra,rc,ri,rp]=await Promise.all([
       sb(`rpc/portal_get_attachments`,{method:'POST',body:{}}).catch(()=>[]),
@@ -226,7 +227,7 @@ async function _fetchPortalJobData(entity){
       }
     });
   }
-  return {jobs,attachments,certs,invoices,notifications};
+  return {jobs,attachments,certs,invoices,notifications,properties};
 }
 
 async function _pollPortalUpdates(){
@@ -236,14 +237,14 @@ async function _pollPortalUpdates(){
   if(_pollInFlight||!_d||!_d.entity)return;
   _pollInFlight=true;
   try{
-    const {jobs,attachments,certs,invoices,notifications}=await _fetchPortalJobData(_d.entity);
+    const {jobs,attachments,certs,invoices,notifications,properties}=await _fetchPortalJobData(_d.entity);
     // Reuses the exact same diff _computeChangesSinceLastVisit already
     // does for "what changed since you last opened this link" — calling
     // it again here just diffs against the snapshot from the previous
     // poll (or the initial load) instead, and overwrites it the same way.
     const changes=_computeChangesSinceLastVisit(jobs,certs,invoices,token);
     const newUnreadCount=notifications.filter(n=>!n.read_at).length - (_d.notifications||[]).filter(n=>!n.read_at).length;
-    _d.jobs=jobs; _d.attachments=attachments; _d.certs=certs; _d.invoices=invoices; _d.notifications=notifications;
+    _d.jobs=jobs; _d.attachments=attachments; _d.certs=certs; _d.invoices=invoices; _d.notifications=notifications; _d.properties=properties;
     invoices.forEach(inv=>{ if(inv.id) _INV_STORE.set(inv.id,inv); });
     if(changes.length||newUnreadCount>0){
       // Prepend so the newest changes lead the notification list, without
@@ -707,6 +708,14 @@ async function init(){
     // content once Phase D emits it, not something to fake in the meantime.
     const notifications=((await sb(`rpc/portal_get_notifications`,{method:'POST',body:{}}).catch(()=>[]))||[]);
 
+    // Real properties table (Office got this 2026-09-04; Portal was never
+    // wired to it — properties.js grouped jobs/certs by raw address string
+    // and separately checked a stale app_settings.__all__ JSON blob for the
+    // "property sold, landlord changed" filter, a blob nothing has written
+    // to since the real table shipped. Session-scoped, matched by name like
+    // _portal_scoped_jobs() — properties has no client_person_id yet.
+    const properties=((await sb(`rpc/portal_get_properties`,{method:'POST',body:{}}).catch(()=>[]))||[]);
+
     if(jobs.length){
       const [ra,rc,ri,rr,rp]=await Promise.all([
         sb(`rpc/portal_get_attachments`,{method:'POST',body:{}}).catch(()=>[]),
@@ -762,7 +771,7 @@ async function init(){
       if(nb)nb.style.display='flex';if(nd)nd.style.display='block';
     }
 
-    _d={name:entity.name,type:ptype,jobs,attachments,certs,invoices,ratings:ratings||[],token,coName,entity,changesSinceLastVisit,notifications};
+    _d={name:entity.name,type:ptype,jobs,attachments,certs,invoices,ratings:ratings||[],token,coName,entity,changesSinceLastVisit,notifications,properties};
     _d._activeAgents=new Set(); // empty = all agents (agency view)
     document.getElementById('nav').style.display='flex';
     document.querySelectorAll('.tab').forEach(tab=>{
@@ -1336,7 +1345,7 @@ function vInvoices(d){
 
   document.getElementById('main').innerHTML=`
     <div class="sec">
-      <div class="sec-hd"><div class="sec-t">Invoices <span class="sec-n">${d.invoices.length}</span></div>
+      <div class="sec-hd"><div class="sec-t">Billing <span class="sec-n">${d.invoices.length}</span></div>
         <div style="display:flex;gap:6px">
           <button class="dl g sm" onclick="exportCSV('invoices')"><i data-lucide="download" style="width:12px;height:12px"></i> CSV</button>
         </div>

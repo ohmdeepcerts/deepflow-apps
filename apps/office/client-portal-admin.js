@@ -134,6 +134,44 @@ function resetPortalPin(id, type, name){
   );
 }
 
+// Real, immediate cutoff (Client Portal V2 Phase 1) — unlike Reset PIN,
+// this ends any session ${name} is already using right this second (their
+// very next click fails) and blocks logging back in, without touching the
+// link itself. Reversible via restorePortalAccess. Operates on every named
+// portal user under this landlord/agency/agent — there's no per-user screen
+// yet (deferred RBAC management UI), so this cuts the whole account off.
+function revokePortalAccess(id, type, name){
+  confirm2(
+    'Revoke Portal Access',
+    `This immediately ends ${name}'s portal access — any device they're already logged in on will be signed out on their next click, and their link/PIN won't work until you restore access. Use this for a client you no longer want to have access, not just someone who forgot their PIN (use Reset PIN for that).`,
+    async()=>{
+      try{
+        await _sb('rpc/portal_revoke_access',{method:'POST',body:{p_table:_portalPinTableFor(type),p_id:id}});
+        toast(`🚫 Portal access revoked for ${name}`,'success',5000);
+        closePortalInviteModal();
+      }catch(e){
+        toast('Failed to revoke access: '+(e.message||'').slice(0,100),'error',6000);
+      }
+    }
+  );
+}
+
+function restorePortalAccess(id, type, name){
+  confirm2(
+    'Restore Portal Access',
+    `This restores ${name}'s portal access — their existing link and PIN will work again immediately.`,
+    async()=>{
+      try{
+        await _sb('rpc/portal_restore_access',{method:'POST',body:{p_table:_portalPinTableFor(type),p_id:id}});
+        toast(`🔓 Portal access restored for ${name}`,'success',5000);
+        closePortalInviteModal();
+      }catch(e){
+        toast('Failed to restore access: '+(e.message||'').slice(0,100),'error',6000);
+      }
+    }
+  );
+}
+
 function _copyPortalLink(url, name, btn) {
   navigator.clipboard.writeText(url).then(() => {
     const orig = btn.textContent;
@@ -281,12 +319,17 @@ async function showPortalInviteModal(id, name, type, agentName){
   loading.addEventListener('click',e=>{if(e.target===loading)closePortalInviteModal();});
   document.body.appendChild(loading);
 
-  let url;
+  let url, revoked=false;
   try{
-    const rows=await _sb('rpc/portal_create_activation',{method:'POST',body:{p_table:_portalPinTableFor(type),p_id:id}});
-    const res=Array.isArray(rows)?rows[0]:rows;
+    const [actRows,statusRows]=await Promise.all([
+      _sb('rpc/portal_create_activation',{method:'POST',body:{p_table:_portalPinTableFor(type),p_id:id}}),
+      _sb('rpc/portal_access_status',{method:'POST',body:{p_table:_portalPinTableFor(type),p_id:id}}).catch(()=>null),
+    ]);
+    const res=Array.isArray(actRows)?actRows[0]:actRows;
     if(!res?.token) throw new Error('no token returned');
     url=`${_portalBaseUrl()}?activate=${encodeURIComponent(res.token)}`;
+    const status=Array.isArray(statusRows)?statusRows[0]:statusRows;
+    revoked=!!(status?.has_users && !status?.any_active);
   }catch(e){
     console.error('[DeepFlow] portal_create_activation failed:',e);
     if(document.getElementById('portal-invite-overlay')===loading){
@@ -297,10 +340,10 @@ async function showPortalInviteModal(id, name, type, agentName){
   }
   if(document.getElementById('portal-invite-overlay')!==loading) return; // closed while we were waiting
   closePortalInviteModal();
-  _renderPortalInviteCard(id, name, type, url);
+  _renderPortalInviteCard(id, name, type, url, revoked);
 }
 
-function _renderPortalInviteCard(id, name, type, url){
+function _renderPortalInviteCard(id, name, type, url, revoked){
   const safeName=name.replace(/'/g,"\\'");
   const safeUrl=url.replace(/'/g,"\\'");
 
@@ -355,6 +398,9 @@ function _renderPortalInviteCard(id, name, type, url){
       <button class="vca-email" onclick="_emailPortalShare('${safeUrl}','${safeName}',this)">✉ Email</button>
       <button class="vca-save" onclick="downloadPortalInviteCard('${safeName}','${safeUrl}')">⬇ Save Card</button>
       <button class="vca-copy" style="background:#7c2d12;color:#fed7aa" onclick="resetPortalPin('${id}','${type}','${safeName}')">🔑 Reset PIN</button>
+      ${revoked
+        ? `<button class="vca-copy" style="background:#14532d;color:#bbf7d0" onclick="restorePortalAccess('${id}','${type}','${safeName}')">🔓 Restore Access</button>`
+        : `<button class="vca-copy" style="background:#7f1d1d;color:#fecaca" onclick="revokePortalAccess('${id}','${type}','${safeName}')">🚫 Revoke Access</button>`}
     </div>`;
   div.addEventListener('click',e=>{if(e.target===div)closePortalInviteModal();});
   document.body.appendChild(div);
@@ -512,4 +558,5 @@ export {
   _copyPortalLink, _waPortalShare, _emailPortalShare,
   loadPortalContacts, renderPortalContactsList, addPortalContactRow, updatePortalContact, deletePortalContact,
   closePortalInviteModal, _startPortalInviteCanvas, showPortalInviteModal, downloadPortalInviteCard,
+  revokePortalAccess, restorePortalAccess,
 };

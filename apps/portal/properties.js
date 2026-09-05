@@ -23,7 +23,7 @@
 // assignment.
 
 import { escText as e, escAttr as ea } from '@ui';
-import { _d, _S, dd, fd, jobCard, empty } from './main.js';
+import { _d, dd, fd, jobCard, empty } from './main.js';
 import { certCard } from './certs.js';
 
 let _propSearch='',_propSort='jobs';
@@ -43,25 +43,34 @@ export function vProperties(d){
   d.jobs.forEach(j=>{const p=addKey(j.address); if(p)p.jobs.push(j);});
   d.certs.forEach(c=>{const p=addKey(c.address); if(p)p.certs.push(c);});
 
+  // Real properties table (portal_get_properties(), session-scoped) —
+  // replaces the old app_settings.__all__ JSON blob this used to read,
+  // which predates that table and nothing writes to any more (its own
+  // "property sold" filter had been silently a no-op since the migration
+  // shipped). Matched by address here too, same as the table itself is
+  // matched by landlord/agency name — no id-based link exists yet.
+  const propByAddr={};
+  (d.properties||[]).forEach(p=>{ if(p.address) propByAddr[p.address.trim().toLowerCase()]=p; });
+
   let list=Object.values(map);
 
-  // If the office has since changed this property's Landlord field to
-  // someone else (e.g. "Property Sold — Landlord Details Awaiting" after a
-  // sale), stop showing it here — the old landlord's invoice/job history at
-  // that address stays fully intact under Invoices, this only affects the
-  // Properties grouping view. Landlord portals only — an agency/agent's own
-  // name would never match a property's "landlord" field, so this check
-  // would incorrectly hide everything for them.
-  if(d.type==='landlord' && Array.isArray(_S?.properties) && _S.properties.length){
+  // If the office has since changed this property's landlord to someone
+  // else (e.g. after a sale), stop showing it here — the old landlord's
+  // job/invoice history at that address stays fully intact under Billing,
+  // this only affects the Properties grouping view. Landlord portals only —
+  // an agency's own name would never match a property's landlord field.
+  if(d.type==='landlord'){
     const meNorm=(d.name||'').trim().toLowerCase();
-    const propByAddr={};
-    _S.properties.forEach(p=>{ if(p.address) propByAddr[p.address.trim().toLowerCase()]=p; });
     list=list.filter(p=>{
       const rec=propByAddr[p.address.trim().toLowerCase()];
-      if(!rec || !rec.landlord) return true; // no office record, or no landlord set — show as before
-      return rec.landlord.trim().toLowerCase()===meNorm;
+      if(!rec || !rec.landlord_name) return true; // no office record, or no landlord set — show as before
+      return rec.landlord_name.trim().toLowerCase()===meNorm;
     });
   }
+  // Enrich each address group with the real property's type/bedrooms/notes
+  // when one matches — genuinely new information Portal couldn't show
+  // before (the old blob wasn't being read from anywhere real anyway).
+  list.forEach(p=>{ p.record=propByAddr[p.address.trim().toLowerCase()]||null; });
   if(_propSearch) list=list.filter(p=>p.address.toLowerCase().includes(_propSearch.toLowerCase()));
   if(_propSort==='jobs') list.sort((a,b)=>b.jobs.length-a.jobs.length);
   else if(_propSort==='az') list.sort((a,b)=>a.address.localeCompare(b.address));
@@ -79,11 +88,14 @@ export function vProperties(d){
   const rows=list.map(p=>{
     const expiring=p.certs.filter(c=>!c.noExpiry&&c.expiryDate&&dd(c.expiryDate)<=60).length;
     const lastJob=p.jobs.length?p.jobs.reduce((a,b)=>new Date(a.date||0)>new Date(b.date||0)?a:b):null;
+    const rec=p.record;
+    const recBits=rec?[rec.property_type,rec.bedrooms?`${rec.bedrooms} bed`:null].filter(Boolean).join(' · '):'';
     return`<div class="pg">
       <div class="pg-hd" data-action="toggle-group">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           <div class="pg-addr"><i data-lucide="building-2" style="width:14px;height:14px;display:inline;vertical-align:-2px;margin-right:6px"></i>${e(p.address)}</div>
           <div class="pg-m">${p.jobs.length} job${p.jobs.length!==1?'s':''} · ${p.certs.length} cert${p.certs.length!==1?'s':''} ›</div>
+          ${recBits?`<span class="pill" style="background:var(--accent-light);color:var(--accent)">${e(recBits)}</span>`:''}
         </div>
         <div style="display:flex;align-items:center;gap:8px">
           ${expiring?`<span class="pill p-s">${expiring} expiring</span>`:''}
@@ -91,6 +103,7 @@ export function vProperties(d){
         </div>
       </div>
       <div class="pg-body collapsed">
+        ${rec?.notes?`<div style="font-size:12px;color:var(--text-secondary);background:var(--border-subtle);border-radius:8px;padding:8px 10px;margin-bottom:10px">${e(rec.notes)}</div>`:''}
         ${p.jobs.length?`<div style="font-size:11px;font-weight:700;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:.5px;margin:10px 0 6px">Jobs</div>${p.jobs.map(j=>jobCard(j,d)).join('')}`:''}
         ${(()=>{
           // Job cards already show their own linked certificates inline — only

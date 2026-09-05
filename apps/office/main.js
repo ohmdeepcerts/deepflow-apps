@@ -169,6 +169,7 @@ import {
   showPortalLinkModal, resetPortalPin, _copyPortalLink, _waPortalShare, _emailPortalShare,
   loadPortalContacts, renderPortalContactsList, addPortalContactRow, updatePortalContact, deletePortalContact,
   closePortalInviteModal, _startPortalInviteCanvas, showPortalInviteModal, downloadPortalInviteCard,
+  revokePortalAccess, restorePortalAccess,
 } from './client-portal-admin.js';
 
 // ════════════════════════════════════════════════════════════════
@@ -8834,12 +8835,29 @@ const _patchCmdSearch = ()=>{
     if(session?.user){
       const email=(session.user.email||'').toLowerCase();
 
+      // Fixed: was going through _sb(), which independently re-resolves the
+      // JWT via its own getSession() call rather than using the token this
+      // function already has in hand. If that second lookup ever raced with
+      // an in-flight token refresh and came back empty, _getJWT() silently
+      // falls back to the anon key — the query below then runs as anon,
+      // RLS returns zero rows, "no profile" looks identical to "not logged
+      // in", and this whole function signs a genuinely-valid session out
+      // (see the `else` branch a few lines down). Bootstrap-time queries
+      // now use session.access_token directly instead, so this restore path
+      // never depends on a second, separate session lookup succeeding.
+      async function _bootstrapQuery(path){
+        const res=await restFetch(path,{},session.access_token);
+        if(!res.ok) return [];
+        const txt=await res.text();
+        return txt?JSON.parse(txt):[];
+      }
+
       // Load profile — no active filter (was blocking valid users)
       let profile=null;
-      const r1=await _sb(`users?auth_id=eq.${session.user.id}&select=*`).catch(()=>[]);
+      const r1=await _bootstrapQuery(`users?auth_id=eq.${session.user.id}&select=*`).catch(()=>[]);
       profile=r1?.[0]||null;
       if(!profile){
-        const r2=await _sb(`users?email=eq.${encodeURIComponent(email)}&select=*`).catch(()=>[]);
+        const r2=await _bootstrapQuery(`users?email=eq.${encodeURIComponent(email)}&select=*`).catch(()=>[]);
         profile=r2?.[0]||null;
         if(profile){
           _sb(`users?id=eq.${profile.id}`,{method:'PATCH',body:{auth_id:session.user.id},prefer:'return=minimal'}).catch(()=>{});
@@ -9843,7 +9861,8 @@ Object.assign(window, {
   renderExpiringPanel, setMissingFilter, clearExpiringFilters, goExpiryWindow,
   renderDash, renderDirSection, renderEngReport, renderExpenses, renderInvItems, renderInvList, renderJobs, renderMapPage,
   renderNotifPreview, renderPLDashboard, renderProps, renderReports, renderRequests, renderSettings, renderStmt,
-  requestNotifPermission, resetColWidths, resetPortalPin, resolveMergeField, saveAgency, saveAgencyFromJob, 
+  requestNotifPermission, resetColWidths, resetPortalPin, resolveMergeField, restorePortalAccess, revokePortalAccess,
+  saveAgency, saveAgencyFromJob,
   saveAgent, saveAgentFromJob, saveAndSendInv, saveCertExpiry, saveCertForm,
   saveCreditNote, saveDashNotes, saveDisposableInvoice, saveEngDefaults, saveExpense, saveInv, 
   saveJob, saveLandlordFromJob, saveNotifSettings, saveOvertimeLog, savePasswordReset, savePayment, savePerson, 
