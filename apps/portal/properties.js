@@ -136,17 +136,35 @@ export function vProperties(d){
         ${rec?.notes?`<div style="font-size:12px;color:var(--text-secondary);background:var(--border-subtle);border-radius:8px;padding:8px 10px;margin-bottom:10px">${e(rec.notes)}</div>`:''}
         ${p.jobs.length?`<div style="font-size:11px;font-weight:700;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:.5px;margin:10px 0 6px">Jobs</div>${p.jobs.map(j=>jobCard(j,d)).join('')}`:''}
         ${(()=>{
-          // Job cards already show their own linked certificates inline — only
-          // list certs here that aren't tied to one of this property's jobs,
-          // so nothing shows up twice.
-          const jobIds=new Set(p.jobs.map(j=>j.id));
-          const standalone=p.certs.filter(c=>!c.jobId||!jobIds.has(c.jobId));
-          return standalone.length?`<div style="font-size:11px;font-weight:700;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 6px">Certificates</div>${standalone.map(c=>certCard(c,d)).join('')}`:'';
+          // Grouped by certificate type, not by which job a cert happens to
+          // be linked to — one address showing "Electrical (EICR)" as its
+          // own heading with the current cert under it (and any superseded
+          // ones collapsed beneath that same heading) reads far better than
+          // the same address repeating on every job card with cert info
+          // scattered across them. Mirrors Office's own per-property
+          // history view (openPropertyCertHistory in
+          // certs-stats-dashboard.js) so both sides of the app present a
+          // property's certificate history the same way.
+          const byType=new Map();
+          [...p.certs,...p.certsHistory].forEach(c=>{
+            if(!byType.has(c.type))byType.set(c.type,{current:null,history:[]});
+            const g=byType.get(c.type);
+            if(c.superseded_by)g.history.push(c); else g.current=c;
+          });
+          if(!byType.size)return'';
+          const sections=[...byType.entries()].sort((a,b)=>a[0].localeCompare(b[0])).map(([type,g])=>{
+            const history=g.history.sort((a,b)=>(b.expiryDate||b.issueDate||'').localeCompare(a.expiryDate||a.issueDate||''));
+            return`<div style="margin-bottom:12px">
+              <div style="font-size:10px;font-weight:700;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">${e(type||'Certificate')}</div>
+              ${g.current?certCard(g.current,d):'<div style="font-size:12px;color:var(--text-tertiary);padding:2px 0 8px">No current certificate — needs renewing</div>'}
+              ${history.length?`<div style="margin-top:2px">
+                <div style="font-size:11px;color:var(--text-tertiary);cursor:pointer;padding:4px 0" onclick="event.stopPropagation();this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">▸ ${history.length} previous ${e(type||'certificate')} certificate${history.length===1?'':'s'}</div>
+                <div style="display:none;opacity:.7">${history.map(c=>certCard(c,d)).join('')}</div>
+              </div>`:''}
+            </div>`;
+          }).join('');
+          return`<div style="font-size:11px;font-weight:700;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px">Certificates</div>${sections}`;
         })()}
-        ${p.certsHistory.length?`<div style="margin-top:10px">
-          <div style="font-size:11px;color:var(--text-tertiary);cursor:pointer;padding:4px 0" onclick="event.stopPropagation();this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">▸ ${p.certsHistory.length} previous certificate${p.certsHistory.length===1?'':'s'} (renewed)</div>
-          <div style="display:none;opacity:.7">${p.certsHistory.map(c=>certCard(c,d)).join('')}</div>
-        </div>`:''}
       </div>
     </div>`;
   }).join('');
