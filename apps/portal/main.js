@@ -11,7 +11,7 @@ import './hero-canvas.js';
 import { vRequest, toggleReqDetail, handleFiles, submitReq, setRenewalData } from './request-wizard.js';
 import { previewInv, downloadCurrentInv, closeModal, payInvoice } from './invoice-pdf.js';
 import { vProperties, setPropSearch, setPropSort } from './properties.js';
-import { vCerts, certCard, previewCertPdf, closeCertPdfPreview, preFillRenewal, getPreviewCert, setCertView, setCertSort, setCertDir, showCertLockedPopup, closeCertLockModal } from './certs.js';
+import { vCerts, certCard, previewCertPdf, closeCertPdfPreview, preFillRenewal, getPreviewCert, setCertView, setCertSort, setCertDir, showCertLockedPopup, closeCertLockModal, toggleShowSuperseded } from './certs.js';
 
 // Real server-side Portal sessions (Client Portal V2 Phase 1) — mirrors the
 // Engineer app's own x-engineer-token pattern (apps/engineer/main.js) exactly.
@@ -1518,5 +1518,5 @@ Object.assign(window, {
   markNotificationRead, openContactModal, openSearch, payInvoice, performSearch, preFillRenewal,
   previewCertPdf, setCertDir, setCertSort, setCertView, setPropSearch,
   setPropSort, shareCert, shareCurrentPreviewCert, showCertLockedPopup, submitReq, toast,
-  toggleAgentFilter, toggleNotif, toggleReqDetail, toggleTheme,
+  toggleAgentFilter, toggleNotif, toggleReqDetail, toggleShowSuperseded, toggleTheme,
 });

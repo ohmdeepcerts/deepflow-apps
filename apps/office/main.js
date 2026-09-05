@@ -17,7 +17,7 @@ import {
   openCertForm, ctypeToggle, saveCertForm, cancelCertForm, updateCertAddrSugg, certContactSugg,
   certFillContact, updateCertJobSugg, certLinkJob, certUnlinkJob, certSendIndivEmail, certSendIndivWA,
 } from './certs-form.js';
-import { renderCertStats, renderCertDash } from './certs-stats-dashboard.js';
+import { renderCertStats, renderCertDash, openPropertyCertHistory, closePropertyCertHistoryModal } from './certs-stats-dashboard.js';
 import {
   setCremMode, generateBulkReminder, copyCremMsg, importCertCSV, exportCertCSV, exportCertPDF,
   downloadCertTemplate,
@@ -7645,7 +7645,9 @@ function viewPropJobs(){
   const p=allProps.find(x=>x.id===editPropId);
   if(!p) return;
   closeModal('mo-prop');
-  document.getElementById('j-search').value=p.address.slice(0,20);
+  // Full address, not a 20-char slice — a prefix could match a different
+  // property in the same building (e.g. two flats sharing a street name).
+  document.getElementById('j-search').value=p.address;
   nav('jobs');
   renderJobs();
 }
@@ -9832,7 +9834,7 @@ Object.assign(window, {
   certContactSugg, certFillContact, certLinkJob, certUnlinkJob, certPageNav, certSendIndivEmail, certSendIndivWA, changeUserRole,
   checkCronSetup, checkDuplicatePhone, checkSecurityStatus, clearAllData, clearCertFilters, clearJobForm, 
   clearNotifs, clearSel, clearStore, closeCtx, closeModal, closePLDashboard, 
-  closePortalInviteModal, confirmKS, convertProformaToInvoice, copyCremMsg, copyJobToNextDay, copySql,
+  closePortalInviteModal, closePropertyCertHistoryModal, confirmKS, convertProformaToInvoice, copyCremMsg, copyJobToNextDay, copySql,
   copyText, copyWAText, copyWaTemplate, createAllTables, creditNote, createDraftsForCompleted, createInvFromJob,
   createJobFromPortalReq, createProforma, createRecurringInv, createRenewalJob, ctxCopyAddr, ctypeToggle, currentEditId, cvLoadClient,
   cvSearch, cvSwitchTab, debounceRenderCmd, debounceRenderJobs, deleteAttachment, deleteComment, deleteCurrentAgency,
@@ -9854,7 +9856,7 @@ Object.assign(window, {
   openEngDir, openExpenseModal, openImportModal, openInvoiceForJob, openInvSendModal, openJobForInvoice, openJobModal, openJobModalByNum, openMergeModal, openNewInvModal,
   openOvertimeModal, openPLDashboard, openPaymentModal, openPersonModal, openPersonModalFor, openPersonWA,
   toggleArchivePerson,
-  openPropModal, openRenewCertModal, openStandaloneProformaModal, openWhatsApp, postComment, previewCertPdf,
+  openPropModal, openPropertyCertHistory, openRenewCertModal, openStandaloneProformaModal, openWhatsApp, postComment, previewCertPdf,
   previewWaTemplate, printFilteredInvoices, printProforma, quickConfirm, quickEditPrice, quickEditTime, quickStatus,
   setChaseStatus, _chasePromptPromise, toggleCommsSettings, saveCommsSettings,
   removeApplianceRow, removeCertPdf, removeCreditItem, removeInvCustomText, renderAgentsSection, renderAuditLog, renderCertMissing, renderCertStats, renderCertTable, renderClientPicker, renderCommsLog,

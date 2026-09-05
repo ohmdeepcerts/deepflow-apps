@@ -42,7 +42,9 @@ export async function generateBulkReminder(){
   const cutoff=document.getElementById('crem-cutoff')?.value||'';
   if(!ll&&!ag)return toast('Select a landlord or agent first','warn');
 
-  let all=await dAll('certs');
+  // Excludes superseded certs — reminding a client about a certificate
+  // that's already been renewed would be confusing and wrong.
+  let all=(await dAll('certs')).filter(c=>!c.supersededBy);
   let filtered=all.filter(c=>(ll&&c.landlord===ll)||(ag&&c.agent===ag));
   if(cutoff)filtered=filtered.filter(c=>c.expiryDate&&c.expiryDate<=cutoff);
   if(!filtered.length)return toast('No certificates found for this client','warn');

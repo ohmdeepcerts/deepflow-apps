@@ -62,15 +62,25 @@ function _lockedInvoiceForCert(c,d){
   return invs.find(i=>i.status!=='Paid')||invs[0]||null;
 }
 
-let _cs='expiry', _cd='asc', _certView='list';
+let _cs='expiry', _cd='asc', _certView='list', _showSuperseded=false;
 
 export function setCertView(v){ _certView=v; vCerts(_d); }
 export function setCertSort(v){ _cs=v; vCerts(_d); }
 export function setCertDir(v){ _cd=v; vCerts(_d); }
+export function toggleShowSuperseded(){ _showSuperseded=!_showSuperseded; vCerts(_d); }
 
 export function vCerts(d){
   const OPTS=[{v:'expiry',l:'Expiry Date'},{v:'status',l:'Status (urgent first)'},{v:'type',l:'Cert Type'},{v:'address',l:'Address'},{v:'certnum',l:'Cert Number'},{v:'issuedate',l:'Issue Date'}];
-  const sorted=sortCerts([...d.certs]);
+  // Certificates renewals never used to link to what they replaced, so an
+  // old, already-renewed certificate stayed listed here as "Expired"
+  // forever, right alongside its own valid replacement — confusing to see
+  // and wrong-looking even when a renewal was done right on schedule. The
+  // main list/calendar now shows only the current one per type; history
+  // stays genuinely visible via the toggle below (superseded_by set by the
+  // supersede_prior_certs trigger — see the certs_superseding migration).
+  const current=(d.certs||[]).filter(c=>!c.superseded_by);
+  const superseded=(d.certs||[]).filter(c=>c.superseded_by);
+  const sorted=sortCerts([...current]);
   const now=new Date();
   const month=now.getMonth();
   const year=now.getFullYear();
@@ -83,7 +93,7 @@ export function vCerts(d){
   for(let day=1;day<=daysInMonth;day++){
     const dateStr=`${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
     const hasJob=d.jobs.some(j=>j.date===dateStr);
-    const hasCert=d.certs.some(c=>c.expiryDate===dateStr);
+    const hasCert=current.some(c=>c.expiryDate===dateStr);
     const isToday=day===now.getDate();
     const cls=`cal-day ${hasCert?'has-expiry':''} ${hasJob?'has-job':''} ${isToday?'today':''}`;
     const title=(hasCert?'Certificate expiry':'')+(hasJob?' · Job scheduled':'');
@@ -93,7 +103,7 @@ export function vCerts(d){
 
   document.getElementById('main').innerHTML=`<div class="sec">
     <div class="sec-hd">
-      <div class="sec-t">Certificates <span class="sec-n">${d.certs.length}</span></div>
+      <div class="sec-t">Certificates <span class="sec-n">${current.length}</span></div>
       <div style="display:flex;gap:6px">
         <button class="dl g sm ${_certView==='list'?'active':''}" onclick="setCertView('list')" style="${_certView==='list'?'border-color:var(--accent);color:var(--accent)':''}"><i data-lucide="list" style="width:12px;height:12px"></i> List</button>
         <button class="dl g sm ${_certView==='calendar'?'active':''}" onclick="setCertView('calendar')" style="${_certView==='calendar'?'border-color:var(--accent);color:var(--accent)':''}"><i data-lucide="calendar" style="width:12px;height:12px"></i> Calendar</button>
@@ -109,6 +119,10 @@ export function vCerts(d){
       </select>
     </div>
     ${_certView==='calendar'?calHtml:sorted.length?sorted.map(c=>certCard(c,d)).join(''):empty('file-check','No certificates','Certificates will appear here after inspections')}
+    ${superseded.length?`<div style="margin-top:16px">
+      <div style="font-size:12px;color:var(--text-tertiary);cursor:pointer;padding:8px 0" onclick="toggleShowSuperseded()"><i data-lucide="${_showSuperseded?'chevron-down':'chevron-right'}" style="width:12px;height:12px;display:inline;vertical-align:-2px"></i> ${superseded.length} previous certificate${superseded.length===1?'':'s'} (renewed)</div>
+      ${_showSuperseded?`<div style="opacity:.7">${sortCerts([...superseded]).map(c=>certCard(c,d)).join('')}</div>`:''}
+    </div>`:''}
   </div>`;
 }
 

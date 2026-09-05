@@ -23,7 +23,7 @@ export const TO_DB = {
   certs: {
     issueDate: 'issuedate', expiryDate: 'expirydate', certNum: 'certnum', jobId: 'jobid',
     jobNum: 'jobnum', noExpiry: 'noexpiry', pdfUrl: 'pdf_url', pdfPath: 'pdf_path',
-    notResponding: 'notresponding',
+    notResponding: 'notresponding', supersededBy: 'superseded_by',
   },
   invoices: {
     clientId: 'clientid', clientName: 'clientname', clientEmail: 'clientemail', clientAddr: 'clientaddr',

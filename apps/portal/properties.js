@@ -37,11 +37,16 @@ export function vProperties(d){
   const map={};
   const addKey=(addr)=>{
     const k=(addr||'').trim(); if(!k) return null;
-    if(!map[k]) map[k]={address:k,jobs:[],certs:[]};
+    if(!map[k]) map[k]={address:k,jobs:[],certs:[],certsHistory:[]};
     return map[k];
   };
   d.jobs.forEach(j=>{const p=addKey(j.address); if(p)p.jobs.push(j);});
-  d.certs.forEach(c=>{const p=addKey(c.address); if(p)p.certs.push(c);});
+  // Superseded certs (an old one a renewal has replaced — see the
+  // certs_superseding migration) go to certsHistory instead of certs, same
+  // fix as vCerts() in certs.js: without it, a property renewed right on
+  // time still showed its old, now-superseded certificate as permanently
+  // "Expired" here, right next to its own valid replacement.
+  d.certs.forEach(c=>{const p=addKey(c.address); if(p)(c.superseded_by?p.certsHistory:p.certs).push(c);});
 
   // Real properties table (portal_get_properties(), session-scoped) —
   // replaces the old app_settings.__all__ JSON blob this used to read,
@@ -113,6 +118,10 @@ export function vProperties(d){
           const standalone=p.certs.filter(c=>!c.jobId||!jobIds.has(c.jobId));
           return standalone.length?`<div style="font-size:11px;font-weight:700;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 6px">Certificates</div>${standalone.map(c=>certCard(c,d)).join('')}`:'';
         })()}
+        ${p.certsHistory.length?`<div style="margin-top:10px">
+          <div style="font-size:11px;color:var(--text-tertiary);cursor:pointer;padding:4px 0" onclick="event.stopPropagation();this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">▸ ${p.certsHistory.length} previous certificate${p.certsHistory.length===1?'':'s'} (renewed)</div>
+          <div style="display:none;opacity:.7">${p.certsHistory.map(c=>certCard(c,d)).join('')}</div>
+        </div>`:''}
       </div>
     </div>`;
   }).join('');

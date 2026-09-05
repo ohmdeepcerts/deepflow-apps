@@ -1018,6 +1018,7 @@ input[type=color]{border:none;background:none;cursor:pointer;padding:0;height:32
 .cpill-soon{background:rgba(240,192,48,.12);color:var(--yellow)}
 .cpill-nr{background:rgba(240,192,48,.12);color:#f0a030}
 .cpill-missing{background:rgba(138,155,192,.12);color:#8a9bc0}
+.cpill-superseded{background:rgba(148,163,184,.12);color:#94a3b8}
 .ctbl-filters{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;padding:12px 18px;background:var(--s1);border-bottom:1px solid var(--border)}
 .ctbl-fg{display:flex;flex-direction:column;gap:3px}
 .ctbl-fg label{font-size:9px;text-transform:uppercase;font-weight:700;color:var(--txt3);letter-spacing:.5px}
@@ -4687,6 +4688,7 @@ body.density-relaxed .jtable td{font-size:15px}
               <option value="expiring">⚠️ Next 60 Days</option>
               <option value="no-expiry">📋 Missing Expiry</option>
               <option value="nr">🔇 No Response</option>
+              <option value="superseded">🗓️ Superseded</option>
             </select>
           </div>
           <div class="ctbl-fg"><label>Type</label><select class="fs" id="ct-type" onchange="renderCertTable()" style="padding:6px 10px;width:155px"><option value="all">All Types</option></select></div>

@@ -12,6 +12,7 @@
 // module reference is used only inside function bodies, never at module-
 // evaluation time.
 
+import { escHtml } from '@ui';
 import { STATUS, daysDiff, localDateStr } from '@business';
 import { S, dAll } from './main.js';
 import { switchCertTab, filterCerts, goExpiryWindow } from './certs-list.js';
@@ -22,7 +23,12 @@ import { addExpiryToExistingCert } from './certs-pdf.js';
 //  STATISTICS  (📈 Statistics tab)
 // ════════════════════════════════════════════════════════════════
 export async function renderCertStats(){
-  const all=await dAll('certs');
+  // Excludes superseded certs (an old cert a renewal has since replaced) —
+  // without this, a property renewed right on schedule still counted as
+  // having an "expired" certificate forever, because the old, now-replaced
+  // row's own expiry date never changes. See supersede_prior_certs() in the
+  // certs_superseding migration for how supersededBy gets set.
+  const all=(await dAll('certs')).filter(c=>!c.supersededBy);
   const now=new Date();
 
   const total=all.length;
@@ -195,12 +201,20 @@ export async function renderCertStats(){
 }
 
 export async function renderCertDash(){
-  const allCerts=await dAll('certs');
+  // allCertsRaw keeps superseded rows too — needed for the per-property
+  // history view (openPropertyCertHistory); every other computation below
+  // uses allCerts, which excludes them — see the same note in
+  // renderCertStats() for why (an old, already-renewed cert never stops
+  // being "expired" on its own, so counting it forever made a property
+  // renewed right on schedule still show as non-compliant).
+  const allCertsRaw=await dAll('certs');
+  const allCerts=allCertsRaw.filter(c=>!c.supersededBy);
   // Real properties table now (Records/CRM rearchitecture Phase 1) — was
   // S.properties, the manual-overrides-only settings blob, which never
   // included the vast majority of properties (those only ever derived
   // from job addresses, never manually edited).
   const allProps=await dAll('properties');
+  const allJobsForProps=await dAll('jobs');
   const now=new Date();
 
   const expired=allCerts.filter(c=>c.expiryDate&&daysDiff(c.expiryDate)<0);
@@ -389,22 +403,44 @@ export async function renderCertDash(){
   :'<div style="text-align:center;padding:20px;color:var(--txt3);font-size:12px">No cert types configured yet</div>';
 
   // ── Properties cert status grid ──
+  // Grouped by the real jobs.property_id link (Records/CRM Phase 1) rather
+  // than matching the first 20 characters of the address — that prefix
+  // match could merge two different flats in the same building (e.g. "10
+  // Downing Street Flat 1" and "...Flat 2" share the same 20-char prefix)
+  // into one property's cert count. window._certDashProps/_certDashCertsRaw
+  // feed openPropertyCertHistory (below) — the property card now opens a
+  // full history view grouped by type instead of just navigating to
+  // Properties, since "certs" here always meant "current, per this grid".
   const propGrid=document.getElementById('cd-prop-grid');
+  window._certDashCertsRaw=allCertsRaw;
+  window._certDashProps=allProps;
   if(allProps.length){
-    const allJobsDb=await dAll('jobs');
+    const jobToProp=new Map((allJobsForProps||[]).map(j=>[j.id,j.propertyId]));
+    const certsByProp=new Map();
+    allCerts.forEach(c=>{
+      const pid=jobToProp.get(c.jobId);
+      if(!pid)return;
+      if(!certsByProp.has(pid))certsByProp.set(pid,[]);
+      certsByProp.get(pid).push(c);
+    });
+    const jobsByProp=new Map();
+    (allJobsForProps||[]).forEach(j=>{
+      if(!j.propertyId)return;
+      if(!jobsByProp.has(j.propertyId))jobsByProp.set(j.propertyId,[]);
+      jobsByProp.get(j.propertyId).push(j);
+    });
     propGrid.innerHTML=allProps.map(p=>{
-      const key=(p.address||'').toLowerCase().slice(0,20);
-      const pc=allCerts.filter(c=>c.address&&c.address.toLowerCase().includes(key));
+      const pc=certsByProp.get(p.id)||[];
       const pExp=pc.filter(c=>c.expiryDate&&daysDiff(c.expiryDate)<0);
       const pExpg=pc.filter(c=>c.expiryDate&&daysDiff(c.expiryDate)>=0&&daysDiff(c.expiryDate)<=60);
       const pMiss=pc.filter(c=>!c.expiryDate);
       const pValid=pc.filter(c=>c.expiryDate&&daysDiff(c.expiryDate)>60);
       const statusCol=pExp.length?'var(--red)':pExpg.length?'var(--yellow)':pMiss.length?'#8a9bc0':pc.length?'var(--green)':'var(--txt3)';
       const statusIco=pExp.length?'❌':pExpg.length?'⚠️':pMiss.length?'📋':pc.length?'✅':'—';
-      const openJobs=(allJobsDb||[]).filter(j=>j.address&&j.address.toLowerCase().includes(key)&&(j.status===STATUS.PENDING||j.status===STATUS.IN_PROGRESS));
+      const openJobs=(jobsByProp.get(p.id)||[]).filter(j=>j.status===STATUS.PENDING||j.status===STATUS.IN_PROGRESS);
       // Next expiry
       const nextExp=pc.filter(c=>c.expiryDate&&daysDiff(c.expiryDate)>=0).sort((a,b)=>new Date(a.expiryDate)-new Date(b.expiryDate))[0];
-      return`<div onclick="nav('props')" style="background:var(--s1);border:1px solid ${statusCol==='var(--txt3)'?'var(--border)':statusCol+'55'};border-left:3px solid ${statusCol};border-radius:var(--r2);padding:10px 12px;cursor:pointer;transition:all .15s" onmouseover="this.style.background='var(--s2)'" onmouseout="this.style.background='var(--s1)'">
+      return`<div onclick="openPropertyCertHistory('${p.id}')" style="background:var(--s1);border:1px solid ${statusCol==='var(--txt3)'?'var(--border)':statusCol+'55'};border-left:3px solid ${statusCol};border-radius:var(--r2);padding:10px 12px;cursor:pointer;transition:all .15s" onmouseover="this.style.background='var(--s2)'" onmouseout="this.style.background='var(--s1)'">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px;margin-bottom:6px">
           <div style="font-size:12px;font-weight:700;color:var(--txt1);line-height:1.3">${p.address||'—'}</div>
           <span style="font-size:14px;flex-shrink:0">${statusIco}</span>
@@ -423,4 +459,81 @@ export async function renderCertDash(){
   } else {
     propGrid.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:28px;color:var(--txt3);font-size:13px">No properties added yet. <a onclick="nav(\'pg-props\')" style="color:var(--acc);cursor:pointer">Add properties →</a></div>';
   }
+}
+
+// ── Per-property certificate history, grouped by type ───────────────────────
+// What the property-status cards above link to. Unlike every other cert view
+// in this app, this one deliberately shows superseded certs too — the whole
+// point is letting the office actually see "Fire: current one + the 2 we
+// replaced it with over the years", not just today's status. Uses
+// window._certDashCertsRaw/_certDashProps that renderCertDash() populates,
+// falling back to a fresh fetch if this is ever opened before that's run.
+export function closePropertyCertHistoryModal(){
+  document.getElementById('prop-cert-history-overlay')?.remove();
+}
+
+export async function openPropertyCertHistory(propertyId){
+  const allProps=window._certDashProps||await dAll('properties');
+  const p=allProps.find(x=>x.id===propertyId);
+  if(!p)return;
+  const allCertsRaw=window._certDashCertsRaw||await dAll('certs');
+  const allJobs=await dAll('jobs');
+  const jobToProp=new Map(allJobs.map(j=>[j.id,j.propertyId]));
+  const certs=allCertsRaw.filter(c=>jobToProp.get(c.jobId)===propertyId);
+
+  const byType=new Map();
+  certs.forEach(c=>{ if(!byType.has(c.type))byType.set(c.type,[]); byType.get(c.type).push(c); });
+
+  const statusFor=c=>{
+    if(!c.expiryDate) return c.noExpiry?{label:'No expiry',color:'var(--txt3)'}:{label:'Missing date',color:'#8a9bc0'};
+    const d=daysDiff(c.expiryDate);
+    if(d<0) return {label:'Expired',color:'var(--red)'};
+    if(d<=60) return {label:'Expiring soon',color:'var(--yellow)'};
+    return {label:'Valid',color:'var(--green)'};
+  };
+  const certRow=(c,isCurrent)=>{
+    const st=statusFor(c);
+    return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border-radius:8px;background:${isCurrent?'var(--s2)':'var(--s1)'};margin-bottom:6px;${isCurrent?'':'opacity:.75'}">
+      <div>
+        <div style="font-size:12px;font-weight:700;color:var(--txt1)">${escHtml(c.certNum||'No reference')}${isCurrent?'':' <span style="font-size:10px;color:var(--txt3);font-weight:400">(superseded)</span>'}</div>
+        <div style="font-size:11px;color:var(--txt3)">Issued ${escHtml(c.issueDate||'—')} · Expires ${c.noExpiry?'No expiry':escHtml(c.expiryDate||'—')}${c.engineer?' · '+escHtml(c.engineer):''}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+        <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:100px;background:${st.color}22;color:${st.color}">${st.label}</span>
+        ${c.pdfPath?`<button class="btn btn-ghost btn-xs" onclick="previewCertPdf('${c.pdfPath}')">👁</button>`:''}
+      </div>
+    </div>`;
+  };
+
+  const sections=[...byType.entries()].sort((a,b)=>a[0].localeCompare(b[0])).map(([type,list])=>{
+    const current=list.find(c=>!c.supersededBy);
+    const history=list.filter(c=>c.supersededBy)
+      .sort((a,b)=>(b.expiryDate||b.issueDate||'').localeCompare(a.expiryDate||a.issueDate||''));
+    return `<div style="margin-bottom:18px">
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--txt2);margin-bottom:8px">${escHtml(type)}</div>
+      ${current?certRow(current,true):'<div style="font-size:12px;color:var(--txt3);padding:6px 10px 10px">No current certificate on file — needs booking</div>'}
+      ${history.length?`<div style="margin-top:2px">
+        <div style="font-size:11px;color:var(--acc);cursor:pointer;padding:4px 10px;user-select:none" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">▸ ${history.length} previous ${escHtml(type)} certificate${history.length===1?'':'s'}</div>
+        <div style="display:none">${history.map(c=>certRow(c,false)).join('')}</div>
+      </div>`:''}
+    </div>`;
+  }).join('') || '<div style="text-align:center;padding:24px;color:var(--txt3);font-size:13px">No certificates recorded for this property yet</div>';
+
+  closePropertyCertHistoryModal();
+  const div=document.createElement('div');
+  div.id='prop-cert-history-overlay';
+  div.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:900;display:flex;align-items:center;justify-content:center;padding:20px';
+  div.innerHTML=`
+    <div style="background:var(--s1);border:1px solid var(--border);border-radius:var(--r2);width:100%;max-width:520px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 24px 60px rgba(0,0,0,.4)">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:16px 18px;border-bottom:1px solid var(--border)">
+        <div>
+          <div style="font-size:14px;font-weight:800;color:var(--txt1)">${escHtml(p.address||'Property')}</div>
+          <div style="font-size:11px;color:var(--txt3);margin-top:2px">👤 ${escHtml(p.landlord_name||'No landlord')} · Certificates by type</div>
+        </div>
+        <button class="btn btn-ghost btn-xs" onclick="closePropertyCertHistoryModal()">✕</button>
+      </div>
+      <div style="padding:16px 18px;overflow-y:auto">${sections}</div>
+    </div>`;
+  div.addEventListener('click',e=>{ if(e.target===div) closePropertyCertHistoryModal(); });
+  document.body.appendChild(div);
 }

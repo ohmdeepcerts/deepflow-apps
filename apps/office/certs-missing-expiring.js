@@ -26,7 +26,9 @@ export function setMissingFilter(mode){
 }
 
 export async function renderCertMissing(){
-  const all=await dAll('certs');
+  // Excludes superseded certs — a missing PDF/date on a cert that's since
+  // been replaced by a renewal is history, not an outstanding task.
+  const all=(await dAll('certs')).filter(c=>!c.supersededBy);
   const missingPdf=all.filter(c=>!c.pdfPath);
   const missingDate=all.filter(c=>!c.expiryDate&&!c.noExpiry);
   const missingBoth=all.filter(c=>!c.pdfPath&&!c.expiryDate&&!c.noExpiry);
@@ -85,7 +87,10 @@ export async function renderCertMissing(){
 // ════════════════════════════════════════════════════════════════
 
 export async function renderExpiringPanel(){
-  const all=await dAll('certs');
+  // Excludes superseded certs — an old cert a renewal has already replaced
+  // needs no follow-up, but with no supersede link it used to sit in this
+  // worklist as "overdue" forever even after the renewal was done.
+  const all=(await dAll('certs')).filter(c=>!c.supersededBy);
 
   const typeEl=document.getElementById('exp-type');
   if(typeEl&&typeEl.options.length<=1){

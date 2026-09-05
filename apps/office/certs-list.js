@@ -79,6 +79,10 @@ export function filterCerts(status){
 // ════════════════════════════════════════════════════════════════
 
 export function calcCertStatus(c){
+  // Checked first — an old cert a renewal has already replaced is done,
+  // regardless of what its own expiry date says. See the certs_superseding
+  // migration (supersede_prior_certs trigger) for how supersededBy is set.
+  if(c.supersededBy)  return{label:'SUPERSEDED',cls:'cpill-superseded'};
   if(c.notResponding) return{label:'NO RESPONSE',cls:'cpill-nr'};
   if(!c.expiryDate)   return{label:'NO DATE',cls:'cpill-missing'};
   const d=daysDiff(c.expiryDate);
@@ -146,6 +150,7 @@ export function ctblGetFiltered(all){
     if(status==='expiring' && st.label!=='EXPIRING')return false;
     if(status==='no-expiry'&& c.expiryDate)return false;
     if(status==='nr'       && !c.notResponding)return false;
+    if(status==='superseded' && !c.supersededBy)return false;
     if(status==='month'){
       const now=new Date(),d=new Date(c.expiryDate||'');
       if(!c.expiryDate||d.getMonth()!==now.getMonth()||d.getFullYear()!==now.getFullYear())return false;
