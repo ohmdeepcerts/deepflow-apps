@@ -34,28 +34,53 @@ export function setPropSearch(v){ _propSearch=v; vProperties(_d); }
 export function setPropSort(v){ _propSort=v; vProperties(_d); }
 
 export function vProperties(d){
+  // Grouped by the real property_id on each job when there is one (every
+  // job gets one via Office's _resolvePropertyForJob), falling back to a
+  // normalized address match only for the rare job that somehow lacks it.
+  // This used to group by the raw address string alone — which looked fine
+  // until a cert's own address differed from its renewal's by so much as a
+  // comma ("Flat A, 58 Elgin Road" vs "...Road,"): the two addresses hashed
+  // to different groups, so a superseded certificate's "N previous
+  // certificates" note ended up nested under an unrelated-looking address
+  // instead of the one holding its own replacement. property_id doesn't
+  // care about punctuation, so this can't happen once jobs share one.
   const map={};
-  const addKey=(addr)=>{
-    const k=(addr||'').trim(); if(!k) return null;
-    if(!map[k]) map[k]={address:k,jobs:[],certs:[],certsHistory:[]};
-    return map[k];
+  const normAddrKey=(addr)=>(addr||'').trim().toLowerCase();
+  const groupFor=(propertyId,addr)=>{
+    const key=propertyId?('id:'+propertyId):('addr:'+normAddrKey(addr));
+    if(key==='addr:') return null;
+    if(!map[key]) map[key]={propertyId:propertyId||null,address:(addr||'').trim(),jobs:[],certs:[],certsHistory:[]};
+    if(!map[key].address && addr) map[key].address=addr.trim();
+    return map[key];
   };
-  d.jobs.forEach(j=>{const p=addKey(j.address); if(p)p.jobs.push(j);});
+  const jobById=new Map(d.jobs.map(j=>[j.id,j]));
+  d.jobs.forEach(j=>{const p=groupFor(j.property_id,j.address); if(p)p.jobs.push(j);});
   // Superseded certs (an old one a renewal has replaced — see the
   // certs_superseding migration) go to certsHistory instead of certs, same
   // fix as vCerts() in certs.js: without it, a property renewed right on
   // time still showed its old, now-superseded certificate as permanently
-  // "Expired" here, right next to its own valid replacement.
-  d.certs.forEach(c=>{const p=addKey(c.address); if(p)(c.superseded_by?p.certsHistory:p.certs).push(c);});
+  // "Expired" here, right next to its own valid replacement. Resolved via
+  // the cert's own job's property_id, same as jobs are grouped above, so a
+  // superseded cert lands in the exact same group as its replacement.
+  d.certs.forEach(c=>{
+    const job=c.jobId?jobById.get(c.jobId):null;
+    const p=groupFor(job?.property_id,job?.address||c.address);
+    if(p)(c.superseded_by?p.certsHistory:p.certs).push(c);
+  });
 
   // Real properties table (portal_get_properties(), session-scoped) —
   // replaces the old app_settings.__all__ JSON blob this used to read,
   // which predates that table and nothing writes to any more (its own
   // "property sold" filter had been silently a no-op since the migration
-  // shipped). Matched by address here too, same as the table itself is
-  // matched by landlord/agency name — no id-based link exists yet.
-  const propByAddr={};
-  (d.properties||[]).forEach(p=>{ if(p.address) propByAddr[p.address.trim().toLowerCase()]=p; });
+  // shipped). Looked up by id first (matches a group's own property_id
+  // directly — no punctuation-sensitivity at all), falling back to address
+  // only for a group that never got a property_id.
+  const propById={},propByAddr={};
+  (d.properties||[]).forEach(p=>{
+    propById[p.id]=p;
+    if(p.address) propByAddr[p.address.trim().toLowerCase()]=p;
+  });
+  const recordFor=(p)=>(p.propertyId&&propById[p.propertyId])||propByAddr[p.address.trim().toLowerCase()]||null;
 
   let list=Object.values(map);
 
@@ -67,15 +92,15 @@ export function vProperties(d){
   if(d.type==='landlord'){
     const meNorm=(d.name||'').trim().toLowerCase();
     list=list.filter(p=>{
-      const rec=propByAddr[p.address.trim().toLowerCase()];
+      const rec=recordFor(p);
       if(!rec || !rec.landlord_name) return true; // no office record, or no landlord set — show as before
       return rec.landlord_name.trim().toLowerCase()===meNorm;
     });
   }
-  // Enrich each address group with the real property's type/bedrooms/notes
-  // when one matches — genuinely new information Portal couldn't show
-  // before (the old blob wasn't being read from anywhere real anyway).
-  list.forEach(p=>{ p.record=propByAddr[p.address.trim().toLowerCase()]||null; });
+  // Enrich each group with the real property's type/bedrooms/notes when one
+  // matches — genuinely new information Portal couldn't show before (the
+  // old blob wasn't being read from anywhere real anyway).
+  list.forEach(p=>{ p.record=recordFor(p); });
   if(_propSearch) list=list.filter(p=>p.address.toLowerCase().includes(_propSearch.toLowerCase()));
   if(_propSort==='jobs') list.sort((a,b)=>b.jobs.length-a.jobs.length);
   else if(_propSort==='az') list.sort((a,b)=>a.address.localeCompare(b.address));
