@@ -24,7 +24,6 @@
 
 import { escText as e, escAttr as ea } from '@ui';
 import { _d, dd, fd, jobCard, empty } from './main.js';
-import { certCard } from './certs.js';
 
 let _propSearch='',_propSort='jobs';
 
@@ -136,15 +135,19 @@ export function vProperties(d){
         ${rec?.notes?`<div style="font-size:12px;color:var(--text-secondary);background:var(--border-subtle);border-radius:8px;padding:8px 10px;margin-bottom:10px">${e(rec.notes)}</div>`:''}
         ${p.jobs.length?`<div style="font-size:11px;font-weight:700;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:.5px;margin:10px 0 6px">Jobs</div>${p.jobs.map(j=>jobCard(j,d)).join('')}`:''}
         ${(()=>{
-          // Grouped by certificate type, not by which job a cert happens to
-          // be linked to — one address showing "Electrical (EICR)" as its
-          // own heading with the current cert under it (and any superseded
-          // ones collapsed beneath that same heading) reads far better than
-          // the same address repeating on every job card with cert info
-          // scattered across them. Mirrors Office's own per-property
-          // history view (openPropertyCertHistory in
-          // certs-stats-dashboard.js) so both sides of the app present a
-          // property's certificate history the same way.
+          // A landlord opening this wants one question answered per
+          // certificate type — "is it current, and until when" — scannable
+          // in one line each, the way a checklist reads. The first version
+          // of this reused the full job-style certCard for the current
+          // cert plus every single superseded one stacked underneath, which
+          // for a type renewed every 6 months over several years meant a
+          // wall of near-identical cards and a dozen expiry dates fighting
+          // for attention on screen at once — exactly what a real landlord
+          // would find confusing rather than reassuring. History is still
+          // one tap away (the small counter on the right), it just isn't
+          // sitting open by default competing with "is this compliant?".
+          const IC={Gas:'flame',EICR:'zap',PAT:'plug',EPC:'home',Fire:'fire-extinguisher',Boiler:'thermometer',Legionella:'droplets',Asbestos:'skull'};
+          const fmtDate=s=>s?new Date(s).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'—';
           const byType=new Map();
           [...p.certs,...p.certsHistory].forEach(c=>{
             if(!byType.has(c.type))byType.set(c.type,{current:null,history:[]});
@@ -152,18 +155,32 @@ export function vProperties(d){
             if(c.superseded_by)g.history.push(c); else g.current=c;
           });
           if(!byType.size)return'';
-          const sections=[...byType.entries()].sort((a,b)=>a[0].localeCompare(b[0])).map(([type,g])=>{
+          const rows=[...byType.entries()].sort((a,b)=>a[0].localeCompare(b[0])).map(([type,g],i)=>{
+            const c=g.current;
+            const df=c&&!c.noExpiry&&c.expiryDate?dd(c.expiryDate):null;
+            const isE=df!==null&&df<0,isS=df!==null&&df>=0&&df<=60;
+            const color=!c?'var(--text-tertiary)':isE?'var(--danger)':isS?'var(--warning)':'var(--success)';
+            const label=!c?'No certificate on file':isE?`Expired ${Math.abs(df)}d ago`:isS?`Expires in ${df}d`:c.noExpiry?'No expiry':'Valid';
+            const icKey=Object.keys(IC).find(k=>(type||'').includes(k));
+            const historyId='cert-hist-'+Math.random().toString(36).slice(2,9)+'-'+i;
             const history=g.history.sort((a,b)=>(b.expiryDate||b.issueDate||'').localeCompare(a.expiryDate||a.issueDate||''));
-            return`<div style="margin-bottom:12px">
-              <div style="font-size:10px;font-weight:700;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">${e(type||'Certificate')}</div>
-              ${g.current?certCard(g.current,d):'<div style="font-size:12px;color:var(--text-tertiary);padding:2px 0 8px">No current certificate — needs renewing</div>'}
-              ${history.length?`<div style="margin-top:2px">
-                <div style="font-size:11px;color:var(--text-tertiary);cursor:pointer;padding:4px 0" onclick="event.stopPropagation();this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">▸ ${history.length} previous ${e(type||'certificate')} certificate${history.length===1?'':'s'}</div>
-                <div style="display:none;opacity:.7">${history.map(c=>certCard(c,d)).join('')}</div>
-              </div>`:''}
-            </div>`;
+            return`<div style="display:flex;align-items:center;gap:10px;padding:9px 2px;border-bottom:1px solid var(--border-subtle)${c?';cursor:pointer':''}"${c?` onclick="previewCertPdf('${c.id}')"`:''}>
+              <i data-lucide="${icKey?IC[icKey]:'file-text'}" style="width:15px;height:15px;flex-shrink:0;color:${color}"></i>
+              <div style="flex:1;min-width:0;font-size:12.5px;font-weight:600;color:var(--text)">${e(type||'Certificate')}</div>
+              <div style="text-align:right;flex-shrink:0">
+                <div style="font-size:11px;font-weight:700;color:${color}">${label}</div>
+                ${c&&!c.noExpiry&&c.expiryDate?`<div style="font-size:10.5px;color:var(--text-tertiary)">${fmtDate(c.expiryDate)}</div>`:''}
+              </div>
+              ${history.length?`<button class="dl g sm" style="flex-shrink:0" onclick="event.stopPropagation();var h=document.getElementById('${historyId}');h.style.display=h.style.display==='none'?'block':'none'" title="Certificate history"><i data-lucide="history" style="width:11px;height:11px"></i> ${history.length}</button>`:''}
+            </div>
+            ${history.length?`<div id="${historyId}" style="display:none;padding:2px 2px 8px 25px">
+              ${history.map(h=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 0;font-size:11px;color:var(--text-tertiary)">
+                <span>${fmtDate(h.issueDate)} – ${fmtDate(h.expiryDate)}</span>
+                <button class="dl g sm" onclick="event.stopPropagation();previewCertPdf('${h.id}')" title="View"><i data-lucide="eye" style="width:11px;height:11px"></i></button>
+              </div>`).join('')}
+            </div>`:''}`;
           }).join('');
-          return`<div style="font-size:11px;font-weight:700;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px">Certificates</div>${sections}`;
+          return`<div style="font-size:11px;font-weight:700;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 4px">Certificates</div>${rows}`;
         })()}
       </div>
     </div>`;
