@@ -26,7 +26,7 @@
 // read in another.
 
 import { escText as e, escAttr as ea } from '@ui';
-import { _d, dd, empty, go, ptype, _blobUrlFor, toast } from './main.js';
+import { _d, dd, empty, go, ptype, _blobUrlFor, toast, _PAGE_SIZE, _pageBar } from './main.js';
 import { setRenewalData } from './request-wizard.js';
 import { payInvoice } from './invoice-pdf.js';
 
@@ -62,12 +62,14 @@ function _lockedInvoiceForCert(c,d){
   return invs.find(i=>i.status!=='Paid')||invs[0]||null;
 }
 
-let _cs='expiry', _cd='asc', _certView='list', _showSuperseded=false;
+let _cs='expiry', _cd='asc', _certView='list', _showSuperseded=false, _certSearch='', _certPage=1;
 
 export function setCertView(v){ _certView=v; vCerts(_d); }
 export function setCertSort(v){ _cs=v; vCerts(_d); }
 export function setCertDir(v){ _cd=v; vCerts(_d); }
 export function toggleShowSuperseded(){ _showSuperseded=!_showSuperseded; vCerts(_d); }
+export function setCertSearch(v){ _certSearch=v; _certPage=1; vCerts(_d); }
+export function certsPageNav(dir,totalPages){ _certPage=Math.max(1,Math.min(totalPages,_certPage+dir)); vCerts(_d); }
 
 export function vCerts(d){
   const OPTS=[{v:'expiry',l:'Expiry Date'},{v:'status',l:'Status (urgent first)'},{v:'type',l:'Cert Type'},{v:'address',l:'Address'},{v:'certnum',l:'Cert Number'},{v:'issuedate',l:'Issue Date'}];
@@ -78,9 +80,14 @@ export function vCerts(d){
   // main list/calendar now shows only the current one per type; history
   // stays genuinely visible via the toggle below (superseded_by set by the
   // supersede_prior_certs trigger — see the certs_superseding migration).
-  const current=(d.certs||[]).filter(c=>!c.superseded_by);
-  const superseded=(d.certs||[]).filter(c=>c.superseded_by);
-  const sorted=sortCerts([...current]);
+  const term=_certSearch.toLowerCase().trim();
+  const matches=c=>!term||(c.type||'').toLowerCase().includes(term)||(c.address||'').toLowerCase().includes(term)||(c.certNum||'').toLowerCase().includes(term);
+  const current=(d.certs||[]).filter(c=>!c.superseded_by&&matches(c));
+  const superseded=(d.certs||[]).filter(c=>c.superseded_by&&matches(c));
+  const sortedFull=sortCerts([...current]);
+  const totalPages=Math.max(1,Math.ceil(sortedFull.length/_PAGE_SIZE));
+  if(_certPage>totalPages)_certPage=totalPages;
+  const sorted=_certView==='list'?sortedFull.slice((_certPage-1)*_PAGE_SIZE,_certPage*_PAGE_SIZE):sortedFull;
   const now=new Date();
   const month=now.getMonth();
   const year=now.getFullYear();
@@ -101,6 +108,12 @@ export function vCerts(d){
   }
   calHtml+=`</div>`;
 
+  // Preserve focus + cursor position across re-render (search re-renders on every keystroke)
+  const activeEl=document.activeElement;
+  const wasSearchFocused=activeEl&&activeEl.id==='cert-search';
+  const selStart=wasSearchFocused?activeEl.selectionStart:null;
+  const selEnd=wasSearchFocused?activeEl.selectionEnd:null;
+
   document.getElementById('main').innerHTML=`<div class="sec">
     <div class="sec-hd">
       <div class="sec-t">Certificates <span class="sec-n">${current.length}</span></div>
@@ -110,6 +123,10 @@ export function vCerts(d){
         <button class="dl g sm" onclick="exportCSV('certs')"><i data-lucide="download" style="width:12px;height:12px"></i> CSV</button>
       </div>
     </div>
+    <div class="fg" style="margin-bottom:12px">
+      <input class="fi" id="cert-search" placeholder=" " value="${ea(_certSearch)}" oninput="setCertSearch(this.value)">
+      <label class="fl">Search type, address, cert number...</label>
+    </div>
     <div class="sort-bar">
       <span class="sl">Sort:</span>
       <select class="ss" onchange="setCertSort(this.value)">${OPTS.map(o=>`<option value="${o.v}"${_cs===o.v?' selected':''}>${o.l}</option>`).join('')}</select>
@@ -118,12 +135,18 @@ export function vCerts(d){
         <option value="desc"${_cd==='desc'?' selected':''}>↓ Descending</option>
       </select>
     </div>
-    ${_certView==='calendar'?calHtml:sorted.length?sorted.map(c=>certCard(c,d)).join(''):empty('file-check','No certificates','Certificates will appear here after inspections')}
+    ${_certView==='calendar'?calHtml:sorted.length?sorted.map(c=>certCard(c,d)).join(''):empty('file-check',term?'No matching certificates':'No certificates',term?'Try a different search':'Certificates will appear here after inspections')}
+    ${_certView==='list'?_pageBar(_certPage,totalPages,sortedFull.length,'certificate','certsPageNav'):''}
     ${superseded.length?`<div style="margin-top:16px">
       <div style="font-size:12px;color:var(--text-tertiary);cursor:pointer;padding:8px 0" onclick="toggleShowSuperseded()"><i data-lucide="${_showSuperseded?'chevron-down':'chevron-right'}" style="width:12px;height:12px;display:inline;vertical-align:-2px"></i> ${superseded.length} previous certificate${superseded.length===1?'':'s'} (renewed)</div>
       ${_showSuperseded?`<div style="opacity:.7">${sortCerts([...superseded]).map(c=>certCard(c,d)).join('')}</div>`:''}
     </div>`:''}
   </div>`;
+
+  if(wasSearchFocused){
+    const inp=document.getElementById('cert-search');
+    if(inp){ inp.focus(); inp.setSelectionRange(selStart,selEnd); }
+  }
 }
 
 function sortCerts(a){

@@ -11,7 +11,7 @@ import './hero-canvas.js';
 import { vRequest, toggleReqDetail, handleFiles, submitReq, setRenewalData } from './request-wizard.js';
 import { previewInv, downloadCurrentInv, closeModal, payInvoice } from './invoice-pdf.js';
 import { vProperties, setPropSearch, setPropSort } from './properties.js';
-import { vCerts, certCard, previewCertPdf, closeCertPdfPreview, preFillRenewal, getPreviewCert, setCertView, setCertSort, setCertDir, showCertLockedPopup, closeCertLockModal, toggleShowSuperseded } from './certs.js';
+import { vCerts, certCard, previewCertPdf, closeCertPdfPreview, preFillRenewal, getPreviewCert, setCertView, setCertSort, setCertDir, showCertLockedPopup, closeCertLockModal, toggleShowSuperseded, setCertSearch, certsPageNav } from './certs.js';
 
 // Real server-side Portal sessions (Client Portal V2 Phase 1) — mirrors the
 // Engineer app's own x-engineer-token pattern (apps/engineer/main.js) exactly.
@@ -1176,12 +1176,41 @@ function getPropertyPayBadge(addr,invoices){
 }
 
 // ── JOBS ─────────────────────────────────────────────────────────────────────
+// Search + pagination — a landlord/agent with a long history (seen live:
+// one real client has 114 jobs) used to get every single one rendered as a
+// full jobCard in one unbounded list, no way to find one except the global
+// ⌘K search (top 8 results only, not built for browsing). Grouped
+// (agency/agent) mode paginates by property instead of by job — each
+// property usually only has a handful of jobs, so the group itself is the
+// natural page unit there, same idea applied to the right level.
+let _jobsSearch='',_jobsPage=1;
+export const _PAGE_SIZE=12;
+export function setJobsSearch(v){ _jobsSearch=v; _jobsPage=1; vJobs(_d); }
+export function jobsPageNav(dir,totalPages){ _jobsPage=Math.max(1,Math.min(totalPages,_jobsPage+dir)); vJobs(_d); }
+
+export function _pageBar(page,totalPages,total,noun,navFn){
+  if(totalPages<=1)return'';
+  return`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 2px;margin-top:4px">
+    <span style="font-size:11px;color:var(--text-tertiary)">${total} ${noun}${total===1?'':'s'} · Page ${page} of ${totalPages}</span>
+    <div style="display:flex;gap:6px">
+      <button class="dl g sm" ${page<=1?'disabled style="opacity:.4;cursor:default"':''} onclick="${navFn}(-1,${totalPages})">‹ Prev</button>
+      <button class="dl g sm" ${page>=totalPages?'disabled style="opacity:.4;cursor:default"':''} onclick="${navFn}(1,${totalPages})">Next ›</button>
+    </div>
+  </div>`;
+}
+
 function vJobs(d){
-  const isG=d.jobs.length>4&&(d.type==='agency'||d.type==='agent');
-  let html='';
+  const term=_jobsSearch.toLowerCase().trim();
+  const filtered=term?d.jobs.filter(j=>(j.address||'').toLowerCase().includes(term)||(j.jobNum||'').toLowerCase().includes(term)||(j.description||'').toLowerCase().includes(term)||(j.status||'').toLowerCase().includes(term)):d.jobs;
+  const isG=filtered.length>4&&(d.type==='agency'||d.type==='agent');
+  let html='',pageBar='';
   if(isG){
-    const byA={};d.jobs.forEach(j=>{const k=j.address||'?';if(!byA[k])byA[k]=[];byA[k].push(j);});
-    html=Object.entries(byA).map(([addr,js])=>{
+    const byA={};filtered.forEach(j=>{const k=j.address||'?';if(!byA[k])byA[k]=[];byA[k].push(j);});
+    const groups=Object.entries(byA);
+    const totalPages=Math.max(1,Math.ceil(groups.length/_PAGE_SIZE));
+    if(_jobsPage>totalPages)_jobsPage=totalPages;
+    const pageGroups=groups.slice((_jobsPage-1)*_PAGE_SIZE,_jobsPage*_PAGE_SIZE);
+    html=pageGroups.map(([addr,js])=>{
       const payBadge=getPropertyPayBadge(addr,d.invoices);
       // Calculate compliance for this property
       const propCerts=d.certs.filter(c=>(c.address||'').toLowerCase().trim()===(addr||'').toLowerCase().trim());
@@ -1195,7 +1224,21 @@ function vJobs(d){
         <div style="display:flex;align-items:center;gap:8px">${compRingMini(propComp)}${payBadge}</div>
       </div><div class="pg-body">${js.map(j=>jobCard(j,d)).join('')}</div></div>`;
     }).join('');
-  }else html=d.jobs.map(j=>jobCard(j,d)).join('');
+    pageBar=_pageBar(_jobsPage,totalPages,groups.length,'property','jobsPageNav');
+  }else{
+    const totalPages=Math.max(1,Math.ceil(filtered.length/_PAGE_SIZE));
+    if(_jobsPage>totalPages)_jobsPage=totalPages;
+    const pageJobs=filtered.slice((_jobsPage-1)*_PAGE_SIZE,_jobsPage*_PAGE_SIZE);
+    html=pageJobs.map(j=>jobCard(j,d)).join('');
+    pageBar=_pageBar(_jobsPage,totalPages,filtered.length,'job','jobsPageNav');
+  }
+
+  // Preserve focus + cursor position across re-render (search re-renders on every keystroke)
+  const activeEl=document.activeElement;
+  const wasSearchFocused=activeEl&&activeEl.id==='jobs-search';
+  const selStart=wasSearchFocused?activeEl.selectionStart:null;
+  const selEnd=wasSearchFocused?activeEl.selectionEnd:null;
+
   document.getElementById('main').innerHTML=`<div class="sec">
     <div class="sec-hd">
       <div class="sec-t">All Jobs <span class="sec-n">${d.jobs.length}</span></div>
@@ -1203,8 +1246,18 @@ function vJobs(d){
         <button class="dl g sm" onclick="exportCSV('jobs')"><i data-lucide="download" style="width:12px;height:12px"></i> CSV</button>
       </div>
     </div>
-    ${html||empty('wrench','No jobs yet','Jobs will appear here once scheduled')}
+    <div class="fg" style="margin-bottom:12px">
+      <input class="fi" id="jobs-search" placeholder=" " value="${ea(_jobsSearch)}" oninput="setJobsSearch(this.value)">
+      <label class="fl">Search address, job number, status...</label>
+    </div>
+    ${html||empty('wrench',term?'No matching jobs':'No jobs yet',term?'Try a different search':'Jobs will appear here once scheduled')}
+    ${pageBar}
   </div>`;
+
+  if(wasSearchFocused){
+    const inp=document.getElementById('jobs-search');
+    if(inp){ inp.focus(); inp.setSelectionRange(selStart,selEnd); }
+  }
 }
 
 function compRingMini(score){
@@ -1293,9 +1346,21 @@ function certMini(c){
 }
 
 // ── INVOICES ─────────────────────────────────────────────────────────────────
+// Search + pagination, same reasoning as vJobs() above — the summary tiles
+// and monthly bar chart below stay computed from the full d.invoices
+// (unaffected by search/paging), only the row list itself is filtered/paged.
+let _invSearch='',_invPage=1;
+export function setInvSearch(v){ _invSearch=v; _invPage=1; vInvoices(_d); }
+export function invPageNav(dir,totalPages){ _invPage=Math.max(1,Math.min(totalPages,_invPage+dir)); vInvoices(_d); }
+
 function vInvoices(d){
-  const sorted=[...d.invoices].sort((a,b)=>new Date(b.createdAt||b.date||0)-new Date(a.createdAt||a.date||0));
-  const rows=sorted.map(inv=>{
+  const term=_invSearch.toLowerCase().trim();
+  const allSorted=[...d.invoices].sort((a,b)=>new Date(b.createdAt||b.date||0)-new Date(a.createdAt||a.date||0));
+  const sorted=term?allSorted.filter(inv=>(inv.number||'').toLowerCase().includes(term)||(inv.billToName||'').toLowerCase().includes(term)||(inv.status||'').toLowerCase().includes(term)):allSorted;
+  const totalPages=Math.max(1,Math.ceil(sorted.length/_PAGE_SIZE));
+  if(_invPage>totalPages)_invPage=totalPages;
+  const pageInvoices=sorted.slice((_invPage-1)*_PAGE_SIZE,_invPage*_PAGE_SIZE);
+  const rows=pageInvoices.map(inv=>{
     const t=calcTotal(inv);const paid=inv.status==='Paid',can=inv.status==='Cancelled';
     // A freshly auto-created Draft invoice can genuinely have no priced line
     // items yet (job price not set at completion time) — showing "£0.00" to
@@ -1343,6 +1408,12 @@ function vInvoices(d){
   const maxM=Math.max(...monthly,1);
   const barChart=`<div class="bar-chart">${months.map((m,i)=>`<div class="bar" style="height:${(monthly[i]/maxM)*100}%;background:${i===new Date().getMonth()?'var(--accent)':'var(--border)'}"><div class="bar-val">${monthly[i]>0?fgbp(monthly[i]):''}</div><div class="bar-lbl">${m}</div></div>`).join('')}</div>`;
 
+  // Preserve focus + cursor position across re-render (search re-renders on every keystroke)
+  const activeEl=document.activeElement;
+  const wasSearchFocused=activeEl&&activeEl.id==='inv-search';
+  const selStart=wasSearchFocused?activeEl.selectionStart:null;
+  const selEnd=wasSearchFocused?activeEl.selectionEnd:null;
+
   document.getElementById('main').innerHTML=`
     <div class="sec">
       <div class="sec-hd"><div class="sec-t">Billing <span class="sec-n">${d.invoices.length}</span></div>
@@ -1361,9 +1432,19 @@ function vInvoices(d){
         </div>
       </div>
       ${barChart}
-      ${rows.length?rows.join(''):empty('receipt','No invoices yet','Invoices will appear here once raised')}
+      <div class="fg" style="margin:16px 0 12px">
+        <input class="fi" id="inv-search" placeholder=" " value="${ea(_invSearch)}" oninput="setInvSearch(this.value)">
+        <label class="fl">Search invoice number, status...</label>
+      </div>
+      ${rows.length?rows.join(''):empty('receipt',term?'No matching invoices':'No invoices yet',term?'Try a different search':'Invoices will appear here once raised')}
+      ${_pageBar(_invPage,totalPages,sorted.length,'invoice','invPageNav')}
     </div>
     ${bankCard(d.entity)?`<div class="sec">${bankCard(d.entity)}</div>`:''}`;
+
+  if(wasSearchFocused){
+    const inp=document.getElementById('inv-search');
+    if(inp){ inp.focus(); inp.setSelectionRange(selStart,selEnd); }
+  }
 }
 
 // ── PAYMENTS ──────────────────────────────────────────────────────────────────
@@ -1512,11 +1593,11 @@ init();
 // actual top-level declarations) — preserving the exact global availability
 // every one of these already had before this migration, no more and no less.
 Object.assign(window, {
-  closeCertLockModal, closeCertPdfPreview, closeContactModal,
+  certsPageNav, closeCertLockModal, closeCertPdfPreview, closeContactModal,
   closeHelpModal, closeLb, closeModal, closeSearch, copyToClipboard,
-  downloadCurrentInv, enablePushNotifications, exportCSV, go, handleFiles,
+  downloadCurrentInv, enablePushNotifications, exportCSV, go, handleFiles, invPageNav, jobsPageNav,
   markNotificationRead, openContactModal, openSearch, payInvoice, performSearch, preFillRenewal,
-  previewCertPdf, setCertDir, setCertSort, setCertView, setPropSearch,
+  previewCertPdf, setCertDir, setCertSearch, setCertSort, setCertView, setInvSearch, setJobsSearch, setPropSearch,
   setPropSort, shareCert, shareCurrentPreviewCert, showCertLockedPopup, submitReq, toast,
   toggleAgentFilter, toggleNotif, toggleReqDetail, toggleShowSuperseded, toggleTheme,
 });
