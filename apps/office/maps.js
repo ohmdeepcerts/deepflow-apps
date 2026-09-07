@@ -580,6 +580,15 @@ export function _buildAndShowMap(points, centLat, centLng, zoom, routeCoords) {
   const lng = centLng || -0.118092;
   const z   = zoom || 12;
 
+  // The map renders into its own isolated document (via blob URL, so it
+  // works offline/cross-origin without a server) — it has no access to the
+  // app's CSS variables, so it can't inherit --bg/--txt like the rest of
+  // the page does. It has to be told the theme explicitly, and re-rendered
+  // whenever that theme changes (see toggleTheme() in main.js) — otherwise
+  // switching the app to dark left this one panel a plain white rectangle,
+  // which is what "no day and night theme" in Maps actually was.
+  const isDark = document.body.classList.contains('theme-dark');
+
   const markersJs = points.map(function(p) {
     var col = p.color === 'green' ? '#22c55e' : p.color === 'red' ? '#f04444' : p.color === 'yellow' ? '#f0c030' : '#4f8fff';
     var lbl = (p.label || '').toString().replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').slice(0,60);
@@ -590,21 +599,39 @@ export function _buildAndShowMap(points, centLat, centLng, zoom, routeCoords) {
     ? 'L.polyline(' + JSON.stringify(routeCoords.map(function(c){return [c[1],c[0]];})) + ',{color:"#4f8fff",weight:5,opacity:.75,dashArray:"10,5"}).addTo(map);'
     : '';
 
+  // Esri's ArcGIS Online demo tile services are free and keyless (same
+  // family already used for the light basemap) and include a dark
+  // "Canvas" set built for exactly this — no separate API key or provider
+  // needed for dark mode. Note the {z}/{y}/{x} order both use — ArcGIS REST
+  // tile services order path segments that way, not Leaflet's usual
+  // {z}/{x}/{y}.
+  var tileUrl = isDark
+    ? 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}'
+    : 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}';
+  var tileAttr = isDark ? 'Esri, HERE, Garmin' : 'Esri, HERE, Garmin, © OpenStreetMap contributors';
+  var bg = isDark ? '#1a1d23' : '#ffffff';
+  // Leaflet's default popup/control chrome is white-on-white against a dark
+  // basemap; darken it to match rather than leaving a bright box floating
+  // over the tiles.
+  var darkChrome = isDark
+    ? '.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#20242c;color:#e8e8ea}'
+      + '.leaflet-bar a{background:#20242c;color:#e8e8ea;border-color:#3a3f4a}'
+      + '.leaflet-bar a:hover{background:#2a2f38}'
+      + '.leaflet-control-attribution{background:rgba(26,29,35,.75);color:#9a9ea6}'
+      + '.leaflet-control-attribution a{color:#c7cad0}'
+    : '';
+
   var html = '<!DOCTYPE html><html><head>'
     + '<meta charset="UTF-8">'
     + '<meta name="viewport" content="width=device-width,initial-scale=1">'
     + '<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">'
-    + '<style>*{margin:0;padding:0}html,body{height:100%;width:100%}#m{height:100%;width:100%}</style>'
+    + '<style>*{margin:0;padding:0}html,body{height:100%;width:100%;background:' + bg + '}#m{height:100%;width:100%;background:' + bg + '}' + darkChrome + '</style>'
     + '</head><body>'
     + '<div id="m"></div>'
     + '<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></sc' + 'ript>'
     + '<script>'
     + 'var map=L.map("m").setView([' + lat + ',' + lng + '],' + z + ');'
-    // CARTO's anonymous basemap tiles (Voyager) now require an API key —
-    // confirmed live 2026-09-04. Esri's World Street Map demo tiles are
-    // free, keyless, and still work. Note the {z}/{y}/{x} order — ArcGIS
-    // REST tile services use that order, not Leaflet's usual {z}/{x}/{y}.
-    + 'L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",{attribution:"Esri, HERE, Garmin, © OpenStreetMap contributors",maxZoom:19}).addTo(map);'
+    + 'L.tileLayer("' + tileUrl + '",{attribution:"' + tileAttr + '",maxZoom:19}).addTo(map);'
     + routeJs
     + markersJs
     + '</sc' + 'ript></body></html>';

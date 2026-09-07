@@ -8658,8 +8658,23 @@ function applyTheme(t) {
   // t = 'light' | 'dark'
   document.body.classList.toggle('theme-dark', t === 'dark');
   document.body.classList.toggle('theme-light', t === 'light');
-  const btn = document.getElementById('theme-toggle');
-  if (btn) btn.textContent = t === 'dark' ? '☀️' : '🌙';
+  // Target the icon SPAN, not the button — setting .textContent on the
+  // button itself (the old code) replaces ALL of its children with a plain
+  // text node, permanently deleting the <span id="theme-icon"> that lives
+  // inside it. The very first theme apply (the IIFE below, which runs on
+  // every page load) was destroying that span before the user ever clicked
+  // anything, so every later click on the toggle hit toggleTheme()'s own
+  // getElementById('theme-icon') and crashed on a null — confirmed live via
+  // the user's pasted console errors ("Cannot set properties of null
+  // (setting 'textContent')" on every click of the theme button).
+  const icon = document.getElementById('theme-icon');
+  if (icon) icon.textContent = t === 'dark' ? '☀️' : '🌙';
+  // The map renders into an isolated iframe document (its own tiles, own
+  // inline styles, no CSS variables to inherit) via a blob URL, so it can't
+  // pick up a theme change on its own — re-render it whenever the theme
+  // actually changes while it's the visible page, whichever path triggered
+  // the change (manual toggle, scheduled, or OS auto).
+  if (curPg === 'maps') renderMapPage();
   const lbl = document.getElementById('current-theme-lbl');
   if (lbl) lbl.textContent = t === 'light' ? '☀️ Light' : '🌙 Dark';
   // Update settings theme buttons
@@ -8675,8 +8690,7 @@ function toggleTheme() {
   const next = cur === 'light' ? 'dark' : 'light';
   S.theme = next;
   saveSetting('theme', next);
-  applyTheme(next);
-  document.getElementById('theme-icon').textContent = document.body.classList.contains('theme-dark') ? '☀️' : '🌙';
+  applyTheme(next); // updates #theme-icon and re-renders the map if it's open
 }
 
 function setTheme(t) {
@@ -8720,8 +8734,8 @@ function startThemeScheduler() {
   const saved = localStorage.getItem('df_theme') || 'light';
   document.body.classList.toggle('theme-dark', saved === 'dark');
   document.body.classList.toggle('theme-light', saved !== 'dark');
-  const btn = document.getElementById('theme-toggle');
-  if (btn) btn.textContent = saved === 'light' ? '🌙' : '☀️';
+  const icon = document.getElementById('theme-icon');
+  if (icon) icon.textContent = saved === 'light' ? '🌙' : '☀️';
 })();
 // ════════════════════════════════════════════════════════════════
 // This patches the existing openCmd function's search to include
