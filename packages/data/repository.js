@@ -10,6 +10,28 @@
 // resolution) preserved from Phase 1 — this stays agnostic to that.
 import { toDb, fromDb } from './mapping.js';
 
+// dAll() orders every table's paginated fetch by "created desc" — true for
+// the original tables (jobs, persons, agencies, certs, invoices, etc.), but
+// every table added since (properties, notifications, client_users,
+// comm_events, portal_sessions, and others — see the migration history)
+// uses a real timestamptz `created_at` instead. Ordering by a column that
+// doesn't exist doesn't return unsorted rows, it 400s the request outright —
+// confirmed live: dAll('properties') failing this way during Office's own
+// session-restore path was surfacing as "refresh logs me out", since the
+// uncaught fetch error aborted bootstrap() partway through and it fell back
+// to showing the login screen even though the session itself was fine.
+// Listed explicitly rather than detected at runtime — one query per table
+// to discover its own column would undo the point of the cache above it.
+const CREATED_AT_TABLES = new Set([
+  'properties', 'notifications', 'client_users', 'client_permissions',
+  'portal_activation_tokens', 'portal_sessions', 'comm_events',
+  'comm_suppressions', 'client_comm_preferences', 'payment_chase_state',
+  'conversations', 'messages', 'push_subscriptions', 'audit_log',
+]);
+function _orderColumn(store) {
+  return CREATED_AT_TABLES.has(store) ? 'created_at' : 'created';
+}
+
 // dAll() read cache — every non-jobs table (persons, agencies, invoices,
 // certs, etc.) had zero caching: each call re-fetched the entire table,
 // and the same page routinely calls dAll() for the same table several
@@ -55,7 +77,7 @@ export function createRepository(sbFetch, { localTables = new Set(), uid } = {})
     let offset = 0;
     const limit = 1000;
     while (true) {
-      const chunk = (await sbFetch(store + `?limit=${limit}&offset=${offset}&order=created.desc&select=*`)) || [];
+      const chunk = (await sbFetch(store + `?limit=${limit}&offset=${offset}&order=${_orderColumn(store)}.desc&select=*`)) || [];
       if (chunk.length === 0) break;
       allRows = allRows.concat(chunk);
       if (chunk.length < limit) break;
