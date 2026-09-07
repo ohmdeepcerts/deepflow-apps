@@ -2364,6 +2364,13 @@ export async function renderJobs(){
       // has a real text label.
       const priLabels={'Emergency':'🚨 Emergency','Urgent':'🔥 Urgent','Certificate':'📋 Cert','Repair':'🔧 Repair','Low':'▽ Low'};
       const prtyPill=priLabels[j.priority]||'';
+      // "Project" = 2+ real visits logged against this job (see the
+      // Projects tab / Running Projects picker) — projectJobIds/_visitCounts
+      // are computed once above, from the real job_visits table, and reused
+      // here so a multi-visit job is visually distinguishable in the normal
+      // "All" list too, not just when filtered to the Projects tab.
+      const visitCount = _visitCounts[j.id]||0;
+      const projectPill = projectJobIds.has(j.id) ? `<span class="jsr-chip jsr-chip-project" title="${visitCount} site visits logged">📦 ${visitCount} visits</span>` : '';
       const statusCls={'Pending':'jsr-chip-pend','In Progress':'jsr-chip-time','Engineer Completed':'jsr-chip-done','Completed':'jsr-chip-done','Invoiced':'jsr-chip-inv','Cancelled':''}[j.status]||'';
       const statusLabel={'Pending':'⏳','In Progress':'🔨','Engineer Completed':'🔷','Completed':'✓','Invoiced':'◎','Cancelled':'✕'}[j.status]||'';
 
@@ -2417,6 +2424,7 @@ export async function renderJobs(){
         <div class="jsr3-cell" data-col="jobnum" style="padding:5px 6px" onclick="event.stopPropagation()">
           ${j.jobNum?`<span class="jsr3-jobnum">${escHtml(j.jobNum)}</span>`:`<span style="color:var(--txt3);font-size:10px">—</span>`}
           ${prtyPill?`<span style="font-size:11px">${prtyPill}</span>`:''}
+          ${projectPill}
           ${isUnconfirmed?`<span class="jsr-unconfirmed">⏳ Unconfirmed</span>`:''}
         </div>
 
