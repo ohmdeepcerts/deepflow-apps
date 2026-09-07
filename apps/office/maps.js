@@ -48,6 +48,32 @@ import { STATUS, localDateStr } from '@business';
 import { escHtml } from '@ui';
 import { _sb } from './main.js';
 
+// Supabase/PostgREST silently caps any request with no explicit limit at
+// 1000 rows — it doesn't error, it just returns page one and stops. Every
+// _sb() call below that fetches a whole table (properties, jobs) has to
+// loop through in pages or it quietly drops everything past row 1000.
+// Confirmed live: with 3,430 properties and 4,149 jobs, the Compliance
+// view's unpaginated fetches were only ever seeing the first 1,000 of
+// each — reported by the user as "958 untracked" out of a 1000-property
+// slice, when the real total is 3,430 properties (492 of them actually
+// have a current certificate). order=id.asc makes each page deterministic
+// — LIMIT/OFFSET without a stable ORDER BY isn't guaranteed to return a
+// consistent row set across repeated calls.
+async function _fetchAllRows(path) {
+  let all = [];
+  let offset = 0;
+  const limit = 1000;
+  const sep = path.includes('?') ? '&' : '?';
+  while (true) {
+    const chunk = (await _sb(`${path}${sep}order=id.asc&limit=${limit}&offset=${offset}`)) || [];
+    all = all.concat(chunk);
+    if (chunk.length < limit) break;
+    offset += limit;
+    if (offset > 50000) { console.warn(`⚠️ Stopped fetching ${path} at 50k rows`); break; }
+  }
+  return all;
+}
+
 let _mapGeoCache = {};  // address → {lat,lng} — in-memory, session-only fallback for non-property addresses
 let _mapBlobUrl = null;
 let _mapEngineers=[],_mapEngineersLoadedAt=0;
@@ -132,7 +158,7 @@ export async function _loadEngineerList() {
 async function _loadPropertiesIndex() {
   const STALE_MS = 5 * 60 * 1000;
   if (_mapPropsCache && (Date.now() - _mapPropsLoadedAt) < STALE_MS) return _mapPropsCache;
-  const rows = await _sb('properties?select=id,address,normalized_address,landlord_name,agency_name,postcode,lat,lng') || [];
+  const rows = await _fetchAllRows('properties?select=id,address,normalized_address,landlord_name,agency_name,postcode,lat,lng');
   const byId = new Map(rows.map(p => [p.id, p]));
   const byAddr = new Map(rows.map(p => [p.normalized_address, p]));
   _mapPropsCache = { rows, byId, byAddr };
@@ -473,9 +499,9 @@ export function _haversineKm(lat1, lng1, lat2, lng2) {
 export async function _mapCompliance(info, status) {
   if (status) status.textContent = 'Loading compliance data…';
   const [props, jobs, certs] = await Promise.all([
-    _sb('properties?select=id,address,landlord_name,agency_name,postcode,lat,lng'),
-    _sb('jobs?select=id,property_id&property_id=not.is.null'),
-    _sb('certs?select=id,type,expirydate,noexpiry,jobid&superseded_by=is.null'),
+    _fetchAllRows('properties?select=id,address,landlord_name,agency_name,postcode,lat,lng'),
+    _fetchAllRows('jobs?select=id,property_id&property_id=not.is.null'),
+    _fetchAllRows('certs?select=id,type,expirydate,noexpiry,jobid&superseded_by=is.null'),
   ]);
 
   const jobToProp = new Map((jobs||[]).map(j => [j.id, j.property_id]));
