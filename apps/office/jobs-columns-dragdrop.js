@@ -23,6 +23,16 @@ export function setJobsView(v){
   const engView=document.getElementById('eng-view');
   const listPane=document.getElementById('jobs-list-pane');
   const calPane=document.getElementById('jobs-cal-pane');
+  // jobs-body-wrap (the flex:1 container wrapping listPane+calPane) and
+  // eng-view are FLEX SIBLINGS in a flex-column parent, not one nested
+  // inside the other — both carry flex:1 in their own CSS. Hiding only
+  // listPane/calPane left jobs-body-wrap itself still present and still
+  // claiming its own flex:1 share of the page even though everything
+  // inside it was hidden, so Engineer Planner view was only ever getting
+  // ~half the vertical space (squeezed above a big dead blank rectangle
+  // that was actually jobs-body-wrap sitting there empty) — reported live
+  // via a picked-element screenshot showing exactly that split.
+  const bodyWrap=document.getElementById('jobs-body-wrap');
   // The visible Jobs table / Engineer Planner toggle. (btn-view-eng/
   // btn-view-list below were referenced here but never existed anywhere
   // in the page — dead code from before this toggle had a real button;
@@ -36,6 +46,7 @@ export function setJobsView(v){
     if(engView) engView.style.display='flex';
     if(listPane) listPane.style.display='none';
     if(calPane) calPane.style.display='none';
+    if(bodyWrap) bodyWrap.style.display='none';
     if(jViewTable) jViewTable.classList.remove('active');
     if(jViewPlanner) jViewPlanner.classList.add('active');
     if(btnEng){ btnEng.classList.add('btn-acc'); btnEng.classList.remove('btn-ghost'); btnEng.style.display='none'; }
@@ -45,6 +56,7 @@ export function setJobsView(v){
     if(engView) engView.style.display='none';
     if(listPane) listPane.style.display='flex';
     if(calPane && _calPaneVisible) calPane.classList.remove('cal-hidden');
+    if(bodyWrap) bodyWrap.style.display='flex';
     if(jViewTable) jViewTable.classList.add('active');
     if(jViewPlanner) jViewPlanner.classList.remove('active');
     if(btnEng){ btnEng.classList.remove('btn-acc'); btnEng.classList.add('btn-ghost'); btnEng.style.display=''; }
