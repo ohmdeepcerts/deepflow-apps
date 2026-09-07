@@ -4947,11 +4947,10 @@ body.density-relaxed .jtable td{font-size:15px}
       <div style="display:flex;align-items:center;gap:8px">
         <label style="font-size:12px;color:var(--txt3);font-weight:600">View:</label>
         <select id="map-view-sel" class="fs" style="padding:6px 10px;font-size:12px;width:160px" onchange="onMapViewChange()">
-          <option value="engineers">👷 Live Engineers</option>
-          <option value="today">📅 Today's Jobs</option>
-          <option value="upcoming">📋 Upcoming Jobs</option>
-          <option value="route">🛣 Engineer Route</option>
-          <option value="heatmap">🔥 Job Heatmap</option>
+          <option value="team">👷 Team</option>
+          <option value="jobs">📅 Jobs</option>
+          <option value="route">🛣 Route</option>
+          <option value="compliance">🎯 Compliance</option>
         </select>
       </div>
       <div id="map-eng-filter" style="display:none;align-items:center;gap:8px">
@@ -4963,6 +4962,11 @@ body.density-relaxed .jtable td{font-size:15px}
       <div id="map-date-filter" style="display:none;align-items:center;gap:8px">
         <label style="font-size:12px;color:var(--txt3);font-weight:600">Date:</label>
         <input type="date" id="map-date-inp" class="fi" style="padding:6px 10px;font-size:12px;width:150px" onchange="renderMapPage()">
+      </div>
+      <div id="map-range-filter" style="display:none;align-items:center;gap:6px">
+        <label style="font-size:12px;color:var(--txt3);display:flex;align-items:center;gap:5px;cursor:pointer">
+          <input type="checkbox" id="map-range-cb" onchange="renderMapPage()"> Next 7 days
+        </label>
       </div>
       <button class="btn btn-ghost btn-sm" onclick="renderMapPage()" style="margin-left:auto">↺ Refresh</button>
       <span id="map-status-txt" style="font-size:11px;color:var(--txt3)"></span>
