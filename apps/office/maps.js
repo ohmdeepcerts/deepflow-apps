@@ -2,24 +2,33 @@
 // route/compliance/live-position rendering, plus the small "Engineer
 // Locations" panel that reuses the same geocoding cache.
 //
-// Rebuilt after the user reviewed the original five-mode version and found
-// it genuinely unhelpful: every view re-geocoded every address from
-// scratch against Nominatim's free (1 req/sec) API on every single page
-// open, which is why job counts were capped at 30/40/200 and the page took
-// several seconds to draw anything, the "heatmap" was just dots colored by
-// completed/not (not a density visualization at all), and Engineer Route
-// drew a line through jobs in creation order rather than an order that
-// minimizes actual driving. None of it had any awareness of certificate
-// compliance, despite that being what this whole app exists to manage.
+// Rebuilt twice in one sitting after real, live evidence each time. First:
+// the user reviewed the original five-mode version and found it genuinely
+// unhelpful — every view re-geocoded every address from scratch against
+// Nominatim's free (1 req/sec) API on every single page open, which is why
+// job counts were capped at 30/40/200 and the page took several seconds to
+// draw anything, the "heatmap" was just dots colored by completed/not (not
+// a density visualization at all), and Engineer Route drew a line through
+// jobs in creation order rather than an order that minimizes actual
+// driving. None of it had any awareness of certificate compliance, despite
+// that being what this whole app exists to manage.
+//
+// Second: after that rebuild shipped, the deployed page's own console
+// showed Nominatim itself failing outright — CORS errors and 429s the
+// moment more than a handful of addresses needed locating in one visit.
+// Nominatim isn't built to absorb a browser firing off 30-40 lookups in a
+// burst, and once it rate-limits an IP its error responses stop carrying
+// CORS headers, which is what showed up as a CORS failure rather than a
+// plain 429. Geocoding itself was replaced: postcodes.io (free, keyless,
+// CORS-enabled, built for exactly this kind of bulk client-side use) is
+// now the primary path, resolving up to 100 postcodes in one request with
+// no per-item rate limit — Nominatim is kept only as a last-resort
+// fallback for the rare property with no postcode findable at all.
 //
 // What changed:
 //  - Geocoding is now cached permanently on properties.lat/lng (see the
 //    properties_geocoding_cache migration) — an address is looked up once,
-//    ever, and every later view reads the cached value instantly. Only
-//    properties never seen before pay the Nominatim rate-limit cost, one
-//    time, capped per page load (_GEO_CAP) so a large uncached backlog
-//    still can't freeze the page — it just finishes caching over a few
-//    page loads instead of all at once.
+//    ever, and every later view reads the cached value instantly.
 //  - The fake Heatmap mode is replaced with a real Compliance view:
 //    every property plotted and colored by its actual current (not
 //    superseded) certificate status — red = something's expired, amber =
@@ -44,10 +53,10 @@ let _mapBlobUrl = null;
 let _mapEngineers=[],_mapEngineersLoadedAt=0;
 let _mapPropsCache=null,_mapPropsLoadedAt=0;
 
-// Nominatim's courtesy limit is 1 req/sec — this caps how many *never
-// before geocoded* properties get looked up in one page load. Anything
-// already cached on the property row is free and uncapped; this only
-// throttles the one-time cost of a property nobody has geocoded yet.
+// Only applies to the Nominatim last-resort fallback now (see
+// _geocodeItems below) — anything resolved via a stored/cached coordinate
+// or via postcodes.io's bulk endpoint is free and uncapped. This just
+// throttles the rare case of a property with no postcode findable at all.
 const GEO_CAP = 40;
 
 // ════════════════════════════════════════════════════════════════
@@ -123,7 +132,7 @@ export async function _loadEngineerList() {
 async function _loadPropertiesIndex() {
   const STALE_MS = 5 * 60 * 1000;
   if (_mapPropsCache && (Date.now() - _mapPropsLoadedAt) < STALE_MS) return _mapPropsCache;
-  const rows = await _sb('properties?select=id,address,normalized_address,landlord_name,agency_name,lat,lng') || [];
+  const rows = await _sb('properties?select=id,address,normalized_address,landlord_name,agency_name,postcode,lat,lng') || [];
   const byId = new Map(rows.map(p => [p.id, p]));
   const byAddr = new Map(rows.map(p => [p.normalized_address, p]));
   _mapPropsCache = { rows, byId, byAddr };
@@ -138,34 +147,114 @@ async function _loadPropertiesIndex() {
 // back to the property row so no future view ever pays that cost again.
 // Items with no matching property fall back to the old session-only cache
 // (never persisted — there's nowhere to persist it to).
+//
+// Geocoding itself was rebuilt after the first version of this rebuild hit
+// a real production wall: calling Nominatim directly from the browser
+// (nominatim.openstreetmap.org) started failing with CORS errors and 429s
+// the moment more than a handful of addresses needed locating in one
+// visit — confirmed live via the deployed site's own console. Nominatim's
+// usage policy is built around one request per second from a single,
+// identifiable client; it isn't meant to absorb a browser firing off 30-40
+// lookups in a burst, and once it rate-limits an IP the error responses
+// stop carrying CORS headers at all, which is what showed up as a CORS
+// failure rather than a plain 429.
+//
+// postcodes.io replaces it as the primary path: a free, keyless, UK-only
+// service built for exactly this kind of bulk client-side use — CORS-
+// enabled (verified: access-control-allow-origin: *), and its /postcodes
+// bulk endpoint resolves up to 100 postcodes in one request with no
+// per-item rate limit at all. 88% of properties already have a real
+// postcode on file (properties.postcode); the rest are recovered by
+// extracting a UK postcode pattern from the end of the address string,
+// which covers a further ~87% of what's left. Nominatim is kept only as a
+// last-resort fallback for the small remainder with no postcode
+// whatsoever — still capped and throttled, since that's the one path still
+// subject to its rate limit.
+const UK_POSTCODE_RE = /([A-Z]{1,2}[0-9][0-9A-Z]?)\s*([0-9][A-Z]{2})\s*$/i;
+function _extractPostcode(address, storedPostcode) {
+  if (storedPostcode && storedPostcode.trim()) return storedPostcode.trim().toUpperCase();
+  const m = (address || '').toUpperCase().match(UK_POSTCODE_RE);
+  return m ? `${m[1]} ${m[2]}` : null;
+}
+
+async function _bulkGeocodePostcodes(postcodes) {
+  // out: postcode (as queried) → {lat,lng} | null
+  const out = new Map();
+  for (let i = 0; i < postcodes.length; i += 100) {
+    const chunk = postcodes.slice(i, i + 100);
+    try {
+      const res = await fetch('https://api.postcodes.io/postcodes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postcodes: chunk }),
+      });
+      const data = await res.json();
+      (data?.result || []).forEach(r => {
+        out.set(r.query, r.result ? { lat: r.result.latitude, lng: r.result.longitude } : null);
+      });
+    } catch (e) { console.warn('postcodes.io bulk lookup failed:', e); }
+  }
+  return out;
+}
+
 async function _geocodeItems(items, addressOf, propOf) {
-  let freshCount = 0;
-  const out = [];
+  // Pass 1: anything already cached (on the property row, or this
+  // session's in-memory fallback) resolves instantly, no network at all.
+  const resolved = new Map(); // item → {lat,lng}
+  const needsPostcode = []; // { item, prop, postcode }
+  const needsNominatim = []; // { item, addr }
+
   for (const item of items) {
     const prop = propOf ? propOf(item) : null;
-    let lat = prop?.lat, lng = prop?.lng;
-    if (lat == null || lng == null) {
-      const addr = addressOf(item);
-      const cacheKey = addr.trim().toLowerCase();
-      if (_mapGeoCache[cacheKey]) {
-        ({ lat, lng } = _mapGeoCache[cacheKey]);
-      } else {
-        if (freshCount >= GEO_CAP) continue; // will be cached on a future load instead
-        const coords = await _geocode(addr);
-        if (!coords) continue;
-        ({ lat, lng } = coords);
-        freshCount++;
-        if (prop?.id) {
-          // Best-effort permanent cache write — never blocks the map on failure.
-          _sb(`properties?id=eq.${prop.id}`, { method: 'PATCH', body: { lat, lng, geocoded_at: new Date().toISOString() } }).catch(() => {});
-          prop.lat = lat; prop.lng = lng; // so a second item at the same property this same pass reuses it too
-        }
-        await _sleep(300); // Nominatim rate limit: 1 req/sec
+    if (prop?.lat != null && prop?.lng != null) { resolved.set(item, { lat: prop.lat, lng: prop.lng }); continue; }
+    const addr = addressOf(item);
+    const cacheKey = addr.trim().toLowerCase();
+    if (_mapGeoCache[cacheKey]) { resolved.set(item, _mapGeoCache[cacheKey]); continue; }
+    const postcode = _extractPostcode(addr, prop?.postcode);
+    if (postcode) needsPostcode.push({ item, prop, postcode });
+    else needsNominatim.push({ item, addr });
+  }
+
+  // Pass 2: everything with a postcode, resolved in one (or a few, chunked)
+  // bulk request — no per-item delay, no per-item rate limit. A postcode
+  // that looked valid but isn't in the ONS directory (typo, retired code —
+  // confirmed live: one real property's stored postcode came back
+  // unresolved) falls through to pass 3 rather than just being dropped,
+  // since Nominatim's fuzzy full-address search can sometimes still place
+  // it even when the isolated postcode alone can't be found.
+  if (needsPostcode.length) {
+    const uniquePostcodes = [...new Set(needsPostcode.map(x => x.postcode))];
+    const coordsByPostcode = await _bulkGeocodePostcodes(uniquePostcodes);
+    const propsWritten = new Set();
+    for (const { item, prop, postcode } of needsPostcode) {
+      const coords = coordsByPostcode.get(postcode);
+      if (!coords) { needsNominatim.push({ item, addr: addressOf(item) }); continue; }
+      resolved.set(item, coords);
+      _mapGeoCache[addressOf(item).trim().toLowerCase()] = coords;
+      if (prop?.id && !propsWritten.has(prop.id)) {
+        propsWritten.add(prop.id);
+        prop.lat = coords.lat; prop.lng = coords.lng;
+        // Best-effort permanent cache write — never blocks the map on failure.
+        _sb(`properties?id=eq.${prop.id}`, { method: 'PATCH', body: { lat: coords.lat, lng: coords.lng, geocoded_at: new Date().toISOString() } }).catch(() => {});
       }
     }
-    out.push({ item, lat, lng });
   }
-  return { results: out, freshCount, skipped: items.length - out.length };
+
+  // Pass 3: last resort — no postcode findable at all, or the postcode
+  // found didn't resolve. Still Nominatim, still throttled and capped, but
+  // this set should be small (~a few percent of properties) since almost
+  // everything resolves via pass 2.
+  let freshNominatim = 0;
+  for (const { item, addr } of needsNominatim) {
+    if (freshNominatim >= GEO_CAP) continue;
+    const coords = await _geocode(addr);
+    freshNominatim++;
+    if (coords) resolved.set(item, coords);
+    await _sleep(300);
+  }
+
+  const out = items.filter(i => resolved.has(i)).map(item => ({ item, ...resolved.get(item) }));
+  return { results: out, skipped: items.length - out.length };
 }
 
 // ── LIVE ENGINEERS ──────────────────────────────────────────────
@@ -213,7 +302,7 @@ export async function _mapJobsByDate(info, status) {
 
   const propsIdx = await _loadPropertiesIndex();
   if (status) status.textContent = `Locating ${jobs.length} job${jobs.length!==1?'s':''}…`;
-  const { results, freshCount, skipped } = await _geocodeItems(
+  const { results, skipped } = await _geocodeItems(
     jobs,
     j => j.address,
     j => (j.property_id && propsIdx.byId.get(j.property_id)) || null
@@ -384,7 +473,7 @@ export function _haversineKm(lat1, lng1, lat2, lng2) {
 export async function _mapCompliance(info, status) {
   if (status) status.textContent = 'Loading compliance data…';
   const [props, jobs, certs] = await Promise.all([
-    _sb('properties?select=id,address,landlord_name,agency_name,lat,lng'),
+    _sb('properties?select=id,address,landlord_name,agency_name,postcode,lat,lng'),
     _sb('jobs?select=id,property_id&property_id=not.is.null'),
     _sb('certs?select=id,type,expirydate,noexpiry,jobid&superseded_by=is.null'),
   ]);
