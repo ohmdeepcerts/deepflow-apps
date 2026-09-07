@@ -332,6 +332,15 @@ th.resizing .col-resize-handle::after,.col-resize-handle:hover::after,.col-resiz
 .frow{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .frow3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
 .fcheck{display:flex;align-items:center;gap:8px;margin-bottom:8px;cursor:pointer;font-size:12px;font-family:var(--fh)}
+
+/* Engineers-on-site picker for Add Visit — plain tap/click toggle chips
+   instead of a native <select multiple>, which needs ctrl/cmd-click to pick
+   more than one and has no equivalent gesture on a touchscreen at all
+   (confirmed unusable on phone — a plain tap just replaces the selection). */
+.vf-eng-chips{display:flex;flex-wrap:wrap;gap:6px}
+.vf-eng-chip{font-family:var(--fh);font-size:12px;font-weight:600;padding:7px 12px;border-radius:20px;border:1px solid var(--border2);background:var(--s2);color:var(--txt2);cursor:pointer;user-select:none;transition:all .15s var(--ease)}
+.vf-eng-chip:hover{border-color:var(--acc)}
+.vf-eng-chip.on{background:var(--acc);border-color:var(--acc);color:#1a1a1a}
 .fcheck input{accent-color:var(--acc);width:15px;height:15px}
 .vat-hidden{display:none!important}
 input[type=date],input[type=time]{color-scheme:light}
@@ -2568,62 +2577,78 @@ body.density-relaxed .jtable td{font-size:15px}
 .dfplanner.project-picker-backdrop.show {display:flex}
 
 .dfplanner .project-picker {
-      width:min(860px,96vw);max-height:88vh;background:#fff;border-radius:14px;border:1px solid #e5e7ea;
+      width:min(960px,96vw);max-height:88vh;background:#fff;border-radius:14px;border:1px solid #e5e7ea;
       box-shadow:0 30px 100px rgba(8,13,19,.28);overflow:hidden;display:flex;flex-direction:column
     }
 
 .dfplanner .project-picker-head {
-      display:flex;align-items:center;gap:9px;padding:14px 15px;border-bottom:1px solid var(--line);background:#fbfbfc
+      display:flex;align-items:center;gap:12px;padding:18px 20px;border-bottom:1px solid var(--line);background:#fbfbfc
     }
 
 .dfplanner .project-picker-icon {
-      width:34px;height:34px;border-radius:9px;background:#efeaff;color:#6b52ba;display:grid;place-items:center;font-weight:900
+      width:42px;height:42px;border-radius:10px;background:#efeaff;color:#6b52ba;display:grid;place-items:center;font-weight:900;font-size:18px;flex-shrink:0
     }
 
-.dfplanner .project-picker-head h3 {margin:0;font-size:13px}
+.dfplanner .project-picker-head h3 {margin:0;font-size:17px}
 
-.dfplanner .project-picker-head p {margin:2px 0 0;color:#8a9097;font-size:8px}
+.dfplanner .project-picker-head p {margin:3px 0 0;color:#8a9097;font-size:12px}
 
-.dfplanner .project-picker-close {margin-left:auto;border:0;background:#eef0f2;width:28px;height:28px;border-radius:50%;font-size:15px}
+.dfplanner .project-picker-close {margin-left:auto;border:0;background:#eef0f2;width:34px;height:34px;border-radius:50%;font-size:18px;flex-shrink:0}
 
-.dfplanner .project-picker-search {padding:10px 12px;border-bottom:1px solid var(--line);background:#fff}
+.dfplanner .project-picker-search {padding:14px 16px;border-bottom:1px solid var(--line);background:#fff}
 
 .dfplanner .project-picker-search input {
-      width:100%;border:1px solid #dfe3e7;border-radius:8px;padding:8px 10px;outline:none;font-size:9px
+      width:100%;border:1px solid #dfe3e7;border-radius:9px;padding:11px 14px;outline:none;font-size:14px
     }
 
-.dfplanner .project-picker-list {padding:10px;overflow:auto;display:flex;flex-direction:column;gap:8px}
+.dfplanner .project-picker-list {padding:14px;overflow:auto;display:flex;flex-direction:column;gap:10px}
 
 .dfplanner .project-pick-card {
-      display:grid;grid-template-columns:105px minmax(180px,1.2fr) minmax(130px,.8fr) 115px 115px;
-      gap:10px;align-items:center;border:1px solid #e1e4e8;background:#fff;border-radius:10px;padding:10px
+      display:grid;grid-template-columns:120px minmax(200px,1.2fr) minmax(150px,.8fr) 130px 150px;
+      gap:14px;align-items:center;border:1px solid #e1e4e8;background:#fff;border-radius:10px;padding:14px
     }
 
 .dfplanner .project-pick-card:hover {background:#fbfcfd;border-color:#d5d9de}
 
-.dfplanner .project-pick-job b {display:block;font-family:ui-monospace,monospace;font-size:9px;color:#3e454c}
+.dfplanner .project-pick-job b {display:block;font-family:ui-monospace,monospace;font-size:13px;color:#3e454c}
 
-.dfplanner .project-pick-job span {display:block;margin-top:4px;font-size:7px;color:#7e858c}
+.dfplanner .project-pick-job span {display:block;margin-top:5px;font-size:11px;color:#7e858c}
 
-.dfplanner .project-pick-main b {display:block;font-size:9px;color:#343a40;margin-bottom:3px}
+.dfplanner .project-pick-main b {display:block;font-size:14px;color:#343a40;margin-bottom:4px}
 
-.dfplanner .project-pick-main span {display:block;font-size:8px;color:#7c838a;line-height:1.35}
+.dfplanner .project-pick-main span {display:block;font-size:12px;color:#7c838a;line-height:1.4}
 
-.dfplanner .project-pick-meta small {display:block;font-size:7px;color:#969ca2;text-transform:uppercase;margin-bottom:3px}
+.dfplanner .project-pick-meta small {display:block;font-size:10px;color:#969ca2;text-transform:uppercase;margin-bottom:4px;letter-spacing:.3px}
 
-.dfplanner .project-pick-meta b {display:block;font-size:9px;color:#454c53}
+.dfplanner .project-pick-meta b {display:block;font-size:13px;color:#454c53}
 
 .dfplanner .add-next-visit {
-      border:0;background:#6d54c1;color:#fff;border-radius:7px;padding:8px 9px;font-size:8px;font-weight:900;white-space:nowrap
+      border:0;background:#6d54c1;color:#fff;border-radius:8px;padding:11px 14px;font-size:12px;font-weight:800;white-space:nowrap
     }
 
 .dfplanner .open-project-btn {
-      border:1px solid #dfe3e7;background:#fff;color:#596168;border-radius:7px;padding:7px 8px;font-size:8px;font-weight:800
+      border:1px solid #dfe3e7;background:#fff;color:#596168;border-radius:8px;padding:10px 12px;font-size:12px;font-weight:700
     }
 
 .dfplanner .picker-empty {
-      border:1px dashed #d4d9df;background:#fafbfc;border-radius:9px;padding:30px;text-align:center;color:#8c9299;font-size:9px
+      border:1px dashed #d4d9df;background:#fafbfc;border-radius:9px;padding:36px;text-align:center;color:#8c9299;font-size:13px
     }
+
+/* The 5-across card grid above only fits a wide screen — on a phone
+   (the actual reason this got resized) it wraps to a stacked card instead
+   of squeezing five fixed-width columns into ~370px. */
+@media (max-width:640px) {
+  .dfplanner .project-pick-card {
+    grid-template-columns:1fr auto;
+    grid-template-areas:"job meta" "main main" "view add";
+    row-gap:10px;
+  }
+  .dfplanner .project-pick-job {grid-area:job}
+  .dfplanner .project-pick-meta {grid-area:meta;text-align:right}
+  .dfplanner .project-pick-main {grid-area:main}
+  .dfplanner .open-project-btn {grid-area:view}
+  .dfplanner .add-next-visit {grid-area:add}
+}
 
 .dfplanner .detail-action-row {display:flex;align-items:center;gap:6px;margin-left:6px}
 
@@ -6323,16 +6348,21 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS last_accuracy integer;</div>
           <input type="date" id="vf-date" class="fi">
         </div>
         <div class="fg" style="flex:2 1 220px;margin-bottom:0">
-          <label class="fl">Engineers on site <span style="font-weight:400;color:var(--txt3);font-size:10px">(ctrl/cmd-click for more than one)</span></label>
-          <select id="vf-engineers" class="fs" multiple size="3" style="width:100%;height:auto"></select>
+          <label class="fl">Engineers on site <span style="font-weight:400;color:var(--txt3);font-size:10px">(tap to select — any number)</span></label>
+          <div id="vf-engineers-chips" class="vf-eng-chips"></div>
         </div>
       </div>
       <div class="fg" style="margin-top:10px;margin-bottom:0">
         <label class="fl">What was done</label>
         <textarea id="vf-notes" class="fi fta-grow" placeholder="e.g. First fix wiring, chased walls in kitchen and hallway" rows="2" style="min-height:50px"></textarea>
       </div>
+      <div class="fg" style="margin-top:10px;margin-bottom:0">
+        <label class="fl">Photo <span style="font-weight:400;color:var(--txt3);font-size:10px">(optional)</span></label>
+        <input type="file" id="vf-photo" accept="image/*" class="fi" style="padding:6px">
+        <div id="vf-photo-preview" style="display:none;margin-top:8px"></div>
+      </div>
       <div style="margin-top:10px;display:flex;gap:8px">
-        <button type="button" class="btn btn-acc btn-sm" onclick="saveVisit()">Save Visit</button>
+        <button type="button" class="btn btn-acc btn-sm" id="vf-save-btn" onclick="saveVisit()">Save Visit</button>
         <button type="button" class="btn btn-ghost btn-sm" onclick="toggleAddVisitForm()">Cancel</button>
       </div>
     </div>

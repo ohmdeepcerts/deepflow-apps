@@ -3893,15 +3893,34 @@ async function loadJobVisits(jobId){
   panel.style.display='';
   list.innerHTML='<div style="color:var(--txt3);font-size:12px;padding:8px 0">Loading…</div>';
   try{
-    const visits=await _sb('job_visits?jobid=eq.'+encodeURIComponent(jobId)+'&order=visit_date.asc,created.asc');
+    const [visits, photoRows] = await Promise.all([
+      _sb('job_visits?jobid=eq.'+encodeURIComponent(jobId)+'&order=visit_date.asc,created.asc'),
+      _sb('attachments?jobid=eq.'+encodeURIComponent(jobId)+'&visit_id=not.is.null'),
+    ]);
     if(!visits||!visits.length){
       list.innerHTML='<div style="color:var(--txt3);font-size:12px;padding:8px 0">No visits logged yet.</div>';
       if(countEl) countEl.textContent='';
       return;
     }
     if(countEl) countEl.textContent='('+visits.length+')';
+    // Resolve real thumbnails up front — the `deepflow` bucket is private,
+    // so every photo needs its own short-lived signed URL; batching this
+    // before the template avoids an async gap mid-render per photo.
+    const photosByVisit = {};
+    (photoRows||[]).forEach(p=>{ (photosByVisit[p.visit_id]=photosByVisit[p.visit_id]||[]).push(p); });
+    const signedByPath = {};
+    await Promise.all((photoRows||[]).map(async p=>{
+      if(p.storage_path) signedByPath[p.storage_path] = await signedUrl(p.storage_path, 3600);
+    }));
     list.innerHTML=visits.map((v,i)=>{
       const engs=(v.engineers||[]).join(', ')||'—';
+      const photos=photosByVisit[v.id]||[];
+      const photosHtml=photos.length?`<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">${photos.map(p=>{
+        const src=signedByPath[p.storage_path];
+        return src
+          ? `<a href="${src}" target="_blank" title="${escHtml(p.name||'Photo')}"><img src="${src}" alt="${escHtml(p.name||'Photo')}" style="width:56px;height:56px;object-fit:cover;border-radius:6px;border:1px solid var(--border)"></a>`
+          : `<div style="width:56px;height:56px;border-radius:6px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--txt3);font-size:18px" title="${escHtml(p.name||'Photo')}">▧</div>`;
+      }).join('')}</div>`:'';
       return `<div style="display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">
         <div style="flex-shrink:0;width:74px">
           <div style="font-size:10px;font-weight:700;color:var(--acc)">VISIT ${i+1}</div>
@@ -3910,6 +3929,7 @@ async function loadJobVisits(jobId){
         <div style="flex:1;min-width:0">
           <div style="font-size:12px;font-weight:600;color:var(--txt1)">👷 ${escHtml(engs)}</div>
           ${v.notes?`<div style="font-size:12px;color:var(--txt2);margin-top:2px">${escHtml(v.notes)}</div>`:''}
+          ${photosHtml}
         </div>
         <button onclick="deleteVisit('${v.id}')" style="background:none;border:none;color:var(--txt3);cursor:pointer;font-size:13px;padding:2px 4px" title="Delete visit">✕</button>
       </div>`;
@@ -3920,6 +3940,20 @@ async function loadJobVisits(jobId){
   }
 }
 
+// Which engineer chips are currently toggled on in the open Add Visit
+// form — a plain Set instead of a native <select multiple>, which needs
+// ctrl/cmd-click to pick more than one option and has no equivalent
+// gesture on a touchscreen (a plain tap just replaces the selection —
+// confirmed unusable on a phone, which is exactly where this form also
+// needs to work).
+let _visitEngineersSel = new Set();
+
+function _toggleVisitEngineer(name, btn){
+  if(_visitEngineersSel.has(name)) _visitEngineersSel.delete(name);
+  else _visitEngineersSel.add(name);
+  if(btn) btn.classList.toggle('on', _visitEngineersSel.has(name));
+}
+
 function toggleAddVisitForm(){
   const form=document.getElementById('jm-add-visit-form');
   if(!form) return;
@@ -3927,27 +3961,71 @@ function toggleAddVisitForm(){
   form.style.display=opening?'':'none';
   if(opening){
     document.getElementById('vf-date').value=TODAY();
-    const sel=document.getElementById('vf-engineers');
-    sel.innerHTML=(S.engineers||[]).map(e=>`<option value="${e.name}">${e.name}</option>`).join('');
+    _visitEngineersSel=new Set();
+    const chips=document.getElementById('vf-engineers-chips');
+    if(chips) chips.innerHTML=(S.engineers||[]).map(e=>
+      `<span class="vf-eng-chip" onclick="_toggleVisitEngineer('${escHtml(e.name)}',this)">${escHtml(e.name)}</span>`
+    ).join('');
     document.getElementById('vf-notes').value='';
+    const photoInp=document.getElementById('vf-photo');
+    if(photoInp) photoInp.value='';
+    const preview=document.getElementById('vf-photo-preview');
+    if(preview){ preview.style.display='none'; preview.innerHTML=''; }
   }
+}
+
+// Storage upload for a visit photo — same `deepflow` bucket, path
+// convention, and auth pattern as invoice-documents.js's own upload
+// helper (private bucket; office always has a real Supabase Auth
+// session, so this signs with the current JWT rather than a service key).
+async function _visitPhotoUpload(jobId,file){
+  const jwt=await _getJWT();
+  const ext=(file.name.split('.').pop()||'jpg').toLowerCase();
+  const path=`jobs/${jobId}/${Date.now()}-${Math.random().toString(36).slice(2,6)}.${ext}`;
+  const res=await fetch(`${SB_URL}/storage/v1/object/deepflow/${path}`,{
+    method:'POST',
+    headers:{'apikey':SB_KEY,'Authorization':'Bearer '+jwt,'Content-Type':file.type||'application/octet-stream','x-upsert':'true'},
+    body:file
+  });
+  if(!res.ok) throw new Error('Photo upload failed: '+(await res.text()).slice(0,200));
+  return path;
 }
 
 async function saveVisit(){
   if(!editJid){toast('Save the job first, then add a visit','warn');return}
   const date=document.getElementById('vf-date').value;
   if(!date){toast('Pick a date for the visit','error');return}
-  const sel=document.getElementById('vf-engineers');
-  const engineers=[...sel.selectedOptions].map(o=>o.value);
+  const engineers=[..._visitEngineersSel];
   const notes=document.getElementById('vf-notes').value.trim();
+  const photoFile=document.getElementById('vf-photo')?.files?.[0]||null;
+  const saveBtn=document.getElementById('vf-save-btn');
+  if(saveBtn){saveBtn.disabled=true;saveBtn.textContent='Saving…';}
   try{
-    await dPut('job_visits',{id:uid(),jobId:editJid,visitDate:date,engineers,notes,created:Date.now()});
+    const visitId=uid();
+    await dPut('job_visits',{id:visitId,jobId:editJid,visitDate:date,engineers,notes,created:Date.now()});
+    if(photoFile){
+      try{
+        const path=await _visitPhotoUpload(editJid,photoFile);
+        await _sb('attachments',{method:'POST',body:{
+          id:'att-'+Date.now()+'-'+Math.random().toString(36).slice(2,6),
+          jobid:editJid, visit_id:visitId, name:photoFile.name, type:'photo',
+          mime:photoFile.type||'image/jpeg', storage_path:path,
+          url:`${SB_URL}/storage/v1/object/public/deepflow/${path}`,
+          uploaded_by_name:_appUser?.name||'Office', created:Date.now(),
+        }});
+      }catch(photoErr){
+        console.error('saveVisit photo upload:',photoErr);
+        toast('Visit saved, but the photo failed to upload','warn');
+      }
+    }
     toggleAddVisitForm();
     await loadJobVisits(editJid);
     toast('Visit logged','success');
   }catch(err){
     console.error('saveVisit:',err);
     toast('Could not save visit — check console','error');
+  }finally{
+    if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='Save Visit';}
   }
 }
 
@@ -9868,7 +9946,7 @@ Object.assign(window, {
   exportExpensesCSV, exportInvsCSV, exportMasterXLSX, exportPLCSV, exportPropsCSV, exportReportPDF, 
   extractAppliancesFromPhoto, fillCreditNote, fillFromMatch, filterCerts, fuzzyAddr, generateBulkReminder, generateCertPdf,
   postcodeLookup, confirmPostcode,
-  loadJobVisits, toggleAddVisitForm, saveVisit, deleteVisit, openProjectPicker,
+  loadJobVisits, toggleAddVisitForm, saveVisit, deleteVisit, openProjectPicker, _toggleVisitEngineer,
   handleAccess, handleLogoUpload, handleNotifClick, handlePriDotClick, importBackup, importCertCSV,
   invClientSelected, invNavSelect, jCalPickDate, jPickDate, jcalShiftMonth, kanbanDragOver, 
   kanbanDragStart, kanbanDrop, loadEarlierJobs, loadEngPerms, loadEngineerLocations, loadStorageDashboard, 

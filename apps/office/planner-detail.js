@@ -13,7 +13,7 @@
 
 import { escHtml } from '@ui';
 import { formatDateUK } from '@business';
-import { S, dAll, _sb, toast, calcInvTotal, getAppUser } from './main.js';
+import { S, dAll, _sb, toast, calcInvTotal, getAppUser, signedUrl } from './main.js';
 import { el, money, resolveContact } from './planner-core.js';
 // openJobModal isn't an ES export of main.js (only exposed on window for
 // inline HTML handlers), so it's called via window here rather than imported.
@@ -48,6 +48,15 @@ export async function openJobDetails(jobId, tab='overview'){
   ]);
   const invoices = allInvoices.filter(i=>i.jobId===jobId||i.linkedJobId===jobId);
   const contact = resolveContact(job);
+
+  // The `deepflow` bucket is private — every photo needs its own
+  // short-lived signed URL to actually render as an image rather than the
+  // "▧" placeholder this used to always show regardless of whether a real
+  // photo existed. Resolved up front so the template below stays sync.
+  const signedByPath = {};
+  await Promise.all((allAttachments||[]).map(async p=>{
+    if(p.storage_path) signedByPath[p.storage_path] = await signedUrl(p.storage_path, 3600);
+  }));
 
   el('dfpDetailTitle').textContent = job.jobNum||'Job';
   el('dfpDetailSubtitle').textContent = job.address||'';
@@ -132,11 +141,16 @@ export async function openJobDetails(jobId, tab='overview'){
             </div>
             <div class="visit-section-title">Photos <span class="count">${photos.length}</span></div>
             <div class="visit-photos">
-              ${photos.length ? photos.map(p=>`
-                <div class="visit-photo" title="${escHtml(p.name||'')}">
-                  <div class="visit-photo-preview">▧</div>
+              ${photos.length ? photos.map(p=>{
+                const src=signedByPath[p.storage_path];
+                const preview=src
+                  ? `<a href="${src}" target="_blank"><img src="${src}" alt="${escHtml(p.name||'Photo')}" class="visit-photo-preview" style="width:100%;height:100%;object-fit:cover;border-radius:inherit"></a>`
+                  : `<div class="visit-photo-preview">▧</div>`;
+                return `<div class="visit-photo" title="${escHtml(p.name||'')}">
+                  ${preview}
                   <div class="visit-photo-info"><b>${escHtml(p.name||'Photo')}</b><span>${escHtml(p.uploaded_by_name||'')}</span></div>
-                </div>`).join('') : `<div class="detail-empty" style="grid-column:1/-1;padding:12px">No photos tagged to this visit yet — engineer-app photo tagging is next on the list.</div>`}
+                </div>`;
+              }).join('') : `<div class="detail-empty" style="grid-column:1/-1;padding:12px">No photos tagged to this visit yet — add one from the "+ Add Visit" form.</div>`}
             </div>
           </div>
         </article>`;
