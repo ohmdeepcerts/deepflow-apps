@@ -7081,7 +7081,20 @@ async function loadEmailProviderSettings(){
     set('s-sendgrid-from',byKey.sendgrid_from);
     set('s-brevo-api-key',byKey.brevo_api_key);
     set('s-brevo-from',byKey.brevo_from);
+    onEmailProviderPicked();
   }catch(e){ console.warn('loadEmailProviderSettings:',e); }
+}
+
+// Only the selected provider's fields are shown — three sets of API-key/
+// from fields all visible at once read as "fill in all of these" rather
+// than "pick one," which is exactly the confusion reported live (a
+// screenshot showing every provider's fields expanded together).
+function onEmailProviderPicked(){
+  const active=document.getElementById('s-email-provider')?.value||'resend';
+  ['resend','sendgrid','brevo'].forEach(p=>{
+    const block=document.getElementById('email-provider-fields-'+p);
+    if(block) block.style.display=(p===active)?'':'none';
+  });
 }
 
 async function saveEmailProviderConfig(){
@@ -10047,7 +10060,7 @@ Object.assign(window, {
   postcodeLookup, confirmPostcode,
   loadJobVisits, toggleAddVisitForm, saveVisit, deleteVisit, openProjectPicker, _toggleVisitEngineer,
   handleAccess, handleLogoUpload, handleNotifClick, handlePriDotClick, importBackup, importCertCSV,
-  sendTestEmail, loadEmailProviderSettings, saveEmailProviderConfig,
+  sendTestEmail, loadEmailProviderSettings, saveEmailProviderConfig, onEmailProviderPicked,
   invClientSelected, invNavSelect, jCalPickDate, jPickDate, jcalShiftMonth, kanbanDragOver, 
   kanbanDragStart, kanbanDrop, loadEarlierJobs, loadEngPerms, loadEngineerLocations, loadStorageDashboard, 
   loadStorageStats, loadTeam, markInvPaid, markInvSent, markInvUnpaid, matchDir, 

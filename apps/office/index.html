@@ -5561,64 +5561,66 @@ body.density-relaxed .jtable td{font-size:15px}
 
             <div class="fg" style="max-width:260px">
               <label class="fl">Active Provider</label>
-              <select id="s-email-provider" class="fs">
+              <select id="s-email-provider" class="fs" onchange="onEmailProviderPicked()">
                 <option value="resend">Resend</option>
                 <option value="sendgrid">SendGrid (Twilio)</option>
                 <option value="brevo">Brevo</option>
               </select>
-              <div style="font-size:11px;color:var(--txt3);margin-top:4px">Whichever is picked here is the one real emails actually send through. The other two stay configured but idle.</div>
+              <div style="font-size:11px;color:var(--txt3);margin-top:4px">Only this one's details need filling in below — the other two stay hidden until picked.</div>
             </div>
 
             <div style="border-top:1px solid var(--border);margin:16px 0"></div>
 
-            <div style="font-size:12px;font-weight:700;color:var(--txt1);margin-bottom:8px">Resend</div>
-            <div class="fg" style="max-width:420px">
-              <label class="fl">API Key</label>
-              <div style="position:relative">
-                <input type="password" id="s-resend-api-key" class="fi" placeholder="re_..." style="padding-right:38px">
-                <button type="button" onclick="togglePwVis('s-resend-api-key',this)" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:14px">👁</button>
+            <div id="email-provider-fields-resend" style="display:none">
+              <div style="font-size:12px;font-weight:700;color:var(--txt1);margin-bottom:8px">Resend</div>
+              <div class="fg" style="max-width:420px">
+                <label class="fl">API Key</label>
+                <div style="position:relative">
+                  <input type="password" id="s-resend-api-key" class="fi" placeholder="re_..." style="padding-right:38px">
+                  <button type="button" onclick="togglePwVis('s-resend-api-key',this)" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:14px">👁</button>
+                </div>
+              </div>
+              <div class="fg" style="max-width:420px">
+                <label class="fl">Send From</label>
+                <input type="text" id="s-resend-from" class="fi" placeholder="GB Electrical <invoices@yourdomain.co.uk>">
+                <div style="font-size:11px;color:var(--txt3);margin-top:4px">Resend needs a verified sending domain to email anyone but your own account address.</div>
               </div>
             </div>
-            <div class="fg" style="max-width:420px">
-              <label class="fl">Send From</label>
-              <input type="text" id="s-resend-from" class="fi" placeholder="GB Electrical <invoices@yourdomain.co.uk>">
-              <div style="font-size:11px;color:var(--txt3);margin-top:4px">Resend needs a verified sending domain to email anyone but your own account address.</div>
-            </div>
 
-            <div style="border-top:1px solid var(--border);margin:16px 0"></div>
-
-            <div style="font-size:12px;font-weight:700;color:var(--txt1);margin-bottom:8px">SendGrid <span style="font-weight:400;color:var(--txt3)">(this is Twilio's email product — Twilio itself doesn't have a separate email API, this is it)</span></div>
-            <div class="fg" style="max-width:420px">
-              <label class="fl">API Key</label>
-              <div style="position:relative">
-                <input type="password" id="s-sendgrid-api-key" class="fi" placeholder="SG...." style="padding-right:38px">
-                <button type="button" onclick="togglePwVis('s-sendgrid-api-key',this)" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:14px">👁</button>
+            <div id="email-provider-fields-sendgrid" style="display:none">
+              <div style="font-size:12px;font-weight:700;color:var(--txt1);margin-bottom:8px">SendGrid <span style="font-weight:400;color:var(--txt3)">(this is Twilio's email product — Twilio itself doesn't have a separate email API, this is it)</span></div>
+              <div class="fg" style="max-width:420px">
+                <label class="fl">API Key</label>
+                <div style="position:relative">
+                  <input type="password" id="s-sendgrid-api-key" class="fi" placeholder="SG...." style="padding-right:38px">
+                  <button type="button" onclick="togglePwVis('s-sendgrid-api-key',this)" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:14px">👁</button>
+                </div>
+              </div>
+              <div class="fg" style="max-width:420px">
+                <label class="fl">Send From</label>
+                <input type="text" id="s-sendgrid-from" class="fi" placeholder="GB Electrical <you@gmail.com>">
+                <div style="font-size:11px;color:var(--txt3);margin-top:4px">Must be a Single-Sender-verified address in SendGrid — no domain/DNS setup needed.</div>
               </div>
             </div>
-            <div class="fg" style="max-width:420px">
-              <label class="fl">Send From</label>
-              <input type="text" id="s-sendgrid-from" class="fi" placeholder="GB Electrical <you@gmail.com>">
-              <div style="font-size:11px;color:var(--txt3);margin-top:4px">Must be a Single-Sender-verified address in SendGrid — no domain/DNS setup needed.</div>
-            </div>
 
-            <div style="border-top:1px solid var(--border);margin:16px 0"></div>
-
-            <div style="font-size:12px;font-weight:700;color:var(--txt1);margin-bottom:8px">Brevo</div>
-            <div class="fg" style="max-width:420px">
-              <label class="fl">API Key</label>
-              <div style="position:relative">
-                <input type="password" id="s-brevo-api-key" class="fi" placeholder="xkeysib-..." style="padding-right:38px">
-                <button type="button" onclick="togglePwVis('s-brevo-api-key',this)" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:14px">👁</button>
+            <div id="email-provider-fields-brevo" style="display:none">
+              <div style="font-size:12px;font-weight:700;color:var(--txt1);margin-bottom:8px">Brevo</div>
+              <div class="fg" style="max-width:420px">
+                <label class="fl">API Key</label>
+                <div style="position:relative">
+                  <input type="password" id="s-brevo-api-key" class="fi" placeholder="xkeysib-..." style="padding-right:38px">
+                  <button type="button" onclick="togglePwVis('s-brevo-api-key',this)" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:14px">👁</button>
+                </div>
+                <div style="font-size:11px;color:var(--txt3);margin-top:4px">From Brevo → Settings → SMTP &amp; API → API Keys. Generate a new one any time you need to rotate it or switch to a different Brevo account.</div>
               </div>
-              <div style="font-size:11px;color:var(--txt3);margin-top:4px">From Brevo → Settings → SMTP &amp; API → API Keys. Generate a new one any time you need to rotate it or switch to a different Brevo account.</div>
+              <div class="fg" style="max-width:420px">
+                <label class="fl">Send From</label>
+                <input type="text" id="s-brevo-from" class="fi" placeholder="Compliance OHM Electrical <compliance@ohmelectricals.co.uk>">
+                <div style="font-size:11px;color:var(--txt3);margin-top:4px">"Name &lt;email@domain.com&gt;" — the email address must already be a verified sender in Brevo, or sends will fail.</div>
+              </div>
+              <label class="fcheck"><input type="checkbox" id="s-brevo-enabled" onchange="saveSettings()"> Enable sending via Brevo</label>
+              <div style="font-size:11px;color:var(--txt3);margin-top:4px;margin-left:24px">Off by default. A separate, immediate switch on top of the two above — even with a key saved and Brevo picked as the active provider, no email goes out via Brevo until this is on. (Resend and SendGrid have no equivalent switch — they're the paths already relied on today.)</div>
             </div>
-            <div class="fg" style="max-width:420px">
-              <label class="fl">Send From</label>
-              <input type="text" id="s-brevo-from" class="fi" placeholder="Compliance OHM Electrical <compliance@ohmelectricals.co.uk>">
-              <div style="font-size:11px;color:var(--txt3);margin-top:4px">"Name &lt;email@domain.com&gt;" — the email address must already be a verified sender in Brevo, or sends will fail.</div>
-            </div>
-            <label class="fcheck"><input type="checkbox" id="s-brevo-enabled" onchange="saveSettings()"> Enable sending via Brevo</label>
-            <div style="font-size:11px;color:var(--txt3);margin-top:4px;margin-left:24px">Off by default. A separate, immediate switch on top of the two above — even with a key saved and Brevo picked as the active provider, no email goes out via Brevo until this is on. (Resend and SendGrid have no equivalent switch — they're the paths already relied on today.)</div>
 
             <button class="btn btn-acc btn-sm" style="margin-top:16px" onclick="saveEmailProviderConfig()">Save All Provider Settings</button>
           </div>
