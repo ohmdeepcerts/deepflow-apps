@@ -1810,8 +1810,26 @@ function applyUserPermissions(){
   // Uses the same rule nav() enforces (not a sidebar-visibility check --
   // Settings has no .ni entry to check), so a role change since the last
   // visit is still respected.
-  const lastPg=localStorage.getItem('df_last_page');
-  if(lastPg && lastPg!=='dash' && _canAccessPage(lastPg)) nav(lastPg);
+  //
+  // ALWAYS call nav() here, including when the target is 'dash' (previously
+  // skipped as "already showing, nothing to do"). That skip was the actual
+  // cause of "app takes forever to load, have to click another page first":
+  // bootstrap() runs init() (which calls renderDash()/renderJobs() etc.)
+  // BEFORE a fresh login — at that point there's no session yet, so those
+  // fetches go out as the anon key and RLS silently returns empty rows, not
+  // an error, so the dashboard renders real zeros with no retry triggered.
+  // doLogin() never re-fetches after a real login succeeds — it relies
+  // entirely on this function, and this function was skipping the re-fetch
+  // for the single most common case (landing on/returning to Dashboard).
+  // nav(pg) is what actually re-runs the per-page data fetch (renderDash(),
+  // renderJobs(), etc.) — re-navigating to the already-active page is a
+  // harmless no-op for the DOM/CSS side of nav() but is exactly what's
+  // needed to replace the stale pre-login data with a real, authenticated
+  // fetch. Session-restore (bootstrap() already calling init() with a valid
+  // session) pays a redundant-but-cheap second render here — the repo-level
+  // dAll() cache (30s TTL) makes it an in-memory hit, not a second fetch.
+  const lastPg=localStorage.getItem('df_last_page')||'dash';
+  nav(_canAccessPage(lastPg)?lastPg:'dash');
 }
 
 
