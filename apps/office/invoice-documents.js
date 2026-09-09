@@ -80,7 +80,7 @@ function _emailInfoCard(leftLabel, leftValue, rightLabel, rightValue, rightColor
 </table>`;
 }
 
-function _overdueEmailHtml(inv, t, daysOver, bodyText){
+export function _overdueEmailHtml(inv, t, daysOver, bodyText){
   return _brandedEmailShell(`
     ${_emailBadge(`⚠ ${daysOver} day${daysOver!==1?'s':''} overdue`,'#fef2f2','#b91c1c')}
     <div style="font-size:15px;color:#1e293b;margin-top:16px;line-height:1.55">${escHtml(bodyText)}</div>

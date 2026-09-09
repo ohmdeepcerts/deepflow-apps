@@ -101,7 +101,7 @@ import {
 import { showJobAudit, showPropertyCerts } from './job-popups.js';
 import {
   _sendEmail, _brandedEmailShell, _invEmailSubject, _invoiceReadyEmailHtml, _paymentReceiptEmailHtml,
-  _certReadyEmailHtml, _certLockedEmailHtml, sendAllOverdueEmail,
+  _certReadyEmailHtml, _certLockedEmailHtml, _overdueEmailHtml, sendAllOverdueEmail,
   downloadInvPDFById, signedUrl, generateAndStoreInvoicePDF,
 } from './invoice-documents.js';
 // Re-exported (not just imported) because planner-email.js, certs-pdf.js,
@@ -6423,7 +6423,7 @@ function renderSettings(){
   cb('s-notif-next-tenant',S.notifNextTenantEta===true);
   cb('s-ai-extract-enabled',S.aiExtractEnabled!==false);
   cb('s-brevo-enabled',S.brevoEnabled===true);
-  if(el('brevo-test-to')) el('brevo-test-to').textContent=S.coEmail||'not set — add one in Company settings';
+  if(el('email-test-to') && !el('email-test-to').value) el('email-test-to').value=S.coEmail||'';
   cb('s-sla-dash',S.slaDash!==false);
   cb('s-req-checklist',S.reqChecklist||false);
   cb('s-gas-prompt',S.gasPrompt!==false);
@@ -7060,63 +7060,93 @@ async function saveSettings(){
   toast('Settings saved ✓','success');
 }
 
-// Brevo's API key/from/provider choice live as their own app_settings rows —
-// deliberately NOT inside the S/'__all__' blob saveAllSettings() pushes,
-// which the Portal app reads in full (RLS on app_settings only opens the
-// '__all__' row to anon; anything else, including these three keys, is
-// office-only — see settings_office_only). Kept editable from here instead
-// of a Supabase secret specifically so rotating the key or switching Brevo
-// accounts doesn't need a developer each time.
-async function loadBrevoSettings(){
+// Every provider's own API key/from, plus which one is active, live as
+// their own app_settings rows — deliberately NOT inside the S/'__all__'
+// blob saveAllSettings() pushes, which the Portal app reads in full (RLS
+// on app_settings only opens the '__all__' row to anon; anything else,
+// including these keys, is office-only — see settings_office_only). Kept
+// editable from here instead of Supabase secrets specifically so rotating
+// a key or switching accounts doesn't need a developer each time.
+const _EMAIL_SETTING_KEYS=['email_provider','resend_api_key','resend_from','sendgrid_api_key','sendgrid_from','brevo_api_key','brevo_from'];
+async function loadEmailProviderSettings(){
   try{
-    const rows=await _sb('app_settings?key=in.(email_provider,brevo_api_key,brevo_from)&select=key,value');
+    const rows=await _sb(`app_settings?key=in.(${_EMAIL_SETTING_KEYS.join(',')})&select=key,value`);
     const byKey={};
     (rows||[]).forEach(r=>{byKey[r.key]=r.value;});
-    const provEl=document.getElementById('s-email-provider');
-    if(provEl) provEl.value=byKey.email_provider||'';
-    const keyEl=document.getElementById('s-brevo-api-key');
-    if(keyEl) keyEl.value=byKey.brevo_api_key||'';
-    const fromEl=document.getElementById('s-brevo-from');
-    if(fromEl) fromEl.value=byKey.brevo_from||'';
-  }catch(e){ console.warn('loadBrevoSettings:',e); }
+    const set=(id,val)=>{const el=document.getElementById(id);if(el)el.value=val||'';};
+    set('s-email-provider',byKey.email_provider||'resend');
+    set('s-resend-api-key',byKey.resend_api_key);
+    set('s-resend-from',byKey.resend_from);
+    set('s-sendgrid-api-key',byKey.sendgrid_api_key);
+    set('s-sendgrid-from',byKey.sendgrid_from);
+    set('s-brevo-api-key',byKey.brevo_api_key);
+    set('s-brevo-from',byKey.brevo_from);
+  }catch(e){ console.warn('loadEmailProviderSettings:',e); }
 }
 
-async function saveBrevoConfig(){
+async function saveEmailProviderConfig(){
   if(_appUser?.role!=='Admin'){ toast('❌ Only Admins can change email provider settings','error'); return; }
-  const provider=document.getElementById('s-email-provider')?.value||'';
-  const apiKey=document.getElementById('s-brevo-api-key')?.value.trim()||'';
-  const from=document.getElementById('s-brevo-from')?.value.trim()||'';
+  const val=id=>document.getElementById(id)?.value.trim()||'';
+  const payload={
+    email_provider: val('s-email-provider'),
+    resend_api_key: val('s-resend-api-key'),
+    resend_from: val('s-resend-from'),
+    sendgrid_api_key: val('s-sendgrid-api-key'),
+    sendgrid_from: val('s-sendgrid-from'),
+    brevo_api_key: val('s-brevo-api-key'),
+    brevo_from: val('s-brevo-from'),
+  };
   try{
-    await Promise.all([
-      _sb('app_settings',{method:'POST',body:{key:'email_provider',value:provider,updated:Math.floor(Date.now()/1000)},prefer:'resolution=merge-duplicates,return=minimal'}),
-      _sb('app_settings',{method:'POST',body:{key:'brevo_api_key',value:apiKey,updated:Math.floor(Date.now()/1000)},prefer:'resolution=merge-duplicates,return=minimal'}),
-      _sb('app_settings',{method:'POST',body:{key:'brevo_from',value:from,updated:Math.floor(Date.now()/1000)},prefer:'resolution=merge-duplicates,return=minimal'}),
-    ]);
+    const now=Math.floor(Date.now()/1000);
+    await Promise.all(Object.entries(payload).map(([key,value])=>
+      _sb('app_settings',{method:'POST',body:{key,value,updated:now},prefer:'resolution=merge-duplicates,return=minimal'})
+    ));
     toast('✅ Email provider settings saved','success');
   }catch(e){
-    console.error('saveBrevoConfig:',e);
+    console.error('saveEmailProviderConfig:',e);
     toast('❌ Could not save — check console','error');
   }
 }
 
-// Fires a real email through the app's actual send-email pipeline (whichever
-// provider is currently active server-side) to the office's own address —
-// the same _sendEmail() every invoice/cert/reminder email already goes
-// through, so a successful test here means the real thing works too. If
-// Brevo is the active provider but the "Enable sending via Brevo" toggle
-// above is off, the Edge Function refuses with a clear message rather than
-// silently succeeding or silently doing nothing.
-async function sendTestBrevoEmail(){
-  if(!S.coEmail){ toast('Add a company email in Settings → Company first','error'); return; }
+// Sample data for every email type this app actually sends — used only to
+// render the real template functions (the exact same ones every live
+// invoice/cert email goes through) with fake values, never touching a real
+// job/invoice/client record.
+function _sampleInvForTest(){
+  return {number:'INV-TEST-0001', clientName:'Test Client', dueDate:new Date(Date.now()+14*86400000).toISOString().slice(0,10)};
+}
+function _sampleCertForTest(){
+  return {type:'EICR', address:'123 Test Street, Test Town, TE1 1ST', landlord:'Test Landlord', expiryDate:new Date(Date.now()+5*365*86400000).toISOString().slice(0,10)};
+}
+
+// Fires a REAL email — built from the app's actual template functions for
+// whichever type is picked, the same ones every live invoice/cert email
+// goes through — via the app's actual send-email pipeline (whichever
+// provider is active server-side), to an address you choose. A successful
+// test here means the real thing works, and looks like this. If Brevo is
+// the active provider but its "Enable sending via Brevo" toggle is off,
+// the Edge Function refuses with a clear message rather than silently
+// succeeding or silently doing nothing.
+async function sendTestEmail(){
+  const to=document.getElementById('email-test-to')?.value.trim();
+  if(!to){ toast('Enter an email address to send the test to','error'); return; }
+  const type=document.getElementById('email-test-type')?.value||'generic';
   const btn=document.getElementById('brevo-test-btn');
   if(btn){ btn.disabled=true; btn.textContent='Sending…'; }
   try{
-    const html=_brandedEmailShell(`
+    const inv=_sampleInvForTest(), cert=_sampleCertForTest(), t={grand:150.00};
+    let subject, html;
+    if(type==='invoice-ready'){ subject=_invEmailSubject(inv); html=_invoiceReadyEmailHtml(inv,t); }
+    else if(type==='payment-receipt'){ subject=_invEmailSubject(inv); html=_paymentReceiptEmailHtml(inv,150.00); }
+    else if(type==='overdue'){ subject=_invEmailSubject(inv); html=_overdueEmailHtml(inv,t,7,`Invoice ${inv.number} for £${t.grand.toFixed(2)} is 7 days overdue. Please arrange payment.`); }
+    else if(type==='cert-ready'){ subject=`Your ${cert.type} Certificate — ${cert.address}`; html=_certReadyEmailHtml(cert,'#sample-certificate-pdf'); }
+    else if(type==='cert-locked'){ subject=`${cert.type} Certificate — payment required — ${cert.address}`; html=_certLockedEmailHtml(cert,'#sample-portal-link'); }
+    else { subject='DeepFlow — test email'; html=_brandedEmailShell(`
       <p style="font-size:14px;color:#333;line-height:1.6">This is a test email from DeepFlow.</p>
       <p style="font-size:14px;color:#333;line-height:1.6">If you're reading this, the app's email pipeline is working correctly.</p>
-    `);
-    const result=await _sendEmail({to:S.coEmail, subject:'DeepFlow — test email', html});
-    if(result.ok) toast('✅ Test email sent to '+S.coEmail,'success');
+    `); }
+    const result=await _sendEmail({to, subject, html});
+    if(result.ok) toast('✅ Test email sent to '+to,'success');
     else toast('❌ '+(result.error||'Test email failed'),'error',8000);
   }catch(e){
     toast('❌ '+(e.message||'Test email failed'),'error',8000);
@@ -7485,7 +7515,7 @@ function switchSetTab(tab){
   if(tab==='guide') setTimeout(renderSqlSnippets, 50);
   if(tab==='portal-contacts') setTimeout(loadPortalContacts, 50);
   if(tab==='notifications') setTimeout(initStaffPush, 50);
-  if(tab==='email') setTimeout(loadBrevoSettings, 50);
+  if(tab==='email') setTimeout(loadEmailProviderSettings, 50);
   document.querySelectorAll('.set-tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===tab));
   document.querySelectorAll('.set-tab-panel').forEach(p=>p.classList.toggle('active',p.id==='stab-'+tab));
 }
@@ -10017,7 +10047,7 @@ Object.assign(window, {
   postcodeLookup, confirmPostcode,
   loadJobVisits, toggleAddVisitForm, saveVisit, deleteVisit, openProjectPicker, _toggleVisitEngineer,
   handleAccess, handleLogoUpload, handleNotifClick, handlePriDotClick, importBackup, importCertCSV,
-  sendTestBrevoEmail, loadBrevoSettings, saveBrevoConfig,
+  sendTestEmail, loadEmailProviderSettings, saveEmailProviderConfig,
   invClientSelected, invNavSelect, jCalPickDate, jPickDate, jcalShiftMonth, kanbanDragOver, 
   kanbanDragStart, kanbanDrop, loadEarlierJobs, loadEngPerms, loadEngineerLocations, loadStorageDashboard, 
   loadStorageStats, loadTeam, markInvPaid, markInvSent, markInvUnpaid, matchDir, 
