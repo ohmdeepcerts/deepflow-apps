@@ -6755,11 +6755,27 @@ async function syncOfficeUsers(){
       failed++;
     }
   }
-  // Also deactivate any Supabase non-engineer users that no longer exist in S.users
+  // Also deactivate any Supabase non-engineer users that no longer exist in S.users.
+  // SAFETY: never auto-deactivate an admin, ever, from any browser. S.users
+  // is a per-browser localStorage cache (df_setting_users) — a founding/
+  // original admin account created directly in Supabase (never added
+  // through the Team UI on THIS browser) legitimately isn't in it, and
+  // this loop used to read that as "removed" and lock them out of their
+  // own account. Confirmed live: this exact function, called from the
+  // ordinary Brevo-toggle save this session, silently deactivated the
+  // logged-in admin's own row, and re-deactivated it again the next time
+  // it ran, even after being manually reactivated in the database,
+  // because the underlying cause (this account missing from S.users on
+  // this browser) was never addressed. Admin removal is rare and already
+  // has a real, explicit, confirm()-gated path (deleteUser/teamRevoke on
+  // the Team page) — this best-effort "prune what's missing" sync has no
+  // business inferring an admin should lose access just because one
+  // particular browser's local cache doesn't happen to list them.
   try{
-    const sbAll=await _sb('users?role=neq.engineer&active=eq.true&select=id,name');
+    const sbAll=await _sb('users?role=neq.engineer&active=eq.true&select=id,name,role');
     if(sbAll){
       for(const sb of sbAll){
+        if(sb.role==='admin') continue;
         const stillExists=users.find(u=>u._sbId===sb.id||u.name===sb.name);
         if(!stillExists){
           await _sb('users?id=eq.'+sb.id,{method:'PATCH',body:{active:false},prefer:'return=minimal'});
