@@ -6422,6 +6422,8 @@ function renderSettings(){
   cb('s-notif-push-enabled',S.notifPushEnabled===true);
   cb('s-notif-next-tenant',S.notifNextTenantEta===true);
   cb('s-ai-extract-enabled',S.aiExtractEnabled!==false);
+  cb('s-brevo-enabled',S.brevoEnabled===true);
+  if(el('brevo-test-to')) el('brevo-test-to').textContent=S.coEmail||'not set — add one in Company settings';
   cb('s-sla-dash',S.slaDash!==false);
   cb('s-req-checklist',S.reqChecklist||false);
   cb('s-gas-prompt',S.gasPrompt!==false);
@@ -6992,6 +6994,7 @@ async function saveSettings(){
   if(getCB('s-notif-push-enabled')!==null) S.notifPushEnabled=getCB('s-notif-push-enabled');
   if(getCB('s-notif-next-tenant')!==null) S.notifNextTenantEta=getCB('s-notif-next-tenant');
   if(getCB('s-ai-extract-enabled')!==null) S.aiExtractEnabled=getCB('s-ai-extract-enabled');
+  if(getCB('s-brevo-enabled')!==null) S.brevoEnabled=getCB('s-brevo-enabled');
   if(get('s-admin-pin')!==null && get('s-admin-pin')) S.adminPin=get('s-admin-pin');
 
   // Checkboxes
@@ -7055,6 +7058,32 @@ async function saveSettings(){
   updateOnlinePanel();
   startThemeScheduler();
   toast('Settings saved ✓','success');
+}
+
+// Fires a real email through the app's actual send-email pipeline (whichever
+// provider is currently active server-side) to the office's own address —
+// the same _sendEmail() every invoice/cert/reminder email already goes
+// through, so a successful test here means the real thing works too. If
+// Brevo is the active provider but the "Enable sending via Brevo" toggle
+// above is off, the Edge Function refuses with a clear message rather than
+// silently succeeding or silently doing nothing.
+async function sendTestBrevoEmail(){
+  if(!S.coEmail){ toast('Add a company email in Settings → Company first','error'); return; }
+  const btn=document.getElementById('brevo-test-btn');
+  if(btn){ btn.disabled=true; btn.textContent='Sending…'; }
+  try{
+    const html=_brandedEmailShell(`
+      <p style="font-size:14px;color:#333;line-height:1.6">This is a test email from DeepFlow.</p>
+      <p style="font-size:14px;color:#333;line-height:1.6">If you're reading this, the app's email pipeline is working correctly.</p>
+    `);
+    const result=await _sendEmail({to:S.coEmail, subject:'DeepFlow — test email', html});
+    if(result.ok) toast('✅ Test email sent to '+S.coEmail,'success');
+    else toast('❌ '+(result.error||'Test email failed'),'error',8000);
+  }catch(e){
+    toast('❌ '+(e.message||'Test email failed'),'error',8000);
+  }finally{
+    if(btn){ btn.disabled=false; btn.textContent='✉ Send Test Email'; }
+  }
 }
 
 function handleLogoUpload(inp){
@@ -9948,6 +9977,7 @@ Object.assign(window, {
   postcodeLookup, confirmPostcode,
   loadJobVisits, toggleAddVisitForm, saveVisit, deleteVisit, openProjectPicker, _toggleVisitEngineer,
   handleAccess, handleLogoUpload, handleNotifClick, handlePriDotClick, importBackup, importCertCSV,
+  sendTestBrevoEmail,
   invClientSelected, invNavSelect, jCalPickDate, jPickDate, jcalShiftMonth, kanbanDragOver, 
   kanbanDragStart, kanbanDrop, loadEarlierJobs, loadEngPerms, loadEngineerLocations, loadStorageDashboard, 
   loadStorageStats, loadTeam, markInvPaid, markInvSent, markInvUnpaid, matchDir, 

@@ -5025,6 +5025,7 @@ body.density-relaxed .jtable td{font-size:15px}
         <button class="set-tab" data-tab="trades" onclick="switchSetTab('trades')">🔧 Trades & Services</button>
         <button class="set-tab" data-tab="invoicing" onclick="switchSetTab('invoicing')">◎ Invoicing</button>
         <button class="set-tab" data-tab="whatsapp" onclick="switchSetTab('whatsapp')">📱 WhatsApp</button>
+        <button class="set-tab" data-tab="email" onclick="switchSetTab('email')">✉ Email</button>
         <button class="set-tab" data-tab="jobs" onclick="switchSetTab('jobs')">⊞ Job Controls</button>
         <button class="set-tab" data-tab="portal-contacts" onclick="switchSetTab('portal-contacts')">☎ Portal Contacts</button>
         <button class="set-tab" data-tab="notifications" onclick="switchSetTab('notifications')">🔔 Notifications</button>
@@ -5545,6 +5546,26 @@ body.density-relaxed .jtable td{font-size:15px}
             <strong>Wired templates</strong> fire automatically when you click the relevant button in the app — variables are filled from the job/invoice data automatically.<br>
             <strong>Manual templates</strong> use the 📋 Copy filled button to copy the message with your last selected job's data pre-filled, then paste into WhatsApp manually.<br>
             <strong>Bold text</strong> in WhatsApp: wrap in *asterisks*. <strong>New line</strong>: press Enter in the text box above.
+          </div>
+        </div>
+      </div>
+
+      <!-- EMAIL TAB -->
+      <div class="set-tab-panel" id="stab-email">
+        <div class="set-section">
+          <div class="set-title">✉ Email Sending (Brevo)</div>
+          <div class="set-card">
+            <div style="font-size:12px;color:var(--txt2);line-height:1.7;margin-bottom:12px">
+              DeepFlow's certificate, invoice and reminder emails already go out through the app's own send-email pipeline — Brevo is a new provider option for that same pipeline.
+              The Brevo <strong>API key itself is never entered here</strong> — it's configured server-side as a Supabase secret, so it never passes through the browser or gets stored anywhere the Portal or Engineer apps could read it.
+              This toggle is a separate, immediate on/off switch you control yourself: even once the key is set up, no email goes out via Brevo while this is off.
+            </div>
+            <label class="fcheck"><input type="checkbox" id="s-brevo-enabled" onchange="saveSettings()"> Enable sending via Brevo</label>
+            <div style="font-size:11px;color:var(--txt3);margin-top:4px;margin-left:24px">Off by default. Turn on only once you're ready for real emails to go out.</div>
+            <div style="margin-top:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <button class="btn btn-ghost btn-sm" id="brevo-test-btn" onclick="sendTestBrevoEmail()">✉ Send Test Email</button>
+              <span style="font-size:11px;color:var(--txt3)">Sends a real test email to your own company email address (<span id="brevo-test-to"></span>) through whichever provider is currently active — useful to confirm Brevo is wired up correctly before turning it on for real client emails.</span>
+            </div>
           </div>
         </div>
       </div>
