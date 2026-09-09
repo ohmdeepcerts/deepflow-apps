@@ -1,20 +1,20 @@
 // Sends transactional email (invoice reminders, cert expiry notices, etc.).
-// Three providers are wired up, switched purely by the EMAIL_PROVIDER secret —
-// no code change needed to flip between them:
+// Three providers are wired up:
 //   - "resend" (default): needs a verified domain to email anyone but the
 //     account owner. Kept fully intact, just dormant until a domain is
-//     verified — see RESEND_API_KEY/RESEND_FROM below.
+//     verified — see RESEND_API_KEY/RESEND_FROM below. Secret-configured.
 //   - "sendgrid": uses Single Sender Verification (one verified email
 //     address, no domain/DNS needed) and can email real recipients
-//     immediately — this is the one turned on for now.
-//   - "brevo": gated by an EXTRA switch on top of the provider secret — the
-//     app_settings.brevoEnabled flag, toggled from Settings → Email, off by
-//     default. The office explicitly asked for this while still testing:
-//     configuring the API key alone must not be enough to start real sends,
-//     since flipping EMAIL_PROVIDER to "brevo" is a one-time secret change
-//     but the on/off switch needs to be something they control themselves,
-//     immediately, without asking for a redeploy each time. See
-//     BREVO_API_KEY/BREVO_FROM below.
+//     immediately — this is the one turned on for now. Secret-configured.
+//   - "brevo": configured entirely from the database (app_settings rows
+//     email_provider/brevo_api_key/brevo_from), not secrets — the office
+//     explicitly asked for this so rotating the key or switching Brevo
+//     accounts is a Settings → Email edit, not a redeploy. RLS already
+//     restricts those rows to office staff only (settings_office_only);
+//     read here with the service key so a live edit takes effect on the
+//     very next send. Also gated by app_settings.brevoEnabled, off by
+//     default — configuring the key alone must not be enough to start
+//     real sends while still testing.
 // Reply-To is always set to the office's own email (S.coEmail) so a client
 // hitting reply lands in a real inbox either way.
 //
@@ -25,16 +25,13 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const SB_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const EMAIL_PROVIDER = (Deno.env.get('EMAIL_PROVIDER') || 'resend').toLowerCase();
+const EMAIL_PROVIDER_DEFAULT = (Deno.env.get('EMAIL_PROVIDER') || 'resend').toLowerCase();
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
 const RESEND_FROM = Deno.env.get('RESEND_FROM'); // e.g. "GB Electrical <invoices@yourdomain.co.uk>"
 
 const SENDGRID_API_KEY = Deno.env.get('SENDGRID_API_KEY');
 const SENDGRID_FROM = Deno.env.get('SENDGRID_FROM'); // e.g. "GB Electrical <you@gmail.com>" — must be a Single-Sender-verified address
-
-const BREVO_API_KEY = Deno.env.get('BREVO_API_KEY');
-const BREVO_FROM = Deno.env.get('BREVO_FROM'); // e.g. "GB Electrical <you@yourdomain.co.uk>"
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -98,11 +95,11 @@ async function sendViaSendGrid(to: string, subject: string, html: string, replyT
   return res.headers.get('x-message-id') || 'sent';
 }
 
-async function sendViaBrevo(to: string, subject: string, html: string, replyTo: string | undefined, attachments: Attachment[], cc: string | undefined) {
-  const from = parseFrom(BREVO_FROM!);
+async function sendViaBrevo(apiKey: string, fromRaw: string, to: string, subject: string, html: string, replyTo: string | undefined, attachments: Attachment[], cc: string | undefined) {
+  const from = parseFrom(fromRaw);
   const res = await fetch('https://api.brevo.com/v3/smtp/email', {
     method: 'POST',
-    headers: { 'api-key': BREVO_API_KEY!, 'Content-Type': 'application/json', Accept: 'application/json' },
+    headers: { 'api-key': apiKey, 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify({
       sender: from,
       to: [{ email: to }],
@@ -122,22 +119,37 @@ async function sendViaBrevo(to: string, subject: string, html: string, replyTo: 
   return (result?.messageId as string) || 'sent';
 }
 
-// The on/off switch office staff control from Settings → Email lives in
-// app_settings (the same single-row '__all__' JSON blob every other Office
-// setting is stored in — see saveAllSettings()/_loadSettingsFromDb() in
-// apps/office/main.js), read here with the service key so it's checked
-// fresh on every send rather than baked into a secret that would need a
-// redeploy to flip. Defaults to disabled on any read failure — the safe
-// direction for something the office asked to be off by default.
-async function isBrevoEnabled(): Promise<boolean> {
+type EmailSettings = { provider: string; brevoEnabled: boolean; brevoApiKey: string | null; brevoFrom: string | null };
+
+// Everything the office can edit from Settings → Email — active provider,
+// Brevo's own key/from, and the enable switch — lives in app_settings, not
+// secrets, specifically so changing them is a Settings edit rather than a
+// redeploy. RLS (settings_office_only) already restricts these rows to
+// office staff; read here with the service key so an edit takes effect on
+// the very next send, and so a bare SELECT with the anon/portal key (RLS
+// only opens the '__all__' row to anon) can never see brevo_api_key at all.
+// Defaults to the secret-based provider and Brevo disabled on any read
+// failure — the safe direction, and identical to pre-database-config
+// behaviour if these rows don't exist yet.
+async function getEmailSettings(): Promise<EmailSettings> {
+  const fallback: EmailSettings = { provider: EMAIL_PROVIDER_DEFAULT, brevoEnabled: false, brevoApiKey: null, brevoFrom: null };
   try {
     const supabase = createClient(SB_URL, SERVICE_KEY);
-    const { data } = await supabase.from('app_settings').select('value').eq('key', '__all__').maybeSingle();
-    if (!data?.value) return false;
-    const settings = JSON.parse(data.value);
-    return settings?.brevoEnabled === true;
+    const [{ data: allRow }, { data: rows }] = await Promise.all([
+      supabase.from('app_settings').select('value').eq('key', '__all__').maybeSingle(),
+      supabase.from('app_settings').select('key,value').in('key', ['email_provider', 'brevo_api_key', 'brevo_from']),
+    ]);
+    const blob = allRow?.value ? JSON.parse(allRow.value) : {};
+    const byKey: Record<string, string> = {};
+    (rows || []).forEach((r: { key: string; value: string }) => { byKey[r.key] = r.value; });
+    return {
+      provider: (byKey.email_provider || EMAIL_PROVIDER_DEFAULT).toLowerCase(),
+      brevoEnabled: blob?.brevoEnabled === true,
+      brevoApiKey: byKey.brevo_api_key || null,
+      brevoFrom: byKey.brevo_from || null,
+    };
   } catch {
-    return false;
+    return fallback;
   }
 }
 
@@ -163,17 +175,19 @@ Deno.serve(async (req) => {
     (a): a is Attachment => !!a?.filename && !!a?.content
   );
 
+  const settings = await getEmailSettings();
+
   try {
-    if (EMAIL_PROVIDER === 'brevo') {
-      if (!(await isBrevoEnabled())) {
+    if (settings.provider === 'brevo') {
+      if (!settings.brevoEnabled) {
         return json({ error: 'Brevo sending is turned off — enable it in Settings → Email, then try again.' }, 503);
       }
-      if (!BREVO_API_KEY || !BREVO_FROM) {
-        return json({ error: 'Brevo is not configured yet — add BREVO_API_KEY and BREVO_FROM as Edge Function secrets.' }, 503);
+      if (!settings.brevoApiKey || !settings.brevoFrom) {
+        return json({ error: 'Brevo is not configured yet — add the API key and From address in Settings → Email.' }, 503);
       }
-      const id = await sendViaBrevo(to, subject, html, replyTo, validAttachments, cc);
+      const id = await sendViaBrevo(settings.brevoApiKey, settings.brevoFrom, to, subject, html, replyTo, validAttachments, cc);
       return json({ id });
-    } else if (EMAIL_PROVIDER === 'sendgrid') {
+    } else if (settings.provider === 'sendgrid') {
       if (!SENDGRID_API_KEY || !SENDGRID_FROM) {
         return json({ error: 'SendGrid is not configured yet — ask the office to finish setup.' }, 503);
       }

@@ -7060,6 +7060,45 @@ async function saveSettings(){
   toast('Settings saved ✓','success');
 }
 
+// Brevo's API key/from/provider choice live as their own app_settings rows —
+// deliberately NOT inside the S/'__all__' blob saveAllSettings() pushes,
+// which the Portal app reads in full (RLS on app_settings only opens the
+// '__all__' row to anon; anything else, including these three keys, is
+// office-only — see settings_office_only). Kept editable from here instead
+// of a Supabase secret specifically so rotating the key or switching Brevo
+// accounts doesn't need a developer each time.
+async function loadBrevoSettings(){
+  try{
+    const rows=await _sb('app_settings?key=in.(email_provider,brevo_api_key,brevo_from)&select=key,value');
+    const byKey={};
+    (rows||[]).forEach(r=>{byKey[r.key]=r.value;});
+    const provEl=document.getElementById('s-email-provider');
+    if(provEl) provEl.value=byKey.email_provider||'';
+    const keyEl=document.getElementById('s-brevo-api-key');
+    if(keyEl) keyEl.value=byKey.brevo_api_key||'';
+    const fromEl=document.getElementById('s-brevo-from');
+    if(fromEl) fromEl.value=byKey.brevo_from||'';
+  }catch(e){ console.warn('loadBrevoSettings:',e); }
+}
+
+async function saveBrevoConfig(){
+  if(_appUser?.role!=='Admin'){ toast('❌ Only Admins can change email provider settings','error'); return; }
+  const provider=document.getElementById('s-email-provider')?.value||'';
+  const apiKey=document.getElementById('s-brevo-api-key')?.value.trim()||'';
+  const from=document.getElementById('s-brevo-from')?.value.trim()||'';
+  try{
+    await Promise.all([
+      _sb('app_settings',{method:'POST',body:{key:'email_provider',value:provider,updated:Math.floor(Date.now()/1000)},prefer:'resolution=merge-duplicates,return=minimal'}),
+      _sb('app_settings',{method:'POST',body:{key:'brevo_api_key',value:apiKey,updated:Math.floor(Date.now()/1000)},prefer:'resolution=merge-duplicates,return=minimal'}),
+      _sb('app_settings',{method:'POST',body:{key:'brevo_from',value:from,updated:Math.floor(Date.now()/1000)},prefer:'resolution=merge-duplicates,return=minimal'}),
+    ]);
+    toast('✅ Email provider settings saved','success');
+  }catch(e){
+    console.error('saveBrevoConfig:',e);
+    toast('❌ Could not save — check console','error');
+  }
+}
+
 // Fires a real email through the app's actual send-email pipeline (whichever
 // provider is currently active server-side) to the office's own address —
 // the same _sendEmail() every invoice/cert/reminder email already goes
@@ -7446,6 +7485,7 @@ function switchSetTab(tab){
   if(tab==='guide') setTimeout(renderSqlSnippets, 50);
   if(tab==='portal-contacts') setTimeout(loadPortalContacts, 50);
   if(tab==='notifications') setTimeout(initStaffPush, 50);
+  if(tab==='email') setTimeout(loadBrevoSettings, 50);
   document.querySelectorAll('.set-tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===tab));
   document.querySelectorAll('.set-tab-panel').forEach(p=>p.classList.toggle('active',p.id==='stab-'+tab));
 }
@@ -9977,7 +10017,7 @@ Object.assign(window, {
   postcodeLookup, confirmPostcode,
   loadJobVisits, toggleAddVisitForm, saveVisit, deleteVisit, openProjectPicker, _toggleVisitEngineer,
   handleAccess, handleLogoUpload, handleNotifClick, handlePriDotClick, importBackup, importCertCSV,
-  sendTestBrevoEmail,
+  sendTestBrevoEmail, loadBrevoSettings, saveBrevoConfig,
   invClientSelected, invNavSelect, jCalPickDate, jPickDate, jcalShiftMonth, kanbanDragOver, 
   kanbanDragStart, kanbanDrop, loadEarlierJobs, loadEngPerms, loadEngineerLocations, loadStorageDashboard, 
   loadStorageStats, loadTeam, markInvPaid, markInvSent, markInvUnpaid, matchDir, 

@@ -5556,12 +5556,38 @@ body.density-relaxed .jtable td{font-size:15px}
           <div class="set-title">✉ Email Sending (Brevo)</div>
           <div class="set-card">
             <div style="font-size:12px;color:var(--txt2);line-height:1.7;margin-bottom:12px">
-              DeepFlow's certificate, invoice and reminder emails already go out through the app's own send-email pipeline — Brevo is a new provider option for that same pipeline.
-              The Brevo <strong>API key itself is never entered here</strong> — it's configured server-side as a Supabase secret, so it never passes through the browser or gets stored anywhere the Portal or Engineer apps could read it.
-              This toggle is a separate, immediate on/off switch you control yourself: even once the key is set up, no email goes out via Brevo while this is off.
+              DeepFlow's certificate, invoice and reminder emails already go out through the app's own send-email pipeline — Brevo is a provider option for that same pipeline, configured entirely here so you can change the key or switch accounts yourself without needing a developer.
+              This is still kept away from the Portal and Engineer apps — office-only, same protection as every other business setting on this page.
             </div>
+
+            <div class="fg" style="max-width:420px">
+              <label class="fl">Brevo API Key</label>
+              <div style="position:relative">
+                <input type="password" id="s-brevo-api-key" class="fi" placeholder="xkeysib-..." style="padding-right:38px">
+                <button type="button" onclick="togglePwVis('s-brevo-api-key',this)" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:14px">👁</button>
+              </div>
+              <div style="font-size:11px;color:var(--txt3);margin-top:4px">From Brevo → Settings → SMTP &amp; API → API Keys. Generate a new one any time you need to rotate it or switch to a different Brevo account.</div>
+            </div>
+            <div class="fg" style="max-width:420px">
+              <label class="fl">Send From</label>
+              <input type="text" id="s-brevo-from" class="fi" placeholder="Compliance OHM Electrical <compliance@ohmelectricals.co.uk>">
+              <div style="font-size:11px;color:var(--txt3);margin-top:4px">"Name &lt;email@domain.com&gt;" — the email address must already be a verified sender in Brevo, or sends will fail.</div>
+            </div>
+            <div class="fg" style="max-width:220px">
+              <label class="fl">Active Provider</label>
+              <select id="s-email-provider" class="fs">
+                <option value="">Server default</option>
+                <option value="brevo">Brevo</option>
+                <option value="resend">Resend</option>
+                <option value="sendgrid">SendGrid</option>
+              </select>
+            </div>
+            <button class="btn btn-acc btn-sm" style="margin-top:4px" onclick="saveBrevoConfig()">Save</button>
+
+            <div style="border-top:1px solid var(--border);margin:16px 0"></div>
+
             <label class="fcheck"><input type="checkbox" id="s-brevo-enabled" onchange="saveSettings()"> Enable sending via Brevo</label>
-            <div style="font-size:11px;color:var(--txt3);margin-top:4px;margin-left:24px">Off by default. Turn on only once you're ready for real emails to go out.</div>
+            <div style="font-size:11px;color:var(--txt3);margin-top:4px;margin-left:24px">Off by default. This is a separate, immediate switch — even with a key saved above and Brevo picked as the active provider, no email goes out via Brevo until this is on.</div>
             <div style="margin-top:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
               <button class="btn btn-ghost btn-sm" id="brevo-test-btn" onclick="sendTestBrevoEmail()">✉ Send Test Email</button>
               <span style="font-size:11px;color:var(--txt3)">Sends a real test email to your own company email address (<span id="brevo-test-to"></span>) through whichever provider is currently active — useful to confirm Brevo is wired up correctly before turning it on for real client emails.</span>
