@@ -28,11 +28,11 @@ export function _invEmailSubject(inv){
 // fetch/auth/error-shape logic exists in exactly one place. Routed through
 // @comms's communicationProvider (Phase B) — same fetch/auth/error-shape
 // behaviour as before, now behind the transport swap point.
-export async function _sendEmail({to, cc, subject, html, attachments, replyTo}){
+export async function _sendEmail({to, cc, subject, html, attachments, replyTo, category}){
   try{
     return await _commProvider.send({
       channel: 'EMAIL',
-      content: {to, cc, subject, html, attachments, replyTo: replyTo===undefined?(S.coEmail||undefined):replyTo},
+      content: {to, cc, subject, html, attachments, replyTo: replyTo===undefined?(S.coEmail||undefined):replyTo, category},
     });
   }catch(e){ return {ok:false, error:e.message}; }
 }
@@ -184,6 +184,7 @@ export async function sendAllOverdueEmail(){
       subject: _invEmailSubject(inv),
       html: _overdueEmailHtml(inv, t, daysOver, bodyText),
       attachments,
+      category: 'invoice',
     });
     if(r.ok) sent++; else { failed++; if(!firstError) firstError=r.error; }
   }

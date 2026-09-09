@@ -373,6 +373,7 @@ async function _maybeEmailCertReady(certId, {manual=false}={}){
       to: email,
       subject: `${c.type||'Compliance'} Certificate — payment required — ${c.address||''}`,
       html: _certLockedEmailHtml(c, portalUrl),
+      category: 'certificate',
     });
     if(result.ok){
       logActivity(`Locked-certificate notice emailed to ${email} for ${c.address||'certificate'} (invoice unpaid)`,'cert');
@@ -406,6 +407,7 @@ async function _maybeEmailCertReady(certId, {manual=false}={}){
     subject: `Your ${c.type||'Compliance'} Certificate — ${c.address||''}`,
     html: _certReadyEmailHtml(c, pdfUrl),
     attachments,
+    category: 'certificate',
   });
   if(result.ok){
     logActivity(`Certificate emailed to ${email} for ${c.address||'certificate'}`,'cert');

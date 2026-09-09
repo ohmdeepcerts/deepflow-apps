@@ -5631,6 +5631,25 @@ body.density-relaxed .jtable td{font-size:15px}
         </div>
 
         <div class="set-section">
+          <div class="set-title">🏷 Sender Name by Email Type</div>
+          <div class="set-card">
+            <div style="font-size:12px;color:var(--txt2);line-height:1.7;margin-bottom:12px">
+              The From <i>address</i> above always stays whatever's verified with the active provider — that part can't change per email without re-verifying a whole new address. The From <i>name</i> can, though: set a different display name for certificate emails vs invoice emails, so a client sees "Certs OHM Electrical" or "Invoices OHM Electrical" in their inbox instead of one generic name for everything. Leave either blank to just use the provider's own Send From name above.
+            </div>
+            <div class="frow">
+              <div class="fg" style="margin-bottom:0">
+                <label class="fl">Certificates <span style="font-weight:400;color:var(--txt3);text-transform:none">(Certificate Ready / Payment Required emails)</span></label>
+                <input type="text" id="s-email-name-certificate" class="fi" placeholder="e.g. Certs OHM Electrical" onchange="saveSettings()">
+              </div>
+              <div class="fg" style="margin-bottom:0">
+                <label class="fl">Invoices &amp; Payments <span style="font-weight:400;color:var(--txt3);text-transform:none">(Invoice / Receipt / Overdue emails)</span></label>
+                <input type="text" id="s-email-name-invoice" class="fi" placeholder="e.g. Invoices OHM Electrical" onchange="saveSettings()">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="set-section">
           <div class="set-title">🧪 Send Test Email</div>
           <div class="set-card">
             <div style="font-size:12px;color:var(--txt2);margin-bottom:12px">Sends a real email — built from the app's actual template for the type you pick — through whichever provider is active above. Use this to see exactly what a client would receive before it ever goes out for real.</div>

@@ -127,6 +127,7 @@ type EmailSettings = {
   resendApiKey: string | null; resendFrom: string | null;
   sendgridApiKey: string | null; sendgridFrom: string | null;
   brevoApiKey: string | null; brevoFrom: string | null;
+  fromNameCertificate: string | null; fromNameInvoice: string | null;
 };
 
 // Everything the office can edit from Settings → Email — active provider,
@@ -147,6 +148,7 @@ async function getEmailSettings(): Promise<EmailSettings> {
     resendApiKey: RESEND_API_KEY || null, resendFrom: RESEND_FROM || null,
     sendgridApiKey: SENDGRID_API_KEY || null, sendgridFrom: SENDGRID_FROM || null,
     brevoApiKey: null, brevoFrom: null,
+    fromNameCertificate: null, fromNameInvoice: null,
   };
   try {
     const supabase = createClient(SB_URL, SERVICE_KEY);
@@ -168,10 +170,25 @@ async function getEmailSettings(): Promise<EmailSettings> {
       sendgridFrom: byKey.sendgrid_from || SENDGRID_FROM || null,
       brevoApiKey: byKey.brevo_api_key || null,
       brevoFrom: byKey.brevo_from || null,
+      // These two are cosmetic (a display name, not a credential), so they
+      // live in the ordinary '__all__' settings blob alongside every other
+      // non-sensitive Office setting rather than getting their own
+      // office-only row — Settings → Email → "Sender Name by Email Type".
+      fromNameCertificate: blob?.emailNameCertificate || null,
+      fromNameInvoice: blob?.emailNameInvoice || null,
     };
   } catch {
     return fallback;
   }
+}
+
+// Swaps just the display NAME on a "Name <email>" string, keeping the
+// address untouched — the address is what's actually verified with the
+// provider, so it can't vary per email category, but the name is free to.
+function applyFromNameOverride(fromRaw: string, overrideName: string | null): string {
+  if (!overrideName) return fromRaw;
+  const parsed = parseFrom(fromRaw);
+  return `${overrideName} <${parsed.email}>`;
 }
 
 Deno.serve(async (req) => {
@@ -187,9 +204,10 @@ Deno.serve(async (req) => {
   let body: {
     to?: string; subject?: string; html?: string; replyTo?: string; cc?: string;
     attachments?: { filename?: string; content?: string }[];
+    category?: string;
   };
   try { body = await req.json(); } catch { return json({ error: 'Invalid request body' }, 400); }
-  const { to, subject, html, replyTo, cc, attachments } = body;
+  const { to, subject, html, replyTo, cc, attachments, category } = body;
   if (!to || !subject || !html) return json({ error: 'to, subject and html are required' }, 400);
 
   const validAttachments: Attachment[] = (attachments || []).filter(
@@ -197,6 +215,12 @@ Deno.serve(async (req) => {
   );
 
   const settings = await getEmailSettings();
+  // 'certificate' -> fromNameCertificate, 'invoice' -> fromNameInvoice,
+  // anything else (the ad-hoc "email this client" compose, or no category
+  // at all) -> the provider's own Send From name, unchanged.
+  const fromNameOverride = category === 'certificate' ? settings.fromNameCertificate
+    : category === 'invoice' ? settings.fromNameInvoice
+    : null;
 
   try {
     if (settings.provider === 'brevo') {
@@ -206,19 +230,19 @@ Deno.serve(async (req) => {
       if (!settings.brevoApiKey || !settings.brevoFrom) {
         return json({ error: 'Brevo is not configured yet — add the API key and From address in Settings → Email.' }, 503);
       }
-      const id = await sendViaBrevo(settings.brevoApiKey, settings.brevoFrom, to, subject, html, replyTo, validAttachments, cc);
+      const id = await sendViaBrevo(settings.brevoApiKey, applyFromNameOverride(settings.brevoFrom, fromNameOverride), to, subject, html, replyTo, validAttachments, cc);
       return json({ id });
     } else if (settings.provider === 'sendgrid') {
       if (!settings.sendgridApiKey || !settings.sendgridFrom) {
         return json({ error: 'SendGrid is not configured yet — add the API key and From address in Settings → Email.' }, 503);
       }
-      const id = await sendViaSendGrid(settings.sendgridApiKey, settings.sendgridFrom, to, subject, html, replyTo, validAttachments, cc);
+      const id = await sendViaSendGrid(settings.sendgridApiKey, applyFromNameOverride(settings.sendgridFrom, fromNameOverride), to, subject, html, replyTo, validAttachments, cc);
       return json({ id });
     } else {
       if (!settings.resendApiKey || !settings.resendFrom) {
         return json({ error: 'Resend is not configured yet — add the API key and From address in Settings → Email.' }, 503);
       }
-      const id = await sendViaResend(settings.resendApiKey, settings.resendFrom, to, subject, html, replyTo, validAttachments, cc);
+      const id = await sendViaResend(settings.resendApiKey, applyFromNameOverride(settings.resendFrom, fromNameOverride), to, subject, html, replyTo, validAttachments, cc);
       return json({ id });
     }
   } catch (e) {

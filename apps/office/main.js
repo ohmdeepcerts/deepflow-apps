@@ -5970,6 +5970,7 @@ async function sendInvEmail(){
     subject: _invEmailSubject(inv),
     html: _invoiceReadyEmailHtml(inv, t),
     attachments: [{filename:(inv.number||'invoice')+'.pdf', content:b64}],
+    category: 'invoice',
   });
   if(!r.ok){
     await _sb('invoice_audit',{method:'POST',body:{invoiceId:id,action:'failed',details:`Email to ${inv.clientEmail} failed: ${(r.error||'unknown error').slice(0,150)}`,to:inv.clientEmail,user:_appUser?.name||'System',timestamp:Date.now()}}).catch(()=>{});
@@ -6018,6 +6019,7 @@ export function _maybeSendPaymentReceipt(inv, amount){
     to: inv.clientEmail,
     subject: _invEmailSubject(inv),
     html: _paymentReceiptEmailHtml(inv, amount),
+    category: 'invoice',
   }).catch(e=>console.warn('[DeepFlow] Payment receipt email failed for',inv.number,e));
 }
 
@@ -6404,6 +6406,8 @@ function renderSettings(){
   if(el('s-notif-webhook-url')) el('s-notif-webhook-url').value=S.notifWebhookUrl||'';
   if(el('s-admin-pin')) el('s-admin-pin').value=S.adminPin||'';
   if(el('s-fontsize')) el('s-fontsize').value=S.fontSize||'normal';
+  if(el('s-email-name-certificate')) el('s-email-name-certificate').value=S.emailNameCertificate||'';
+  if(el('s-email-name-invoice')) el('s-email-name-invoice').value=S.emailNameInvoice||'';
   if(el('s-sidebar-w')) el('s-sidebar-w').value=S.sidebarWidth||'230';
   if(el('s-row-density')) el('s-row-density').value=S.rowDensity||'normal';
 
@@ -7025,6 +7029,8 @@ async function saveSettings(){
   if(get('s-theme-mode')) S.themeMode=get('s-theme-mode');
   if(get('s-theme-light-start')) S.themeLightStart=get('s-theme-light-start');
   if(get('s-theme-light-end')) S.themeLightEnd=get('s-theme-light-end');
+  if(get('s-email-name-certificate')!==null) S.emailNameCertificate=get('s-email-name-certificate').trim();
+  if(get('s-email-name-invoice')!==null) S.emailNameInvoice=get('s-email-name-invoice').trim();
 
   await saveAllSettings();
   // Sync both engineers AND office users to Supabase — so every device sees them on reload
@@ -7171,17 +7177,17 @@ async function sendTestEmail(){
   if(btn){ btn.disabled=true; btn.textContent='Sending…'; }
   try{
     const inv=_sampleInvForTest(), cert=_sampleCertForTest(), t={grand:150.00};
-    let subject, html;
-    if(type==='invoice-ready'){ subject=_invEmailSubject(inv); html=_invoiceReadyEmailHtml(inv,t); }
-    else if(type==='payment-receipt'){ subject=_invEmailSubject(inv); html=_paymentReceiptEmailHtml(inv,150.00); }
-    else if(type==='overdue'){ subject=_invEmailSubject(inv); html=_overdueEmailHtml(inv,t,7,`Invoice ${inv.number} for £${t.grand.toFixed(2)} is 7 days overdue. Please arrange payment.`); }
-    else if(type==='cert-ready'){ subject=`Your ${cert.type} Certificate — ${cert.address}`; html=_certReadyEmailHtml(cert,'#sample-certificate-pdf'); }
-    else if(type==='cert-locked'){ subject=`${cert.type} Certificate — payment required — ${cert.address}`; html=_certLockedEmailHtml(cert,'#sample-portal-link'); }
+    let subject, html, category;
+    if(type==='invoice-ready'){ subject=_invEmailSubject(inv); html=_invoiceReadyEmailHtml(inv,t); category='invoice'; }
+    else if(type==='payment-receipt'){ subject=_invEmailSubject(inv); html=_paymentReceiptEmailHtml(inv,150.00); category='invoice'; }
+    else if(type==='overdue'){ subject=_invEmailSubject(inv); html=_overdueEmailHtml(inv,t,7,`Invoice ${inv.number} for £${t.grand.toFixed(2)} is 7 days overdue. Please arrange payment.`); category='invoice'; }
+    else if(type==='cert-ready'){ subject=`Your ${cert.type} Certificate — ${cert.address}`; html=_certReadyEmailHtml(cert,'#sample-certificate-pdf'); category='certificate'; }
+    else if(type==='cert-locked'){ subject=`${cert.type} Certificate — payment required — ${cert.address}`; html=_certLockedEmailHtml(cert,'#sample-portal-link'); category='certificate'; }
     else { subject='DeepFlow — test email'; html=_brandedEmailShell(`
       <p style="font-size:14px;color:#333;line-height:1.6">This is a test email from DeepFlow.</p>
       <p style="font-size:14px;color:#333;line-height:1.6">If you're reading this, the app's email pipeline is working correctly.</p>
     `); }
-    const result=await _sendEmail({to, subject, html});
+    const result=await _sendEmail({to, subject, html, category});
     if(result.ok) toast('✅ Test email sent to '+to,'success');
     else toast('❌ '+(result.error||'Test email failed'),'error',8000);
   }catch(e){

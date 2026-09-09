@@ -22,13 +22,18 @@
 
 export function createCommunicationProvider({ sbUrl, sbKey, getJWT, fetchImpl = fetch }) {
   async function sendEmail(content) {
-    const { to, subject, html, replyTo, cc, attachments } = content || {};
+    const { to, subject, html, replyTo, cc, attachments, category } = content || {};
     if (!to || !subject || !html) throw new Error('EMAIL requires to, subject and html');
     const jwt = await getJWT();
     const res = await fetchImpl(`${sbUrl}/functions/v1/send-email`, {
       method: 'POST',
       headers: { apikey: sbKey, Authorization: 'Bearer ' + jwt, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to, cc, subject, html, attachments, replyTo }),
+      // category picks the From *name* only (e.g. "Certs OHM Electrical" vs
+      // "Invoices OHM Electrical") — the send-email function looks it up
+      // and swaps just the display name on the active provider's verified
+      // From address; the address itself never changes per category since
+      // that's the part that actually needs provider-side verification.
+      body: JSON.stringify({ to, cc, subject, html, attachments, replyTo, category }),
     });
     if (res.ok) return { ok: true };
     return { ok: false, error: (await res.json().catch(() => ({}))).error || 'Email send failed' };
