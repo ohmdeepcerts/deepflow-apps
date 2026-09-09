@@ -7082,7 +7082,29 @@ async function loadEmailProviderSettings(){
     set('s-brevo-api-key',byKey.brevo_api_key);
     set('s-brevo-from',byKey.brevo_from);
     onEmailProviderPicked();
+    _updateEmailProviderLiveBadge(byKey.email_provider||'resend');
   }catch(e){ console.warn('loadEmailProviderSettings:',e); }
+}
+
+// A plain <select> only ever shows what's currently highlighted — it can't
+// tell you whether that reflects what's actually saved, or a change you
+// (or someone testing) picked but never hit Save on. This badge is
+// deliberately separate from the dropdown: it's only ever updated from a
+// real DB read (here) or a real save (saveEmailProviderConfig), never by
+// just clicking the dropdown — reported live as genuine confusion ("can't
+// see which one is default") after exactly that mismatch happened.
+function _updateEmailProviderLiveBadge(provider){
+  const badge=document.getElementById('email-provider-live-badge');
+  if(!badge) return;
+  const names={resend:'Resend',sendgrid:'SendGrid (Twilio)',brevo:'Brevo'};
+  const label=names[provider]||provider||'Resend';
+  if(provider==='brevo' && S.brevoEnabled!==true){
+    badge.textContent=label+' — ⚠ disabled, real sends will fail until you turn it on below';
+    badge.style.color='var(--yellow)';
+  } else {
+    badge.textContent=label;
+    badge.style.color='var(--green)';
+  }
 }
 
 // Only the selected provider's fields are shown — three sets of API-key/
@@ -7114,6 +7136,7 @@ async function saveEmailProviderConfig(){
     await Promise.all(Object.entries(payload).map(([key,value])=>
       _sb('app_settings',{method:'POST',body:{key,value,updated:now},prefer:'resolution=merge-duplicates,return=minimal'})
     ));
+    _updateEmailProviderLiveBadge(payload.email_provider);
     toast('✅ Email provider settings saved','success');
   }catch(e){
     console.error('saveEmailProviderConfig:',e);
@@ -10060,7 +10083,7 @@ Object.assign(window, {
   postcodeLookup, confirmPostcode,
   loadJobVisits, toggleAddVisitForm, saveVisit, deleteVisit, openProjectPicker, _toggleVisitEngineer,
   handleAccess, handleLogoUpload, handleNotifClick, handlePriDotClick, importBackup, importCertCSV,
-  sendTestEmail, loadEmailProviderSettings, saveEmailProviderConfig, onEmailProviderPicked,
+  sendTestEmail, loadEmailProviderSettings, saveEmailProviderConfig, onEmailProviderPicked, _updateEmailProviderLiveBadge,
   invClientSelected, invNavSelect, jCalPickDate, jPickDate, jcalShiftMonth, kanbanDragOver, 
   kanbanDragStart, kanbanDrop, loadEarlierJobs, loadEngPerms, loadEngineerLocations, loadStorageDashboard, 
   loadStorageStats, loadTeam, markInvPaid, markInvSent, markInvUnpaid, matchDir, 

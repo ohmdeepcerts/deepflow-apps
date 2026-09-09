@@ -5559,6 +5559,10 @@ body.density-relaxed .jtable td{font-size:15px}
               DeepFlow's certificate, invoice and reminder emails all go out through the app's own send-email pipeline. Every provider below is configured entirely here — API key and From address — so switching accounts or rotating a key is a Settings edit, not a redeploy. This stays office-only, same protection as every other business setting on this page: the Portal and Engineer apps cannot read any of it.
             </div>
 
+            <div style="background:var(--s2);border:1px solid var(--border);border-radius:var(--r1);padding:8px 12px;margin-bottom:12px;font-size:12px;display:flex;align-items:center;gap:6px">
+              <span style="color:var(--txt3)">Currently sending real emails through:</span>
+              <b id="email-provider-live-badge" style="color:var(--green)">—</b>
+            </div>
             <div class="fg" style="max-width:260px">
               <label class="fl">Active Provider</label>
               <select id="s-email-provider" class="fs" onchange="onEmailProviderPicked()">
@@ -5566,7 +5570,7 @@ body.density-relaxed .jtable td{font-size:15px}
                 <option value="sendgrid">SendGrid (Twilio)</option>
                 <option value="brevo">Brevo</option>
               </select>
-              <div style="font-size:11px;color:var(--txt3);margin-top:4px">Only this one's details need filling in below — the other two stay hidden until picked.</div>
+              <div style="font-size:11px;color:var(--txt3);margin-top:4px">Only this one's details need filling in below — the other two stay hidden until picked. Changing this doesn't take effect until you click Save further down — the box above always shows what's actually live right now.</div>
             </div>
 
             <div style="border-top:1px solid var(--border);margin:16px 0"></div>
@@ -5618,7 +5622,7 @@ body.density-relaxed .jtable td{font-size:15px}
                 <input type="text" id="s-brevo-from" class="fi" placeholder="Compliance OHM Electrical <compliance@ohmelectricals.co.uk>">
                 <div style="font-size:11px;color:var(--txt3);margin-top:4px">"Name &lt;email@domain.com&gt;" — the email address must already be a verified sender in Brevo, or sends will fail.</div>
               </div>
-              <label class="fcheck"><input type="checkbox" id="s-brevo-enabled" onchange="saveSettings()"> Enable sending via Brevo</label>
+              <label class="fcheck"><input type="checkbox" id="s-brevo-enabled" onchange="saveSettings().then(()=>_updateEmailProviderLiveBadge(document.getElementById('s-email-provider').value))"> Enable sending via Brevo</label>
               <div style="font-size:11px;color:var(--txt3);margin-top:4px;margin-left:24px">Off by default. A separate, immediate switch on top of the two above — even with a key saved and Brevo picked as the active provider, no email goes out via Brevo until this is on. (Resend and SendGrid have no equivalent switch — they're the paths already relied on today.)</div>
             </div>
 
