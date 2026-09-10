@@ -6634,12 +6634,19 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS last_accuracy integer;</div>
   </div>
   <div class="fg">
     <div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Workbook Includes</div>
-    <div style="font-size:12px;color:var(--txt2);background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:10px 12px">
-      ✓ 01 Daily Jobs (date → engineer grouping, certificate-only / additional-work colour coding)<br>
-      ✓ Data Quality<br>
-      ✓ Export Audit (reconciliation — proves nothing was silently dropped)<br>
-      <span style="color:var(--txt3)">More sheets (Landlords, Agencies, Certificates, Properties, Finance, Engineers, Clients, Dashboard) are being built next and will appear here as they land.</span>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 14px;font-size:12px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:10px 12px">
+      <label class="fcheck"><input type="checkbox" id="export-inc-dashboard" checked> Dashboard</label>
+      <label class="fcheck"><input type="checkbox" id="export-inc-dailyJobs" checked> Daily Jobs</label>
+      <label class="fcheck"><input type="checkbox" id="export-inc-landlords" checked> Landlords</label>
+      <label class="fcheck"><input type="checkbox" id="export-inc-agencies" checked> Agencies</label>
+      <label class="fcheck"><input type="checkbox" id="export-inc-certificates" checked> Certificates</label>
+      <label class="fcheck"><input type="checkbox" id="export-inc-properties" checked> Properties</label>
+      <label class="fcheck"><input type="checkbox" id="export-inc-finance" checked> Finance</label>
+      <label class="fcheck"><input type="checkbox" id="export-inc-engineers" checked> Engineers</label>
+      <label class="fcheck"><input type="checkbox" id="export-inc-clients" checked> Clients</label>
+      <label class="fcheck"><input type="checkbox" id="export-inc-dataQuality" checked> Data Quality</label>
     </div>
+    <div style="font-size:11px;color:var(--txt3);margin-top:4px">Export Audit is always included — it's the proof nothing was silently dropped.</div>
   </div>
   <div class="fg">
     <button class="btn btn-acc" id="export-generate-btn" style="width:100%" onclick="runExportWorkbook()">Generate Excel Workbook</button>

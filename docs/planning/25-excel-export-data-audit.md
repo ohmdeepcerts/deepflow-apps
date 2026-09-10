@@ -181,9 +181,37 @@ outstanding in today's export. This is being replaced, not patched, by the new e
 | Engineer Summary | `jobs.engineer` + `app_settings.engineers` | job counts, cert-only vs work split, avg jobs/day |
 | Clients | `persons`+`agencies`+`agents` (no existing unified list — built new, §4) | job/invoice/outstanding rollup per entity |
 
-## 10. Immediate next steps
+## 10. Status (updated after the full build pass)
 
-Phase 2 (export data service + ExcelJS swap) and Phase 3 (Export Audit + Data Quality + reconciliation,
-proven correct before any styling work per the spec's own phase order) start now. Dashboard (spec Phase
-9) is built last, once every source sheet it links to is verified against real counts — same order the
-spec itself mandates.
+All 13 worksheet types the spec requires now exist and are wired into `export-workbook-builder.js`:
+00 Dashboard, 01 Daily Jobs, 02 Landlords, 03 Agency Summary + one real worksheet per agency,
+Certificates Dashboard, Certificates, Properties, Invoices & Payments, Outstanding, Engineer Summary,
+Clients, Data Quality, Export Audit — built in that order (Dashboard's worksheet is reserved first so
+it's physically sheet 1, but its content is written last, once every sheet it links to/summarizes
+exists — same dependency order the spec itself mandates). 184 tests pass (166 unit + 18 integration),
+including a golden-dataset test that builds a real 14-sheet workbook from a fixed fixture, re-reads the
+actual `.xlsx` bytes, and checks real cell values/colours/hyperlinks/reconciliation — not a mock.
+
+Every sheet-builder's reconciliation pair (tracked in `export-workbook-builder.js` and shown on the
+Export Audit sheet) is a genuine check — each is computed from an independently pre-filtered array
+compared against an actual per-row counter incremented during the write loop, not the same number
+echoed twice. Verified `findDuplicateProperties()`'s O(n²) candidate scan is not a real performance risk
+at current real scale (3,431 properties, ~88% with a postcode to bucket by) — `fuzzyScore()` itself is
+a cheap linear greedy pass, not full edit-distance, so the whole scan is sub-second — but this should be
+revisited if property count grows an order of magnitude.
+
+**Not yet done / real remaining gaps:**
+- No live browser click-test has been possible — this needs a real Office login, which the assistant
+  building this will never do (password handling is out of bounds). Needs a real user test pass.
+- No native Excel charts (per the spec's own fallback guidance, correct data took priority) — the
+  Certificate monthly-forecast table exists without a chart.
+- Job Number → real DeepFlow job route hyperlinks not added (spec says "only if stable URLs exist" —
+  not yet confirmed one does for a specific job id in this app).
+- No "Exports" history page/list in Office (spec's optional recommendation) — Export Audit metadata is
+  the only record kept today, plus the new Activity Log entry on every export.
+- Not stress-tested against the full real dataset (4,153 jobs / 590 invoices / 679 certs / 3,431
+  properties / 56 agencies) end-to-end in a live browser — only unit/integration-tested and reasoned
+  about for complexity.
+- Company/date-range filter UI exists but only Daily Jobs actually respects the date range (deliberate,
+  see §"Date-range scoping" in `export-data-service.js` — every financial rollup sheet stays all-time to
+  avoid a misleading partial balance).

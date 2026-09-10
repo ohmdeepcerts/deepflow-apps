@@ -4,9 +4,9 @@
 // covered by tests/integration/export-workbook.test.js's golden dataset.
 // No fake timed progress bar — every stage below fires only when its real
 // step actually completes.
-import { S, dAll, toast, getAppUser } from './main.js';
+import { S, dAll, toast, getAppUser, logActivity } from './main.js';
 import { gatherExportData, resolveDateRange } from './export-data-service.js';
-import { buildWorkbook, workbookToBlob } from './export-workbook-builder.js';
+import { buildWorkbook, workbookToBlob, DEFAULT_INCLUDE } from './export-workbook-builder.js';
 
 const STAGE_LABELS = {
   jobs: 'Loading Jobs', invoices: 'Loading Invoices', persons: 'Loading Landlords',
@@ -74,7 +74,12 @@ export async function runExportWorkbook() {
     });
 
     renderProgressStage('build', 'active');
-    const scope = { dateRange, include: { dailyJobs: true, dataQuality: true } };
+    const include = {};
+    Object.keys(DEFAULT_INCLUDE).forEach((key) => {
+      const el = document.getElementById('export-inc-' + key);
+      include[key] = el ? el.checked : DEFAULT_INCLUDE[key];
+    });
+    const scope = { dateRange, include };
     const requestedBy = getAppUser()?.name || 'Unknown';
     const result = await buildWorkbook({ data, S, scope, requestedBy });
     doneStages += 1; setProgressPct((doneStages / totalStages) * 100);
@@ -83,6 +88,11 @@ export async function runExportWorkbook() {
     renderProgressStage('recon', 'active');
     doneStages += 1; setProgressPct(100);
     renderProgressStage('recon', 'done');
+
+    // Security requirement (spec: "Potentially sensitive exports should
+    // create Audit Log events") — fire-and-forget, never blocks the
+    // download on the audit write succeeding.
+    logActivity(`${requestedBy} exported Business Workbook — ${dateRange.label}${result.allMatch ? '' : ' (with validation warnings)'}`, result.allMatch ? 'info' : 'warn').catch(() => {});
 
     const resultEl = document.getElementById('export-result');
     if (resultEl) {
