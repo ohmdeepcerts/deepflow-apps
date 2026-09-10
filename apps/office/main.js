@@ -137,7 +137,7 @@ import {
 // renderAgeingReport from main.js — its own import list didn't change when
 // this split moved renderAgeingReport's implementation to invoices-extras.js.
 export { renderAgeingReport } from './invoices-extras.js';
-import { exportMasterXLSX } from './master-xlsx-export.js';
+import { openExportWorkbookModal, onExportRangeChanged, runExportWorkbook } from './export-controller.js';
 import { oneClickBackup, showJobsSkeleton, checkCronSetup } from './backup-diagnostics.js';
 import { renderReports, getTopAddresses, exportReportPDF } from './reports.js';
 import {
@@ -10118,7 +10118,7 @@ Object.assign(window, {
   doLogout, doResetPassword, downloadCertTemplate, downloadEngPayslip, downloadInvPDF, downloadInvPDFById, downloadPortalInviteCard,
   dupUpdateName, dupUseExisting, duplicateInv, duplicateJob, editCertRecord, enableStaffPush, executeMerge, exportAllCSV,
   exportAuditLog, exportBackup, exportCertCSV, exportCertPDF, exportEngReport, exportEngReportPDF, 
-  exportExpensesCSV, exportInvsCSV, exportMasterXLSX, exportPLCSV, exportPropsCSV, exportReportPDF, 
+  exportExpensesCSV, exportInvsCSV, openExportWorkbookModal, onExportRangeChanged, runExportWorkbook, exportPLCSV, exportPropsCSV, exportReportPDF,
   extractAppliancesFromPhoto, fillCreditNote, fillFromMatch, filterCerts, fuzzyAddr, generateBulkReminder, generateCertPdf,
   postcodeLookup, confirmPostcode,
   loadJobVisits, toggleAddVisitForm, saveVisit, deleteVisit, openProjectPicker, _toggleVisitEngineer,

@@ -4408,7 +4408,7 @@ body.density-relaxed .jtable td{font-size:15px}
           <option value="365">This Year</option>
         </select>
         <button class="btn btn-ghost btn-sm" onclick="exportReportPDF()">Export PDF</button>
-        <button class="btn btn-acc btn-sm" onclick="exportMasterXLSX()">📊 Export Master Workbook</button>
+        <button class="btn btn-acc btn-sm" onclick="openExportWorkbookModal()">📊 Export Business Workbook</button>
       </div>
       <div class="rep-grid" id="rep-grid"></div>
       <div style="font-family:var(--fh);font-size:16px;font-weight:700;margin:20px 0 12px;display:flex;align-items:center;gap:8px">
@@ -5940,7 +5940,7 @@ body.density-relaxed .jtable td{font-size:15px}
             <div style="display:flex;gap:8px;flex-wrap:wrap">
               <button class="btn btn-acc btn-sm" onclick="oneClickBackup('csv')">📄 Export All as CSV</button>
               <button class="btn btn-acc btn-sm" onclick="oneClickBackup('json')">💾 Export Full JSON Backup</button>
-              <button class="btn btn-green btn-sm" onclick="exportMasterXLSX()">📊 Export Master Workbook (XLSX)</button>
+              <button class="btn btn-green btn-sm" onclick="openExportWorkbookModal()">📊 Export Business Workbook (XLSX)</button>
             </div>
           </div>
           <div class="set-card" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
@@ -6606,6 +6606,55 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS last_accuracy integer;</div>
     <button class="btn btn-red btn-sm" id="btn-del-agency" style="display:none;margin-right:auto" onclick="deleteCurrentAgency()">Delete</button>
     <button class="btn btn-ghost" onclick="closeModal('mo-agency')">Cancel</button>
     <button class="btn btn-acc" onclick="saveAgency()">Save Agency</button>
+  </div>
+</div>
+</div>
+
+<!-- Export Business Workbook Modal -->
+<div class="overlay" id="mo-export">
+<div class="modal" style="max-width:560px">
+  <div class="modal-title">📊 Export Business Workbook</div>
+  <div class="fg">
+    <label class="fl">Company</label>
+    <input type="text" class="fi" value="All data (single company today)" disabled>
+  </div>
+  <div class="fg">
+    <label class="fl">Date Range</label>
+    <div style="display:flex;flex-direction:column;gap:6px;font-size:13px">
+      <label class="fcheck"><input type="radio" name="export-range" value="all" checked onchange="onExportRangeChanged()"> All Data</label>
+      <label class="fcheck"><input type="radio" name="export-range" value="today" onchange="onExportRangeChanged()"> Today</label>
+      <label class="fcheck"><input type="radio" name="export-range" value="week" onchange="onExportRangeChanged()"> This Week</label>
+      <label class="fcheck"><input type="radio" name="export-range" value="month" onchange="onExportRangeChanged()"> This Month</label>
+      <label class="fcheck"><input type="radio" name="export-range" value="custom" onchange="onExportRangeChanged()"> Custom</label>
+    </div>
+  </div>
+  <div class="frow" id="export-custom-dates" style="display:none">
+    <div class="fg"><label class="fl">From</label><input type="date" id="export-from" class="fi"></div>
+    <div class="fg"><label class="fl">To</label><input type="date" id="export-to" class="fi"></div>
+  </div>
+  <div class="fg">
+    <div style="font-size:11px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Workbook Includes</div>
+    <div style="font-size:12px;color:var(--txt2);background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:10px 12px">
+      ✓ 01 Daily Jobs (date → engineer grouping, certificate-only / additional-work colour coding)<br>
+      ✓ Data Quality<br>
+      ✓ Export Audit (reconciliation — proves nothing was silently dropped)<br>
+      <span style="color:var(--txt3)">More sheets (Landlords, Agencies, Certificates, Properties, Finance, Engineers, Clients, Dashboard) are being built next and will appear here as they land.</span>
+    </div>
+  </div>
+  <div class="fg">
+    <button class="btn btn-acc" id="export-generate-btn" style="width:100%" onclick="runExportWorkbook()">Generate Excel Workbook</button>
+  </div>
+  <div id="export-progress-list" style="font-family:var(--fm,monospace);margin-bottom:6px"></div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+    <div style="flex:1;height:6px;background:var(--bg2);border-radius:3px;overflow:hidden">
+      <div id="export-progress-bar" style="height:100%;background:var(--acc);width:0%;transition:width .2s"></div>
+    </div>
+    <div id="export-progress-pct" style="font-size:11px;color:var(--txt3);margin-left:8px;min-width:32px;text-align:right">0%</div>
+  </div>
+  <div id="export-result" style="font-size:12px;margin-bottom:8px"></div>
+  <div class="modal-actions">
+    <button class="btn btn-ghost" onclick="closeModal('mo-export')">Close</button>
+    <a class="btn btn-green" id="export-download-btn" style="display:none;text-decoration:none" download>⬇ Download Excel</a>
   </div>
 </div>
 </div>
