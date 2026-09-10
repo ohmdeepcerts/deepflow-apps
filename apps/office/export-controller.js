@@ -12,6 +12,7 @@ const STAGE_LABELS = {
   jobs: 'Loading Jobs', invoices: 'Loading Invoices', persons: 'Loading Landlords',
   agencies: 'Loading Agencies', agents: 'Loading Agents', certs: 'Loading Certificates',
   properties: 'Loading Properties', payments: 'Loading Payments', job_visits: 'Loading Visits',
+  build: 'Building Workbook', recon: 'Reconciliation',
 };
 const STAGE_ORDER = ['jobs', 'invoices', 'persons', 'agencies', 'agents', 'certs', 'properties', 'payments', 'job_visits'];
 

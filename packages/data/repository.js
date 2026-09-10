@@ -77,7 +77,24 @@ export function createRepository(sbFetch, { localTables = new Set(), uid } = {})
     let offset = 0;
     const limit = 1000;
     while (true) {
-      const chunk = (await sbFetch(store + `?limit=${limit}&offset=${offset}&order=${_orderColumn(store)}.desc&select=*`)) || [];
+      // order must be a fully deterministic total order, not just the
+      // primary column — PostgREST/Postgres give no guarantee about the
+      // relative order of TIED rows between two separate paginated
+      // requests. Real, previously-unknown bug found live: 100 of
+      // jobs.created's values are shared by hundreds of rows each (one
+      // bulk-import timestamp alone is shared by 379 jobs), so page N and
+      // page N+1 each independently re-resolve that tie differently —
+      // some tied rows come back in BOTH pages (duplicates) while others
+      // never come back in either (silently dropped). Confirmed via a live
+      // authenticated fetch: dAll('jobs') returned 4153 rows for a table
+      // with exactly 4153 distinct ids, but only 4053 of those rows were
+      // unique — 100 jobs were being silently dropped from every full-
+      // table read (Dashboard revenue, Jobs page's search-all-years
+      // fallback, and the Excel export) every single time, with no error.
+      // `id` is a real, always-unique column on every table this reads
+      // from — appending it as a tiebreaker costs nothing and makes the
+      // sort order (and therefore the pagination) fully stable.
+      const chunk = (await sbFetch(store + `?limit=${limit}&offset=${offset}&order=${_orderColumn(store)}.desc,id.asc&select=*`)) || [];
       if (chunk.length === 0) break;
       allRows = allRows.concat(chunk);
       if (chunk.length < limit) break;
