@@ -40,11 +40,11 @@ export function switchDirSection(section){
 
 export async function updateDirTabBadges(){
   try{
-    const ps=await dAll('persons');
+    const [ps,agenciesAll,agentsAll]=await Promise.all([dAll('persons'),dAll('agencies'),dAll('agents')]);
     const landlords=ps.filter(p=>(p.roles||[]).includes('landlord')).length;
     const subs=ps.filter(p=>(p.roles||[]).includes('subcontractor')).length;
-    const agencies=(await dAll('agencies')).length;
-    const agents=(await dAll('agents')).length;
+    const agencies=agenciesAll.length;
+    const agents=agentsAll.length;
     const counts={landlords,agencies,agents,subcontractors:subs,all:ps.length};
     Object.entries(counts).forEach(([k,v])=>{
       const tab=document.getElementById('dtab-'+k);
@@ -77,16 +77,17 @@ export async function renderDirSection(section){
 export async function renderLandlordsSection(){
   const search = (document.getElementById('dir-search-landlords')?.value||'').toLowerCase();
   const showArchived = document.getElementById('dir-show-archived-landlords')?.checked||false;
-  let ps = await dAll('persons');
+  // persons/invoices/jobs are independent reads — fetched together instead
+  // of one at a time (this used to fetch invoices and jobs twice each on
+  // top of that, sequentially, for one page render).
+  let [ps, invs, jobs] = await Promise.all([dAll('persons'), dAll('invoices'), dAll('jobs')]);
   ps = ps.filter(p=>(p.roles||[]).includes('landlord'));
   const archivedCount = ps.filter(p=>p.archived).length;
   if(!showArchived) ps = ps.filter(p=>!p.archived);
   if(search) ps = ps.filter(p=>(p.name+p.phone+p.email).toLowerCase().includes(search));
   // Sort
   const sortMode=document.getElementById('dir-sort-landlords')?.value||'name';
-  _sortPersons(ps, sortMode, await dAll('invoices'), await dAll('jobs'));
-  const invs = await dAll('invoices');
-  const jobs = await dAll('jobs');
+  _sortPersons(ps, sortMode, invs, jobs);
   const grid = document.getElementById('dir-grid-landlords');
   if(!grid) return;
   const archiveHint = archivedCount ? `<div style="text-align:center;font-size:11px;color:var(--txt3);padding:8px 0;grid-column:1/-1">${archivedCount} archived landlord${archivedCount!==1?'s':''} ${showArchived?'shown':'hidden'} — <a href="#" onclick="event.preventDefault();const cb=document.getElementById('dir-show-archived-landlords');cb.checked=!cb.checked;renderDirSection('landlords')" style="color:var(--acc)">${showArchived?'hide':'show'} them</a></div>` : '';
@@ -96,13 +97,11 @@ export async function renderLandlordsSection(){
 
 export async function renderSubcontractorsSection(){
   const search = (document.getElementById('dir-search-subcontractors')?.value||'').toLowerCase();
-  let ps = await dAll('persons');
+  let [ps, allInvs, allJobs] = await Promise.all([dAll('persons'), dAll('invoices'), dAll('jobs')]);
   ps = ps.filter(p=>(p.roles||[]).includes('subcontractor'));
   if(search) ps = ps.filter(p=>(p.name+p.phone+p.email).toLowerCase().includes(search));
   // Sort
   const sortMode=document.getElementById('dir-sort-subcontractors')?.value||'name';
-  const allJobs = await dAll('jobs');
-  const allInvs = await dAll('invoices');
   _sortPersons(ps, sortMode, allInvs, allJobs);
   const grid = document.getElementById('dir-grid-subcontractors');
   if(!grid) return;
@@ -147,10 +146,8 @@ export async function renderSubcontractorsSection(){
 
 export async function renderAgenciesSection(){
   const search = (document.getElementById('dir-search-agencies')?.value||'').toLowerCase();
-  let agencies = await dAll('agencies');
+  let [agencies, agents, allJobs] = await Promise.all([dAll('agencies'), dAll('agents'), dAll('jobs')]);
   if(search) agencies = agencies.filter(a=>(a.name+a.phone+a.email).toLowerCase().includes(search));
-  const agents = await dAll('agents');
-  const allJobs = await dAll('jobs');
   const grid = document.getElementById('dir-grid-agencies');
   if(!grid) return;
   if(!agencies.length){grid.innerHTML='<div class="empty"><div class="ei">🏢</div><p>No agencies yet. Click "+ Add Agency" to get started.</p></div>';return}
@@ -196,11 +193,10 @@ export async function renderAgenciesSection(){
 export async function renderAgentsSection(){
   const search = (document.getElementById('dir-search-agents')?.value||'').toLowerCase();
   const agencyFilter = document.getElementById('dir-agent-agency-filter')?.value||'';
-  const legacyAgents = await dAll('agents');
-  const personAgents = (await dAll('persons')).filter(p=>(p.roles||[]).includes('agent'));
-  const agencies = await dAll('agencies');
-  const allJobs = await dAll('jobs');
-  const allInvs = await dAll('invoices');
+  const [legacyAgents, personsAll, agencies, allJobs, allInvs] = await Promise.all([
+    dAll('agents'), dAll('persons'), dAll('agencies'), dAll('jobs'), dAll('invoices'),
+  ]);
+  const personAgents = personsAll.filter(p=>(p.roles||[]).includes('agent'));
 
   // Populate agency filter dropdown
   const agFilt = document.getElementById('dir-agent-agency-filter');
@@ -265,40 +261,46 @@ export async function renderAgentsSection(){
 
 export async function renderEngineersSection(){
   const search=(document.getElementById('dir-search-engineers')?.value||'').toLowerCase();
-  // Pull fresh from Supabase users table
-  let engs=[];
-  try{
-    const sbEngs=await _sb('users?role=eq.engineer&active=eq.true&order=name.asc&select=id,name,phone,pin,role,active,last_seen,last_lat,last_lng');
-    if(sbEngs&&sbEngs.length){
-      // Merge with S.engineers for rate/trade/wa extras
-      engs=sbEngs.map(sbe=>{
-        const loc=(S.engineers||[]).find(e=>e._sbId===sbe.id||e.name===sbe.name)||{};
-        return {...loc,...sbe,_sbId:sbe.id};
-      });
-      // Also update S.engineers with fresh data
-      S.engineers=engs.map(e=>({...e}));
-      localStorage.setItem('df_setting_engineers',JSON.stringify(S.engineers));
-    } else {
-      engs=S.engineers||[];
-    }
-  }catch(e){ engs=S.engineers||[]; }
+  // Pull fresh from Supabase users table — run alongside the jobs fetch
+  // (needed further down) rather than after it, since neither depends on
+  // the other's result.
+  const [engs, allJobs] = await Promise.all([
+    (async()=>{
+      try{
+        const sbEngs=await _sb('users?role=eq.engineer&active=eq.true&order=name.asc&select=id,name,phone,pin,role,active,last_seen,last_lat,last_lng');
+        if(sbEngs&&sbEngs.length){
+          // Merge with S.engineers for rate/trade/wa extras
+          const merged=sbEngs.map(sbe=>{
+            const loc=(S.engineers||[]).find(e=>e._sbId===sbe.id||e.name===sbe.name)||{};
+            return {...loc,...sbe,_sbId:sbe.id};
+          });
+          // Also update S.engineers with fresh data
+          S.engineers=merged.map(e=>({...e}));
+          localStorage.setItem('df_setting_engineers',JSON.stringify(S.engineers));
+          return merged;
+        }
+        return S.engineers||[];
+      }catch(e){ return S.engineers||[]; }
+    })(),
+    dAll('jobs'),
+  ]);
 
-  if(search) engs=engs.filter(e=>(e.name+e.phone+e.trade+'').toLowerCase().includes(search));
+  let engsFiltered=engs;
+  if(search) engsFiltered=engs.filter(e=>(e.name+e.phone+e.trade+'').toLowerCase().includes(search));
   const grid=document.getElementById('dir-grid-engineers');
   if(!grid) return;
 
-  if(!engs.length){
+  if(!engsFiltered.length){
     grid.innerHTML=`<div class="empty" style="grid-column:1/-1"><div class="ei">👷</div><p>No engineers yet.<br><button class="btn btn-acc btn-sm" style="margin-top:8px" onclick="nav('set');setTimeout(()=>switchSetTab('team'),300);setTimeout(addEngRow,300)">+ Add First Engineer</button></p></div>`;
     return;
   }
 
   // Get today's jobs per engineer
   const today=TODAY();
-  const allJobs=await dAll('jobs');
   const todayJobs=allJobs.filter(j=>j.date===today);
 
   const palette=['#a855f7','#14b8a6','#f97316','#4f8fff','#22c55e','#e05252','#f5a623','#ec4899'];
-  grid.innerHTML=engs.map((e,i)=>{
+  grid.innerHTML=engsFiltered.map((e,i)=>{
     const col=palette[i%palette.length];
     const todayCount=todayJobs.filter(j=>j.engineer===e.name).length;
     const totalJobs=allJobs.filter(j=>j.engineer===e.name).length;
@@ -435,13 +437,11 @@ export async function openEngDir(sbIdOrName){
 export async function renderAllSection(){
   const filter = document.getElementById('dir-filter')?.value||'';
   const search = (document.getElementById('dir-search')?.value||'').toLowerCase();
-  let ps = await dAll('persons');
+  let [ps, invs, jobs] = await Promise.all([dAll('persons'), dAll('invoices'), dAll('jobs')]);
   if(filter) ps = ps.filter(p=>(p.roles||[]).includes(filter));
   if(search) ps = ps.filter(p=>(p.name+p.phone+p.email).toLowerCase().includes(search));
   // Sort
   const sortMode=document.getElementById('dir-sort-all')?.value||'name';
-  const invs = await dAll('invoices');
-  const jobs = await dAll('jobs');
   _sortPersons(ps, sortMode, invs, jobs);
   const grid = document.getElementById('dir-grid');
   if(!grid) return;

@@ -30,14 +30,21 @@ export async function renderRequests(){
   try{
     let url='engineer_requests?order=created.desc&limit=200';
     if(statusFilter) url+='&status=eq.'+statusFilter;
-    let reqs = await _sb(url)||[];
+    // These two are independent reads of the same table — sequential
+    // awaits made every visit to this page pay for two round trips (each
+    // also independently resolving a fresh JWT) back to back.
+    const [reqsRaw, pendingRows]=await Promise.all([
+      _sb(url),
+      _sb('engineer_requests?status=eq.pending&select=id'),
+    ]);
+    let reqs = reqsRaw||[];
 
     // Apply type filter
     if(_reqType==='portal') reqs=reqs.filter(r=>r.type==='portal_request');
     else if(_reqType==='eng') reqs=reqs.filter(r=>r.type!=='portal_request');
 
     // Update sidebar badge
-    const allPending=(await _sb('engineer_requests?status=eq.pending&select=id')||[]).length;
+    const allPending=(pendingRows||[]).length;
     const badge=document.getElementById('nb-req');
     if(badge){ badge.textContent=allPending; badge.style.display=allPending?'inline':'none'; }
 

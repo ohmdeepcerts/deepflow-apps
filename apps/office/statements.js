@@ -70,11 +70,13 @@ export async function populateStmtFilters(invs) {
 }
 
 export async function renderStmt() {
-  let invs = await dAll('invoices');
-  // Also get jobs to cross-reference agent/engineer
-  const jobs = await dAll('jobs');
-  const agents = await dAll('agents');
-  const agencies = await dAll('agencies');
+  // Independent tables — fetching them one at a time (each a real network
+  // round trip whenever the 30s cache is cold, and jobs alone is several
+  // paginated round trips for a table this size) made every visit to this
+  // page pay for the sum of all four instead of just the slowest one.
+  let [invs, jobs, agents, agencies, allPayments] = await Promise.all([
+    dAll('invoices'), dAll('jobs'), dAll('agents'), dAll('agencies'), dAll('payments'),
+  ]);
 
   // Enrich invoices with agent/agency info from linked job
   invs = invs.map(inv => {
@@ -114,7 +116,6 @@ export async function renderStmt() {
   _stmtInvoices = invs;
 
   // KPIs
-  const allPayments = await dAll('payments');
   let totalGrand = 0, totalPaid = 0, totalVat = 0, totalSub = 0;
   invs.forEach(inv => {
     const t = calcInvTotal(inv);
