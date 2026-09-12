@@ -113,6 +113,19 @@ export function _paymentReceiptEmailHtml(inv, amount){
   `);
 }
 
+// Sent when office marks a job Completed — explicit opt-in per job via a
+// confirm popup (onJobComplete() in main.js), never automatic. There's no
+// invoice/amount to show yet at this point (that's a separate step), so
+// this is deliberately just a plain completion notice, not a bill.
+export function _jobCompletedEmailHtml(job){
+  return _brandedEmailShell(`
+    ${_emailBadge('✅ Job Completed','#f0fdf4','#15803d')}
+    <div style="font-size:15px;color:#1e293b;margin-top:16px;line-height:1.55">Dear ${escHtml(job.landlordName||job.referrer||'Client')},<br><br>We're pleased to confirm the work at <b>${escHtml(job.address||'')}</b> has been completed.</div>
+    ${job.description?`<div style="font-size:13px;color:#475569;margin-top:12px;line-height:1.5">${escHtml(job.description)}</div>`:''}
+    ${job.jobNum?_emailInfoCard('Job Reference', job.jobNum, 'Completed', formatDateUK(TODAY())||TODAY(), '#15803d'):''}
+  `);
+}
+
 // Sent the moment a certificate PDF is uploaded (i.e. the cert is actually
 // ready) — links to the stored PDF rather than attaching it, since these
 // are scanned compliance documents (EICR/Gas Safety reports etc) that can

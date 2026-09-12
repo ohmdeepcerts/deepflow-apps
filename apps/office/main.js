@@ -103,6 +103,7 @@ import {
   _sendEmail, _brandedEmailShell, _invEmailSubject, _invoiceReadyEmailHtml, _paymentReceiptEmailHtml,
   _certReadyEmailHtml, _certLockedEmailHtml, _overdueEmailHtml, sendAllOverdueEmail,
   downloadInvPDFById, signedUrl, generateAndStoreInvoicePDF, _buildInvoicePDFDoc, _storeInvoicePDF,
+  _jobCompletedEmailHtml,
 } from './invoice-documents.js';
 // Re-exported (not just imported) because planner-email.js, certs-pdf.js,
 // statements.js, and invoices-extras.js still import these from main.js —
@@ -2732,7 +2733,7 @@ export async function _applyStatusChange(id,status,opts){
   // Missing Invoices report. Treat both as the same "just finished" edge.
   const _wasDone=old===STATUS.COMPLETED||old===STATUS.INVOICED;
   const _isDone=status===STATUS.COMPLETED||status===STATUS.INVOICED;
-  if(_isDone&&!_wasDone) onJobComplete(j);
+  if(_isDone&&!_wasDone) onJobComplete(j,{silent});
   await logActivity(`Job "${j.address}" → ${status}`,'job');
   logAudit('job_status_change',{jobId:id,jobNum:j.jobNum,address:j.address,oldStatus:old,newStatus:status});
   logStatusRevertIfNeeded({jobId:id,jobNum:j.jobNum,address:j.address,oldStatus:old,newStatus:status,staffName:_appUser?.name||''});
@@ -2756,7 +2757,7 @@ async function quickStatus(id,status){
 
 
 
-function onJobComplete(j){
+function onJobComplete(j,opts){
   const allCertTypes=S.certTypes||[];
 
   // Trust j.certTypes as-is — it's already the fully-resolved set (manual
@@ -2802,6 +2803,35 @@ function onJobComplete(j){
 
   // Refresh smart banner to show newly completed job needing invoice
   setTimeout(updateInvSmartBanner,2000);
+
+  // Offer to email the client that the job's done — explicit opt-in per
+  // job (never auto-sends), skipped for bulk completions (opts.silent —
+  // see bulkSetStatus()) since popping this up once per job in a 20-job
+  // batch would be unusable. Silently does nothing if there's no client
+  // email on file, same as every other email call site in this app.
+  if(!opts?.silent) _maybeOfferCompletionEmail(j);
+}
+
+function _maybeOfferCompletionEmail(j){
+  const email=(j.landlordEmail||'').trim();
+  if(!email) return;
+  const name=j.landlordName||j.referrer||'the client';
+  confirm2(
+    '✅ Job Completed',
+    `Send a completion email to ${name} (${email})?`,
+    async ()=>{
+      const r=await _sendEmail({
+        to: email,
+        subject: `${S.coName||'DeepFlow'} — Job completed at ${j.address||''}`,
+        html: _jobCompletedEmailHtml(j),
+        category: 'job',
+      });
+      if(r.ok) toast(`📧 Completion email sent to ${email}`,'success');
+      else toast('❌ '+(r.error||'Could not send completion email'),'error',6000);
+    },
+    ()=>{}, // Skip — no email sent
+    {okText:'Send Email'}
+  );
 }
 
 function promptNextCertExpiry(){
