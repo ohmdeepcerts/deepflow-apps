@@ -102,7 +102,7 @@ import { showJobAudit, showPropertyCerts } from './job-popups.js';
 import {
   _sendEmail, _brandedEmailShell, _invEmailSubject, _invoiceReadyEmailHtml, _paymentReceiptEmailHtml,
   _certReadyEmailHtml, _certLockedEmailHtml, _overdueEmailHtml, sendAllOverdueEmail,
-  downloadInvPDFById, signedUrl, generateAndStoreInvoicePDF,
+  downloadInvPDFById, signedUrl, generateAndStoreInvoicePDF, _buildInvoicePDFDoc, _storeInvoicePDF,
 } from './invoice-documents.js';
 // Re-exported (not just imported) because planner-email.js, certs-pdf.js,
 // statements.js, and invoices-extras.js still import these from main.js —

@@ -198,7 +198,7 @@ export async function sendAllOverdueEmail(){
 // Previously this whole thing lived inline inside downloadInvPDFById(),
 // which meant "regenerate and store a copy in Supabase" had nowhere to
 // hook in without duplicating ~250 lines of drawing code.
-async function _buildInvoicePDFDoc(inv){
+export async function _buildInvoicePDFDoc(inv){
   const t=calcInvTotal(inv);
   const vr=getVatRate();
   const {jsPDF}=window.jspdf;
@@ -271,7 +271,7 @@ export async function signedUrl(path,expiresIn=3600){
 // Uploads an already-built PDF doc to Storage and records the URL on the
 // invoice — the "store" half of automatic generation. Callers that already
 // have a built doc (download, bulk export) pass it in to skip rebuilding.
-async function _storeInvoicePDF(inv,doc){
+export async function _storeInvoicePDF(inv,doc){
   const path=`invoices/${inv.id}/${(inv.number||'invoice').replace(/[^a-z0-9-]/gi,'_')}.pdf`;
   const blob=doc.output('blob');
   await _invPdfSbStorage(path,blob);
