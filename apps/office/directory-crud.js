@@ -16,7 +16,7 @@ import {
   closeModal, openModal, sendToWA, saveSetting,
 } from './main.js';
 import { getCurDirSection, renderDir, renderDirSection } from './directory-sections.js';
-import { showAutosaveBanner, wireAutoSave } from './directory-matching.js';
+import { showAutosaveBanner, wireAutoSave, cancelAutoSave } from './directory-matching.js';
 import { _lockedCertsForEntity, _releaseLockedCertsForEntity } from './certs-pdf.js';
 
 let editPid=null, editAgencyId=null, editAgentId=null;
@@ -33,6 +33,10 @@ export function currentEditId(store){
 export async function fillFromMatch(store, id){
   const r = await dGet(store, id);
   if(!r) return;
+  // Cancel any autosave timer scheduled against the pre-swap field values —
+  // see cancelAutoSave()'s own comment for the real corruption this caused
+  // live before this fix. Must happen before any field is touched below.
+  cancelAutoSave(store);
   // Clear all match popups
   document.querySelectorAll('[id$="-dup"]').forEach(el=>el.innerHTML='');
   if(store==='persons'){

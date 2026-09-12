@@ -139,6 +139,23 @@ export function scheduleAutoSave(store, delay=1200){
   _autoSaveTimers[store] = setTimeout(()=>_autoSaveStore(store), delay);
 }
 
+// Real bug found live (2026-09-12): fillFromMatch() (directory-crud.js) can
+// swap the form's fields to an EXISTING record's data — e.g. the user was
+// typing a new person's details, a duplicate-match popup appeared, and a
+// click landed on it — while a scheduleAutoSave() timer from the PRE-swap
+// typing is still pending. That timer fires 1.2s later with no idea the
+// identity underneath it changed, saving whatever the fields hold at that
+// moment onto the newly-loaded EXISTING record. If any further keystrokes
+// land in the same window (a fast typist, or here, scripted input), they
+// append onto the field fillFromMatch just set rather than replacing it —
+// confirmed live: a real client's email/WhatsApp fields ended up with the
+// old value and the new value concatenated together. fillFromMatch must
+// cancel the stale timer the instant it changes the record identity, so a
+// save can only capture field state consistent with the record it's for.
+export function cancelAutoSave(store){
+  clearTimeout(_autoSaveTimers[store]);
+}
+
 export async function _autoSaveStore(store){
   if(store==='persons'){
     const name = document.getElementById('pf-name')?.value.trim();
