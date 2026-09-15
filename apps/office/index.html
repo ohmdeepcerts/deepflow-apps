@@ -6287,6 +6287,13 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS last_accuracy integer;</div>
   <div class="modal-title" id="mo-job-title">📋 New Job</div>
   <div id="mo-job-cr-banner" style="display:none;background:rgba(14,165,233,.1);border:1px solid rgba(14,165,233,.25);border-radius:8px;padding:8px 12px;font-size:11px;font-weight:600;color:#0ea5e9;margin-bottom:12px;align-items:center;gap:6px"></div>
 
+  <!-- Prominent, always-visible-for-existing-jobs entry point into the
+       Visits modal — was previously a small section buried at the bottom
+       of a long scrolling form, easy to miss entirely. Hidden for a
+       brand-new (not yet saved) job in openJobModal(); badge text updated
+       there too, from a lightweight count-only query. -->
+  <button type="button" id="jm-visits-btn" class="btn btn-ghost btn-sm" style="display:none;margin:-8px 0 14px" onclick="openVisitsModal()">📅 Site Visits <span id="jm-visits-btn-badge"></span></button>
+
   <!-- ★ RATINGS BAR — Landlord + Agency + Agent ratings at the TOP for visibility -->
   <!-- ★ RATINGS BAR — Landlord + Agency + Agent at the TOP -->
   <div id="jm-ratings-bar" style="display:none;gap:10px;margin-bottom:14px;flex-wrap:nowrap">
@@ -6457,47 +6464,6 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS last_accuracy integer;</div>
     </div>
 
   </div><!-- /jm-3col -->
-
-  <!-- SITE VISITS — timeline for long-running, multi-visit projects (site
-       works spanning weeks/months, visited intermittently). One job record
-       stays open the whole time; each return trip is a new visit logged
-       here rather than a new job. Hidden for brand-new jobs (nothing to log
-       yet); populated in openJobModal(). -->
-  <div id="jm-visits-panel" style="display:none;margin-top:18px;border-top:1px solid var(--border);padding-top:16px">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-      <div style="font-family:var(--fh);font-weight:700;font-size:13px;color:var(--txt1)">📅 Site Visits <span id="jm-visits-count" style="font-size:11px;color:var(--txt3);font-weight:400"></span></div>
-      <button type="button" class="btn btn-ghost btn-sm" onclick="toggleAddVisitForm()">+ Add Visit</button>
-    </div>
-    <div id="jm-add-visit-form" style="display:none;background:var(--s2);border:1px solid var(--border);border-radius:var(--r1);padding:12px;margin-bottom:12px">
-      <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <div class="fg" style="flex:1 1 150px;margin-bottom:0">
-          <label class="fl">Date</label>
-          <input type="date" id="vf-date" class="fi">
-        </div>
-        <div class="fg" style="flex:2 1 220px;margin-bottom:0">
-          <label class="fl">Engineers on site <span style="font-weight:400;color:var(--txt3);font-size:10px">(tap to select — any number)</span></label>
-          <div id="vf-engineers-chips" class="vf-eng-chips"></div>
-        </div>
-      </div>
-      <div class="fg" style="margin-top:10px;margin-bottom:0">
-        <label class="fl">What was done</label>
-        <textarea id="vf-notes" class="fi fta-grow" placeholder="e.g. First fix wiring, chased walls in kitchen and hallway" rows="2" style="min-height:50px"></textarea>
-      </div>
-      <div class="fg" style="margin-top:10px;margin-bottom:0">
-        <label class="fl">Photo <span style="font-weight:400;color:var(--txt3);font-size:10px">(optional)</span></label>
-        <input type="file" id="vf-photo" accept="image/*" class="fi" style="padding:6px">
-        <div id="vf-photo-preview" style="display:none;margin-top:8px"></div>
-      </div>
-      <div style="margin-top:10px;display:flex;gap:8px">
-        <button type="button" class="btn btn-acc btn-sm" id="vf-save-btn" onclick="saveVisit()">Save Visit</button>
-        <button type="button" class="btn btn-ghost btn-sm" onclick="toggleAddVisitForm()">Cancel</button>
-      </div>
-    </div>
-    <div id="jm-visits-list">
-      <div style="color:var(--txt3);font-size:12px;padding:8px 0">No visits logged yet.</div>
-    </div>
-  </div>
-
   <!-- INVOICE — the third piece of "whole process" alongside the job itself
        and the engineer's field notes/photos above/below. Hidden for new jobs
        (nothing to link yet); populated in openJobModal(). -->
@@ -6523,6 +6489,59 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS last_accuracy integer;</div>
     <button class="btn btn-ghost" onclick="closeModal('mo-job');localStorage.removeItem('df_job_draft')">Cancel</button>
     <button class="btn btn-wa btn-sm" id="btn-wa-this-job" style="display:none" onclick="waSingleJob()">📱 WhatsApp</button>
     <button class="btn btn-acc" onclick="saveJob()">Save Job</button>
+  </div>
+</div>
+</div>
+
+<!-- Site Visits — dedicated view/manage screen, opened from the "📅 Site
+     Visits" button on the job modal. Marking a visit done here never
+     touches the parent job's own status — that's the whole point (see
+     markProjectCompleteFromModal()'s own comment) — a multi-visit project
+     can have visit 3 finished while the job stays In Progress until the
+     office explicitly completes the whole project below. -->
+<div class="overlay" id="mo-visits">
+<div class="modal" style="max-width:640px">
+  <div class="modal-title" id="mo-visits-title">📅 Site Visits</div>
+  <div id="mo-visits-progress" style="font-size:12px;color:var(--txt3);margin:-10px 0 14px"></div>
+
+  <div id="mo-visits-list" style="max-height:340px;overflow-y:auto;margin-bottom:4px"></div>
+
+  <div style="margin:14px 0">
+    <button type="button" class="btn btn-ghost btn-sm" onclick="toggleAddVisitForm()">+ Add Visit</button>
+  </div>
+  <div id="jm-add-visit-form" style="display:none;background:var(--s2);border:1px solid var(--border);border-radius:var(--r1);padding:12px;margin-bottom:14px">
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <div class="fg" style="flex:1 1 150px;margin-bottom:0">
+        <label class="fl">Date</label>
+        <input type="date" id="vf-date" class="fi">
+      </div>
+      <div class="fg" style="flex:2 1 220px;margin-bottom:0">
+        <label class="fl">Engineers on site <span style="font-weight:400;color:var(--txt3);font-size:10px">(tap to select — any number)</span></label>
+        <div id="vf-engineers-chips" class="vf-eng-chips"></div>
+      </div>
+    </div>
+    <div class="fg" style="margin-top:10px;margin-bottom:0">
+      <label class="fl">What was done</label>
+      <textarea id="vf-notes" class="fi fta-grow" placeholder="e.g. First fix wiring, chased walls in kitchen and hallway" rows="2" style="min-height:50px"></textarea>
+    </div>
+    <div class="fg" style="margin-top:10px;margin-bottom:0">
+      <label class="fl">Photo <span style="font-weight:400;color:var(--txt3);font-size:10px">(optional)</span></label>
+      <input type="file" id="vf-photo" accept="image/*" class="fi" style="padding:6px">
+      <div id="vf-photo-preview" style="display:none;margin-top:8px"></div>
+    </div>
+    <div style="margin-top:10px;display:flex;gap:8px">
+      <button type="button" class="btn btn-acc btn-sm" id="vf-save-btn" onclick="saveVisit()">Save Visit</button>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="toggleAddVisitForm()">Cancel</button>
+    </div>
+  </div>
+
+  <div style="border-top:1px solid var(--border);padding-top:14px">
+    <button type="button" class="btn btn-acc" id="mo-visits-complete-btn" style="width:100%" onclick="markProjectCompleteFromModal()">✅ Mark Whole Project Complete</button>
+    <div style="font-size:11px;color:var(--txt3);margin-top:6px;text-align:center">Finishes the whole job — separate from marking individual visits done above.</div>
+  </div>
+
+  <div class="modal-actions">
+    <button class="btn btn-ghost" onclick="closeModal('mo-visits')">Close</button>
   </div>
 </div>
 </div>

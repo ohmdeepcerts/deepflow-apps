@@ -2230,8 +2230,14 @@ export async function renderJobs(){
       if(scroll) scroll.innerHTML=`<div style="padding:48px;text-align:center;color:var(--txt3)"><div style="font-size:28px;margin-bottom:12px">⌕</div><div style="font-family:var(--fh);font-weight:700;font-size:14px;margin-bottom:6px">Searching all jobs…</div><div style="font-size:12px">Checking every year on record — this can take a moment for older jobs</div></div>`;
     },250);
   }
+  let _visitRows;
   try{
-    allJobs = await _getJobs();
+    // Kicked off together — job_visits doesn't depend on allJobs, so there's
+    // no reason to pay for it as a second sequential round trip after jobs
+    // (jobs alone is already several paginated round trips at this table's
+    // size) every time this page's cache is cold.
+    [allJobs, _visitRows] = await Promise.all([_getJobs(), dAll('job_visits')]);
+    _visitRows = _visitRows || [];
   }catch(err){
     clearTimeout(_searchWaitTimer);
     const scroll=document.getElementById('jobs-list-scroll');
@@ -2249,11 +2255,6 @@ export async function renderJobs(){
   // "Projects" = jobs with 2+ real visits logged (job_visits), computed
   // once here from the real table (not simulated) and reused for both the
   // status-tab counts and the Projects filter below.
-  // dAll() (not raw _sb()) — this has a 30s cache built in, so the extra
-  // "Projects" lookup doesn't fire a fresh network fetch on every render
-  // (search keystrokes, filter clicks, etc.) the way the first cut of this
-  // did.
-  const _visitRows = await dAll('job_visits') || [];
   const _visitCounts = {};
   _visitRows.forEach(v=>{ _visitCounts[v.jobId]=(_visitCounts[v.jobId]||0)+1; });
   const projectJobIds = new Set(Object.keys(_visitCounts).filter(id=>_visitCounts[id]>=2));
@@ -3334,7 +3335,7 @@ export async function openJobModal(id){
       openModal('mo-job');
       // Load photos/files uploaded by engineers
       loadJobAttachments(id);
-      loadJobVisits(id);
+      _updateVisitsBadge(id);
     });
   } else {
     document.getElementById('mo-job-title').textContent='📋 New Job';
@@ -3349,7 +3350,7 @@ export async function openJobModal(id){
     renderCertChips([]);
     document.getElementById('btn-delete-job').style.display='none';
     document.getElementById('jm-photos-panel').style.display='none';
-    document.getElementById('jm-visits-panel').style.display='none';
+    document.getElementById('jm-visits-btn').style.display='none';
     document.getElementById('jm-invoice-panel').style.display='none';
     document.getElementById('btn-wa-this-job').style.display='none';
     document.getElementById('btn-wa-ll').style.display='none';
@@ -3930,15 +3931,43 @@ async function loadJobAttachments(jobId){
   }
 }
 
-// Site Visits — timeline entries for a long-running job. Unlike photos,
-// the panel stays visible with zero entries so "+ Add Visit" is always
-// reachable on any existing job, not just ones already mid-project.
+// Site Visits — a dedicated modal (mo-visits) for a job's visit timeline,
+// separate from the main Edit Job form. Each visit has its OWN completion
+// state (completed/completed_at/completed_by on job_visits) — real gap
+// found live: marking visit 3 of an ongoing multi-visit project done used
+// to have no representation at all except changing the whole JOB's status,
+// which wrongly finished the entire project. Marking a visit done here
+// never touches jobs.status; only markProjectCompleteFromModal() does that,
+// deliberately, as a separate action.
+
+// Lightweight badge on the "📅 Site Visits" button in the job modal header
+// — a count-only query (not the full visit rows/photos) so opening a job
+// doesn't pay for photo signed-URL work it may never need.
+async function _updateVisitsBadge(jobId){
+  const btn=document.getElementById('jm-visits-btn');
+  const badge=document.getElementById('jm-visits-btn-badge');
+  if(!btn) return;
+  btn.style.display='';
+  try{
+    const rows=await _sb('job_visits?jobid=eq.'+encodeURIComponent(jobId)+'&select=completed')||[];
+    if(!rows.length){ if(badge) badge.textContent=''; return; }
+    const done=rows.filter(r=>r.completed).length;
+    if(badge) badge.textContent=`(${done}/${rows.length})`;
+  }catch(e){ console.warn('[DeepFlow] _updateVisitsBadge failed',e); }
+}
+
+function openVisitsModal(){
+  if(!editJid){ toast('Save the job first, then add a visit','warn'); return; }
+  const addrEl=document.getElementById('jf-addr');
+  document.getElementById('mo-visits-title').textContent='📅 Site Visits'+(addrEl&&addrEl.value?' — '+addrEl.value:'');
+  openModal('mo-visits');
+  loadJobVisits(editJid);
+}
+
 async function loadJobVisits(jobId){
-  const panel=document.getElementById('jm-visits-panel');
-  const list=document.getElementById('jm-visits-list');
-  const countEl=document.getElementById('jm-visits-count');
-  if(!panel||!list) return;
-  panel.style.display='';
+  const list=document.getElementById('mo-visits-list');
+  const progress=document.getElementById('mo-visits-progress');
+  if(!list) return;
   list.innerHTML='<div style="color:var(--txt3);font-size:12px;padding:8px 0">Loading…</div>';
   try{
     const [visits, photoRows] = await Promise.all([
@@ -3946,11 +3975,12 @@ async function loadJobVisits(jobId){
       _sb('attachments?jobid=eq.'+encodeURIComponent(jobId)+'&visit_id=not.is.null'),
     ]);
     if(!visits||!visits.length){
-      list.innerHTML='<div style="color:var(--txt3);font-size:12px;padding:8px 0">No visits logged yet.</div>';
-      if(countEl) countEl.textContent='';
+      list.innerHTML='<div style="color:var(--txt3);font-size:12px;padding:8px 0">No visits logged yet — add the first one below.</div>';
+      if(progress) progress.textContent='';
       return;
     }
-    if(countEl) countEl.textContent='('+visits.length+')';
+    const doneCount=visits.filter(v=>v.completed).length;
+    if(progress) progress.textContent=`${doneCount} of ${visits.length} visit${visits.length!==1?'s':''} completed`;
     // Resolve real thumbnails up front — the `deepflow` bucket is private,
     // so every photo needs its own short-lived signed URL; batching this
     // before the template avoids an async gap mid-render per photo.
@@ -3963,29 +3993,87 @@ async function loadJobVisits(jobId){
     list.innerHTML=visits.map((v,i)=>{
       const engs=(v.engineers||[]).join(', ')||'—';
       const photos=photosByVisit[v.id]||[];
-      const photosHtml=photos.length?`<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">${photos.map(p=>{
+      const photosHtml=photos.length?`<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">${photos.map(p=>{
         const src=signedByPath[p.storage_path];
         return src
-          ? `<a href="${src}" target="_blank" title="${escHtml(p.name||'Photo')}"><img src="${src}" alt="${escHtml(p.name||'Photo')}" style="width:56px;height:56px;object-fit:cover;border-radius:6px;border:1px solid var(--border)"></a>`
-          : `<div style="width:56px;height:56px;border-radius:6px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--txt3);font-size:18px" title="${escHtml(p.name||'Photo')}">▧</div>`;
+          ? `<a href="${src}" target="_blank" title="${escHtml(p.name||'Photo')}"><img src="${src}" alt="${escHtml(p.name||'Photo')}" style="width:72px;height:72px;object-fit:cover;border-radius:6px;border:1px solid var(--border)"></a>`
+          : `<div style="width:72px;height:72px;border-radius:6px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--txt3);font-size:20px" title="${escHtml(p.name||'Photo')}">▧</div>`;
       }).join('')}</div>`:'';
-      return `<div style="display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">
-        <div style="flex-shrink:0;width:74px">
+      const completedInfo=v.completed
+        ? `<div style="font-size:11px;color:var(--green);margin-top:6px">✓ Completed${v.completedBy?' by '+escHtml(v.completedBy):''}${v.completedAt?' · '+formatDateUK(v.completedAt.slice(0,10)):''}</div>`
+        : '';
+      return `<div style="display:flex;gap:10px;padding:12px 0;border-bottom:1px solid var(--border);${v.completed?'opacity:.75':''}">
+        <div style="flex-shrink:0;width:80px">
           <div style="font-size:10px;font-weight:700;color:var(--acc)">VISIT ${i+1}</div>
-          <div style="font-size:11px;color:var(--txt3)">${formatDateUK(v.visit_date)||v.visit_date}</div>
+          <div style="font-size:11px;color:var(--txt3)">${formatDateUK(v.visitDate)||v.visitDate}</div>
         </div>
         <div style="flex:1;min-width:0">
           <div style="font-size:12px;font-weight:600;color:var(--txt1)">👷 ${escHtml(engs)}</div>
-          ${v.notes?`<div style="font-size:12px;color:var(--txt2);margin-top:2px">${escHtml(v.notes)}</div>`:''}
+          ${v.notes?`<div style="font-size:12px;color:var(--txt2);margin-top:4px;white-space:pre-wrap">${escHtml(v.notes)}</div>`:''}
           ${photosHtml}
+          ${completedInfo}
         </div>
-        <button onclick="deleteVisit('${v.id}')" style="background:none;border:none;color:var(--txt3);cursor:pointer;font-size:13px;padding:2px 4px" title="Delete visit">✕</button>
+        <div style="flex-shrink:0;display:flex;flex-direction:column;gap:6px;align-items:flex-end">
+          <button onclick="toggleVisitComplete('${v.id}',${!v.completed})" class="btn ${v.completed?'btn-ghost':'btn-green'} btn-xs" style="white-space:nowrap">${v.completed?'↺ Reopen':'✓ Mark Done'}</button>
+          <button onclick="deleteVisit('${v.id}')" style="background:none;border:none;color:var(--txt3);cursor:pointer;font-size:13px;padding:2px 4px" title="Delete visit">✕</button>
+        </div>
       </div>`;
     }).join('');
   }catch(err){
     console.error('loadJobVisits:',err);
     list.innerHTML='<div style="color:var(--txt3);font-size:12px">Could not load visits</div>';
   }
+}
+
+// Marks ONE visit done/undone — deliberately never touches jobs.status.
+// See this section's header comment for why that separation is the whole
+// point of this feature.
+async function toggleVisitComplete(visitId, makeComplete){
+  try{
+    await _sb('job_visits?id=eq.'+encodeURIComponent(visitId),{
+      method:'PATCH',
+      body:{
+        completed:makeComplete,
+        completedAt: makeComplete ? new Date().toISOString() : null,
+        completedBy: makeComplete ? (_appUser?.name||'Office') : null,
+      },
+      prefer:'return=minimal',
+    });
+    await loadJobVisits(editJid);
+    _updateVisitsBadge(editJid);
+    toast(makeComplete?'Visit marked complete':'Visit reopened','success',2000);
+  }catch(err){
+    console.error('toggleVisitComplete:',err);
+    toast('Could not update visit','error');
+  }
+}
+
+// The explicit "finish the whole project" action — distinct from marking
+// any individual visit done. Reuses the same status-change path the
+// Status dropdown itself uses (_applyStatusChange), so it triggers the
+// exact same automation (cert creation, auto-invoice, completion-email
+// popup) as completing a job normally — this button is a more discoverable
+// shortcut to that, not a separate/different code path.
+async function markProjectCompleteFromModal(){
+  if(!editJid) return;
+  const job=await dGet('jobs',editJid);
+  if(!job) return;
+  confirm2(
+    '✅ Complete Whole Project',
+    `Mark the whole job at ${job.address||'this property'} as Completed? This finishes the job itself, not just one visit.`,
+    async()=>{
+      const ok=await _applyStatusChange(editJid,STATUS.COMPLETED);
+      if(ok){
+        closeModal('mo-visits');
+        const statusSel=document.getElementById('jf-status');
+        if(statusSel) statusSel.value=STATUS.COMPLETED;
+        _renderJobsKeepScroll();updateBadges();
+        toast('✅ Project marked Completed','success');
+      }
+    },
+    ()=>{},
+    {okText:'Complete Project'}
+  );
 }
 
 // Which engineer chips are currently toggled on in the open Add Visit
@@ -4068,6 +4156,7 @@ async function saveVisit(){
     }
     toggleAddVisitForm();
     await loadJobVisits(editJid);
+    _updateVisitsBadge(editJid);
     toast('Visit logged','success');
   }catch(err){
     console.error('saveVisit:',err);
@@ -4082,6 +4171,7 @@ async function deleteVisit(id){
   try{
     await dDel('job_visits',id);
     await loadJobVisits(editJid);
+    _updateVisitsBadge(editJid);
   }catch(err){
     console.error('deleteVisit:',err);
     toast('Could not delete visit','error');
@@ -10152,6 +10242,7 @@ Object.assign(window, {
   extractAppliancesFromPhoto, fillCreditNote, fillFromMatch, filterCerts, fuzzyAddr, generateBulkReminder, generateCertPdf,
   postcodeLookup, confirmPostcode,
   loadJobVisits, toggleAddVisitForm, saveVisit, deleteVisit, openProjectPicker, _toggleVisitEngineer,
+  openVisitsModal, toggleVisitComplete, markProjectCompleteFromModal,
   handleAccess, handleLogoUpload, handleNotifClick, handlePriDotClick, importBackup, importCertCSV,
   sendTestEmail, loadEmailProviderSettings, saveEmailProviderConfig, onEmailProviderPicked, _updateEmailProviderLiveBadge,
   invClientSelected, invNavSelect, jCalPickDate, jPickDate, jcalShiftMonth, kanbanDragOver, 
