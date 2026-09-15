@@ -3977,14 +3977,14 @@ async function loadJobVisits(jobId){
   const list=document.getElementById('mo-visits-list');
   const progress=document.getElementById('mo-visits-progress');
   if(!list) return;
-  list.innerHTML='<div style="color:var(--txt3);font-size:12px;padding:8px 0">Loading…</div>';
+  list.innerHTML='<div style="color:var(--txt3);font-size:14px;padding:8px 0">Loading…</div>';
   try{
     const [visits, photoRows] = await Promise.all([
       _sb('job_visits?jobid=eq.'+encodeURIComponent(jobId)+'&order=visit_date.asc,created.asc'),
       _sb('attachments?jobid=eq.'+encodeURIComponent(jobId)+'&visit_id=not.is.null'),
     ]);
     if(!visits||!visits.length){
-      list.innerHTML='<div style="color:var(--txt3);font-size:12px;padding:8px 0">No visits logged yet — add the first one below.</div>';
+      list.innerHTML='<div style="color:var(--txt3);font-size:14px;padding:8px 0">No visits logged yet — add the first one below.</div>';
       if(progress) progress.textContent='';
       return;
     }
@@ -4013,28 +4013,28 @@ async function loadJobVisits(jobId){
       // (visit_date/completed_by/completed_at), not the camelCase the rest
       // of this app usually sees via the repository layer.
       const completedInfo=v.completed
-        ? `<div style="font-size:11px;color:var(--green);margin-top:6px">✓ Completed${v.completed_by?' by '+escHtml(v.completed_by):''}${v.completed_at?' · '+formatDateUK(v.completed_at.slice(0,10)):''}</div>`
+        ? `<div style="font-size:13px;color:var(--green);margin-top:8px;font-weight:600">✓ Completed${v.completed_by?' by '+escHtml(v.completed_by):''}${v.completed_at?' · '+formatDateUK(v.completed_at.slice(0,10)):''}</div>`
         : '';
-      return `<div style="display:flex;gap:10px;padding:12px 0;border-bottom:1px solid var(--border);${v.completed?'opacity:.75':''}">
-        <div style="flex-shrink:0;width:80px">
-          <div style="font-size:10px;font-weight:700;color:var(--acc)">VISIT ${i+1}</div>
-          <div style="font-size:11px;color:var(--txt3)">${formatDateUK(v.visit_date)||v.visit_date}</div>
+      return `<div style="display:flex;gap:12px;padding:14px 0;border-bottom:1px solid var(--border);${v.completed?'opacity:.75':''}">
+        <div style="flex-shrink:0;width:90px">
+          <div style="font-size:12px;font-weight:700;color:var(--acc)">VISIT ${i+1}</div>
+          <div style="font-size:14px;color:var(--txt2);margin-top:2px">${formatDateUK(v.visit_date)||v.visit_date}</div>
         </div>
         <div style="flex:1;min-width:0">
-          <div style="font-size:12px;font-weight:600;color:var(--txt1)">👷 ${escHtml(engs)}</div>
-          ${v.notes?`<div style="font-size:12px;color:var(--txt2);margin-top:4px;white-space:pre-wrap">${escHtml(v.notes)}</div>`:''}
+          <div style="font-size:15px;font-weight:600;color:var(--txt1)">👷 ${escHtml(engs)}</div>
+          ${v.notes?`<div style="font-size:14px;color:var(--txt2);margin-top:6px;white-space:pre-wrap;line-height:1.5">${escHtml(v.notes)}</div>`:''}
           ${photosHtml}
           ${completedInfo}
         </div>
-        <div style="flex-shrink:0;display:flex;flex-direction:column;gap:6px;align-items:flex-end">
-          <button onclick="toggleVisitComplete('${v.id}',${!v.completed})" class="btn ${v.completed?'btn-ghost':'btn-green'} btn-xs" style="white-space:nowrap">${v.completed?'↺ Reopen':'✓ Mark Done'}</button>
-          <button onclick="deleteVisit('${v.id}')" style="background:none;border:none;color:var(--txt3);cursor:pointer;font-size:13px;padding:2px 4px" title="Delete visit">✕</button>
+        <div style="flex-shrink:0;display:flex;flex-direction:column;gap:8px;align-items:flex-end">
+          <button onclick="toggleVisitComplete('${v.id}',${!v.completed})" class="btn ${v.completed?'btn-ghost':'btn-green'} btn-sm" style="white-space:nowrap">${v.completed?'↺ Reopen':'✓ Mark Done'}</button>
+          <button onclick="deleteVisit('${v.id}')" style="background:none;border:none;color:var(--txt3);cursor:pointer;font-size:16px;padding:2px 6px" title="Delete visit">✕</button>
         </div>
       </div>`;
     }).join('');
   }catch(err){
     console.error('loadJobVisits:',err);
-    list.innerHTML='<div style="color:var(--txt3);font-size:12px">Could not load visits</div>';
+    list.innerHTML='<div style="color:var(--txt3);font-size:14px">Could not load visits</div>';
   }
 }
 

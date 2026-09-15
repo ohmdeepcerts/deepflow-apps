@@ -337,10 +337,18 @@ th.resizing .col-resize-handle::after,.col-resize-handle:hover::after,.col-resiz
    instead of a native <select multiple>, which needs ctrl/cmd-click to pick
    more than one and has no equivalent gesture on a touchscreen at all
    (confirmed unusable on phone — a plain tap just replaces the selection). */
-.vf-eng-chips{display:flex;flex-wrap:wrap;gap:6px}
-.vf-eng-chip{font-family:var(--fh);font-size:12px;font-weight:600;padding:7px 12px;border-radius:20px;border:1px solid var(--border2);background:var(--s2);color:var(--txt2);cursor:pointer;user-select:none;transition:all .15s var(--ease)}
+.vf-eng-chips{display:flex;flex-wrap:wrap;gap:8px}
+.vf-eng-chip{font-family:var(--fh);font-size:14px;font-weight:600;padding:9px 15px;border-radius:20px;border:1px solid var(--border2);background:var(--s2);color:var(--txt2);cursor:pointer;user-select:none;transition:all .15s var(--ease)}
 .vf-eng-chip:hover{border-color:var(--acc)}
 .vf-eng-chip.on{background:var(--acc);border-color:var(--acc);color:#1a1a1a}
+/* Site Visits modal — real feedback that this form read too small/cramped.
+   Scoped to #mo-visits only (not .fl/.fi globally, which every other form
+   in the app also uses at their current size without complaint) so this
+   is a deliberate size bump for this one screen, not a silent global
+   change. */
+#mo-visits .fl{font-size:13px}
+#mo-visits .fi,#mo-visits .fs,#mo-visits .fta{font-size:16px;padding:12px 14px}
+#mo-visits #mo-visits-list{font-size:14px}
 .fcheck input{accent-color:var(--acc);width:15px;height:15px}
 .vat-hidden{display:none!important}
 input[type=date],input[type=time]{color-scheme:light}
@@ -6507,7 +6515,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS last_accuracy integer;</div>
 <div class="overlay" id="mo-visits">
 <div class="modal" style="max-width:640px">
   <div class="modal-title" id="mo-visits-title">📅 Site Visits</div>
-  <div id="mo-visits-progress" style="font-size:12px;color:var(--txt3);margin:-10px 0 14px"></div>
+  <div id="mo-visits-progress" style="font-size:14px;color:var(--txt2);font-weight:600;margin:-8px 0 14px"></div>
 
   <div id="mo-visits-list" style="max-height:340px;overflow-y:auto;margin-bottom:4px"></div>
 
@@ -6521,7 +6529,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS last_accuracy integer;</div>
         <input type="date" id="vf-date" class="fi">
       </div>
       <div class="fg" style="flex:2 1 220px;margin-bottom:0">
-        <label class="fl">Engineers on site <span style="font-weight:400;color:var(--txt3);font-size:10px">(tap to select — any number)</span></label>
+        <label class="fl">Engineers on site <span style="font-weight:400;color:var(--txt3);font-size:12px">(tap to select — any number)</span></label>
         <div id="vf-engineers-chips" class="vf-eng-chips"></div>
       </div>
     </div>
@@ -6530,7 +6538,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS last_accuracy integer;</div>
       <textarea id="vf-notes" class="fi fta-grow" placeholder="e.g. First fix wiring, chased walls in kitchen and hallway" rows="2" style="min-height:50px"></textarea>
     </div>
     <div class="fg" style="margin-top:10px;margin-bottom:0">
-      <label class="fl">Photo <span style="font-weight:400;color:var(--txt3);font-size:10px">(optional)</span></label>
+      <label class="fl">Photo <span style="font-weight:400;color:var(--txt3);font-size:12px">(optional)</span></label>
       <input type="file" id="vf-photo" accept="image/*" class="fi" style="padding:6px">
       <div id="vf-photo-preview" style="display:none;margin-top:8px"></div>
     </div>
@@ -6542,7 +6550,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS last_accuracy integer;</div>
 
   <div style="border-top:1px solid var(--border);padding-top:14px">
     <button type="button" class="btn btn-acc" id="mo-visits-complete-btn" style="width:100%" onclick="markProjectCompleteFromModal()">✅ Mark Whole Project Complete</button>
-    <div style="font-size:11px;color:var(--txt3);margin-top:6px;text-align:center">Finishes the whole job — separate from marking individual visits done above.</div>
+    <div style="font-size:13px;color:var(--txt3);margin-top:8px;text-align:center">Finishes the whole job — separate from marking individual visits done above.</div>
   </div>
 
   <div class="modal-actions">
