@@ -3999,13 +3999,17 @@ async function loadJobVisits(jobId){
           ? `<a href="${src}" target="_blank" title="${escHtml(p.name||'Photo')}"><img src="${src}" alt="${escHtml(p.name||'Photo')}" style="width:72px;height:72px;object-fit:cover;border-radius:6px;border:1px solid var(--border)"></a>`
           : `<div style="width:72px;height:72px;border-radius:6px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--txt3);font-size:20px" title="${escHtml(p.name||'Photo')}">▧</div>`;
       }).join('')}</div>`:'';
+      // v comes from a raw _sb() call, not dAll() — no fromDb() mapping
+      // applied, so these are the real snake_case column names
+      // (visit_date/completed_by/completed_at), not the camelCase the rest
+      // of this app usually sees via the repository layer.
       const completedInfo=v.completed
-        ? `<div style="font-size:11px;color:var(--green);margin-top:6px">✓ Completed${v.completedBy?' by '+escHtml(v.completedBy):''}${v.completedAt?' · '+formatDateUK(v.completedAt.slice(0,10)):''}</div>`
+        ? `<div style="font-size:11px;color:var(--green);margin-top:6px">✓ Completed${v.completed_by?' by '+escHtml(v.completed_by):''}${v.completed_at?' · '+formatDateUK(v.completed_at.slice(0,10)):''}</div>`
         : '';
       return `<div style="display:flex;gap:10px;padding:12px 0;border-bottom:1px solid var(--border);${v.completed?'opacity:.75':''}">
         <div style="flex-shrink:0;width:80px">
           <div style="font-size:10px;font-weight:700;color:var(--acc)">VISIT ${i+1}</div>
-          <div style="font-size:11px;color:var(--txt3)">${formatDateUK(v.visitDate)||v.visitDate}</div>
+          <div style="font-size:11px;color:var(--txt3)">${formatDateUK(v.visit_date)||v.visit_date}</div>
         </div>
         <div style="flex:1;min-width:0">
           <div style="font-size:12px;font-weight:600;color:var(--txt1)">👷 ${escHtml(engs)}</div>
@@ -4030,12 +4034,15 @@ async function loadJobVisits(jobId){
 // point of this feature.
 async function toggleVisitComplete(visitId, makeComplete){
   try{
+    // _sb() is a raw REST call, not dPut() — real snake_case column names
+    // required in the body, same as everywhere else _sb() writes directly
+    // (see loadJobVisits()'s own comment on this).
     await _sb('job_visits?id=eq.'+encodeURIComponent(visitId),{
       method:'PATCH',
       body:{
         completed:makeComplete,
-        completedAt: makeComplete ? new Date().toISOString() : null,
-        completedBy: makeComplete ? (_appUser?.name||'Office') : null,
+        completed_at: makeComplete ? new Date().toISOString() : null,
+        completed_by: makeComplete ? (_appUser?.name||'Office') : null,
       },
       prefer:'return=minimal',
     });
