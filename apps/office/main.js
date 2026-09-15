@@ -1248,6 +1248,15 @@ export function openModal(id){
   if(!el.hasAttribute('role')) el.setAttribute('role','dialog');
   el.setAttribute('aria-modal','true');
   el.classList.add('open');
+  // Real bug found live: .modal itself scrolls (overflow-y:auto, tall
+  // forms like the job modal routinely need it), but its scroll position
+  // was never reset on open — closing a modal scrolled halfway down and
+  // reopening it (even for a different record) left it scrolled to the
+  // same spot, so anything positioned near the top (like the Site Visits
+  // button) could be sitting above the visible area with nothing on
+  // screen to suggest scrolling up would reveal it.
+  const scrollable=el.querySelector('.modal');
+  if(scrollable) scrollable.scrollTop=0;
   const focusable=_getFocusable(el);
   // Wait a frame — some modals populate their own fields/visibility right
   // after opening, which can affect what's actually focusable/visible yet.

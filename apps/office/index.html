@@ -6289,10 +6289,15 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS last_accuracy integer;</div>
 
   <!-- Prominent, always-visible-for-existing-jobs entry point into the
        Visits modal — was previously a small section buried at the bottom
-       of a long scrolling form, easy to miss entirely. Hidden for a
-       brand-new (not yet saved) job in openJobModal(); badge text updated
-       there too, from a lightweight count-only query. -->
-  <button type="button" id="jm-visits-btn" class="btn btn-ghost btn-sm" style="display:none;margin:-8px 0 14px" onclick="openVisitsModal()">📅 Site Visits <span id="jm-visits-btn-badge"></span></button>
+       of a long scrolling form, easy to miss entirely. Made a full-width
+       solid-colour bar (not a small ghost button) after real feedback that
+       the first version was still too easy to miss/misclick — see
+       openModal()'s scroll-reset fix for the other half of that same
+       report (a stale scroll position could hide it above the fold
+       entirely). Hidden for a brand-new (not yet saved) job in
+       openJobModal(); badge text updated there too, from a lightweight
+       count-only query. -->
+  <button type="button" id="jm-visits-btn" class="btn btn-acc" style="display:none;width:100%;margin:0 0 14px;padding:12px;font-size:14px;font-weight:700" onclick="openVisitsModal()">📅 Site Visits <span id="jm-visits-btn-badge"></span></button>
 
   <!-- ★ RATINGS BAR — Landlord + Agency + Agent ratings at the TOP for visibility -->
   <!-- ★ RATINGS BAR — Landlord + Agency + Agent at the TOP -->
