@@ -63,14 +63,24 @@ function render(){
   el.innerHTML = filterBar() + (state.eng!=='all' ? tasksPanel() : '') + (state.view==='feed' ? feedView() : visitsView());
 }
 
+const ENG_PREVIEW = 3;
+let showAllEng = false;
+
+function assignedNames(){
+  return [...new Set(ctx.visits.flatMap(v=>engsOf(v)))].sort((a,b)=>a.localeCompare(b));
+}
+
 function filterBar(){
-  const names=engineerNames();
+  const all=assignedNames();
+  const extra=all.slice(ENG_PREVIEW);
+  const names = showAllEng ? all : [...all.slice(0,ENG_PREVIEW), ...(extra.includes(state.eng) ? [state.eng] : [])];
+  const hidden = all.length - names.length;
   const chip=(val,label,sub,dot)=>`<button type="button" class="act-chip${state.eng===val?' on':''}" data-act="eng" data-val="${escHtml(val)}">${dot?`<span class="dot" style="background:${dot}"></span>`:''}${escHtml(label)}${sub?` <small>${escHtml(sub)}</small>`:''}</button>`;
   const engChips = chip('all','All engineers',`${ctx.visits.length} visits`) + names.map(n=>{
     const visits=ctx.visits.filter(v=>engsOf(v).includes(n)).length;
     const notes=ctx.visits.reduce((s,v)=>s+commentsOf(v).filter(c=>!isHandover(c)&&c.by===n).length,0);
     return chip(n,n,`${visits} visit${visits===1?'':'s'} · ${notes} comment${notes===1?'':'s'}`,colour(n));
-  }).join('');
+  }).join('') + (all.length>ENG_PREVIEW ? `<button type="button" class="act-chip act-more" data-act="more-eng">${showAllEng?'Show fewer':`+${hidden} more`}</button>` : '');
   const totalNotes=ctx.visits.reduce((s,v)=>s+commentsOf(v).filter(c=>!isHandover(c)).length,0);
   const totalPhotos=ctx.photos.length;
   const totalHandover=ctx.visits.reduce((s,v)=>s+commentsOf(v).filter(isHandover).length,0);
@@ -281,6 +291,7 @@ document.addEventListener('click', async e=>{
   if(act==='view'){ state.view=t.dataset.val; render(); return; }
   if(act==='eng'){ state.eng = (state.eng===t.dataset.val && t.dataset.val!=='all') ? 'all' : t.dataset.val; render(); return; }
   if(act==='type'){ state.type=t.dataset.val; render(); return; }
+  if(act==='more-eng'){ showAllEng=!showAllEng; render(); return; }
   if(act==='add-comment'){ await addComment(t.dataset.visit); return; }
   if(act==='del-comment'){ await deleteComment(t.dataset.visit, Number(t.dataset.idx), t.dataset.stamp); return; }
   if(act==='task-toggle'){ await setVisitDone(t.dataset.visit, t.dataset.done==='1'); }
