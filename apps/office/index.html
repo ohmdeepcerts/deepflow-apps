@@ -2875,7 +2875,7 @@ body.density-relaxed .jtable td{font-size:15px}
     }
 
 .dfplanner .visit-comment {
-      display:grid;grid-template-columns:30px 160px minmax(0,1fr);align-items:flex-start;gap:7px;
+      display:grid;grid-template-columns:30px 160px minmax(0,1fr) auto;align-items:flex-start;gap:7px;
       border:1px solid #e5e8eb;background:#fff;border-radius:8px;padding:8px
     }
 
@@ -2906,6 +2906,42 @@ body.density-relaxed .jtable td{font-size:15px}
 .dfplanner .visit-comment-form .dfp-add-comment {grid-column:1/-1;justify-self:end;font-size:13px;padding:9px 16px}
 
 .dfplanner .visit-photo-add {display:flex;align-items:center;gap:10px;margin-top:10px;font-size:12px;color:#6b7280;flex-wrap:wrap}
+
+.dfplanner .act-bar {background:#fff;border:1px solid #e3e6ea;border-radius:11px;padding:12px;margin-bottom:12px;display:flex;flex-direction:column;gap:10px}
+.dfplanner .act-row {display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.dfplanner .act-engs {gap:7px}
+.dfplanner .act-chip {border:1px solid #d9dde3;background:#fff;color:#374151;border-radius:999px;padding:7px 13px;font-size:13px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-family:inherit}
+.dfplanner .act-chip small {opacity:.75;font-weight:600;font-size:11px}
+.dfplanner .act-chip.on {background:#17191d;border-color:#17191d;color:#fff}
+.dfplanner .act-chip .dot {width:10px;height:10px;border-radius:50%;display:inline-block}
+.dfplanner .act-sep {width:1px;height:22px;background:#e3e6ea;margin:0 4px}
+.dfplanner .act-search {flex:1;min-width:220px;border:1px solid #dfe2e6;border-radius:8px;padding:9px 11px;font-size:14px}
+.dfplanner .act-select {border:1px solid #dfe2e6;border-radius:8px;padding:8px 10px;font-size:14px;background:#fff}
+.dfplanner .act-stats {font-size:12px;color:#6b7280}
+.dfplanner .act-eng-tag {border:0;color:#fff;border-radius:999px;padding:4px 11px;font-size:13px;font-weight:800;cursor:pointer;margin:0 4px 4px 0}
+.dfplanner .act-done {display:inline-block;margin-top:4px;font-size:11px;font-weight:800;color:#15803d;background:#dcfce7;border-radius:999px;padding:2px 8px}
+.dfplanner .act-del {align-self:start;border:0;background:transparent;color:#b91c1c;font-size:14px;cursor:pointer;padding:2px 6px}
+.dfplanner .act-handover-row {display:flex;gap:8px;align-items:flex-start}
+.dfplanner .act-handover-row > div {flex:1;min-width:0}
+.dfplanner .act-tasks {background:#fff;border:1px solid #e3e6ea;border-radius:11px;padding:12px;margin-bottom:12px}
+.dfplanner .act-tasks-head {display:flex;justify-content:space-between;align-items:center;font-size:14px;margin-bottom:10px;gap:10px;flex-wrap:wrap}
+.dfplanner .act-tasks-head span {font-size:12px;color:#6b7280;font-weight:700}
+.dfplanner .act-task {display:grid;grid-template-columns:34px minmax(0,1fr);gap:10px;padding:10px;border:1px solid #e3e6ea;border-radius:9px;margin-bottom:8px;background:#fff;align-items:start}
+.dfplanner .act-task.done {background:#f3faf5;border-color:#bfe5cb}
+.dfplanner .act-task-check {width:30px;height:30px;border-radius:8px;border:1px solid #cfd4da;background:#fff;font-size:15px;font-weight:900;cursor:pointer;color:#15803d}
+.dfplanner .act-task-body b {display:block;font-size:13px}
+.dfplanner .act-task-body span {display:block;font-size:13px;color:#4b5563;white-space:pre-wrap;margin-top:3px}
+.dfplanner .act-task-body em {display:block;font-size:12px;color:#8a6100;font-style:normal;margin-top:4px;white-space:pre-wrap}
+.dfplanner .act-feed {display:flex;flex-direction:column;gap:8px}
+.dfplanner .act-feed-item {background:#fff;border:1px solid #e3e6ea;border-radius:10px;padding:10px 12px}
+.dfplanner .act-feed-item.is-handover {background:#fff8e6;border-color:#f1d78a}
+.dfplanner .act-feed-meta {display:flex;gap:8px;align-items:center;font-size:12px;color:#6b7280;flex-wrap:wrap;margin-bottom:6px}
+.dfplanner .act-feed-visit {background:#efeaff;color:#6951b9;border-radius:6px;padding:2px 7px;font-weight:800}
+.dfplanner .act-feed-kind {background:#fde68a;color:#7c5800;border-radius:6px;padding:2px 7px;font-weight:800}
+.dfplanner .act-feed-who {display:flex;align-items:center;gap:8px;font-size:13px}
+.dfplanner .act-feed-who span {color:#6b7280;font-size:12px}
+.dfplanner .act-feed-who .act-del {margin-left:auto}
+.dfplanner .act-feed-item .comment-text {margin-top:6px}
 
 .dfplanner .visit-photos {
       display:grid;grid-template-columns:repeat(4,minmax(135px,1fr));gap:7px
