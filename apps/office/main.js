@@ -9345,6 +9345,8 @@ let _cvClientId   = null; // current person/agency id
 let _cvClientType = null; // 'person' | 'agency'
 let _cvClientName = null;
 let _cvActiveTab  = 'jobs';
+let _cvJobFilters = [];
+let _cvJobFilterKey = 'all';
 
 async function cvSearch(q){
   const ql = q.trim().toLowerCase();
@@ -9426,10 +9428,10 @@ async function cvLoadClient(type, id, name){
   let agencyAgents = [];
   if(type==='agency'){
     agencyAgents = allAgents.filter(a=>a.agencyId===id||a.agencyName===name).map(a=>{
-      const aJobs=allJobs.filter(j=>j.agentName===a.name);
+      const aJobs=jobs.filter(j=>j.agentName===a.name);
       const aCompleted=aJobs.filter(j=>j.status===STATUS.COMPLETED||j.status===STATUS.INVOICED);
       const aRevenue=aCompleted.reduce((s,j)=>s+Number(j.price||0),0);
-      return{...a,jobCount:aJobs.length,completedCount:aCompleted.length,revenue:aRevenue};
+      return{...a,jobRows:aJobs,jobCount:aJobs.length,completedCount:aCompleted.length,revenue:aRevenue};
     });
   }
 
@@ -9490,28 +9492,16 @@ async function cvLoadClient(type, id, name){
   }
   document.getElementById('cv-tabs').innerHTML = tabsHtml;
 
-  // ── Jobs panel ──
-  document.getElementById('cv-panel-jobs').innerHTML = jobs.length ? `
-    <table style="width:100%;border-collapse:collapse;font-size:12px">
-      <thead><tr style="border-bottom:2px solid var(--border)">
-        <th style="text-align:left;padding:8px 10px;color:var(--txt3);font-weight:700">Date</th>
-        <th style="text-align:left;padding:8px 10px;color:var(--txt3);font-weight:700">Address</th>
-        <th style="text-align:left;padding:8px 10px;color:var(--txt3);font-weight:700">Trade</th>
-        <th style="text-align:left;padding:8px 10px;color:var(--txt3);font-weight:700">Engineer</th>
-        <th style="text-align:left;padding:8px 10px;color:var(--txt3);font-weight:700">Status</th>
-        <th style="text-align:right;padding:8px 10px;color:var(--txt3);font-weight:700">Price</th>
-      </tr></thead>
-      <tbody>
-        ${jobs.map(j=>`<tr style="border-bottom:1px solid var(--border);cursor:pointer" onmouseover="this.style.background='var(--s2)'" onmouseout="this.style.background=''" onclick="openJobModal('${j.id}')">
-          <td style="padding:9px 10px;white-space:nowrap">${j.date||'—'}</td>
-          <td style="padding:9px 10px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(j.address)||'—'}</td>
-          <td style="padding:9px 10px">${escHtml(j.trade)||'—'}</td>
-          <td style="padding:9px 10px">${escHtml(j.engineer)||'—'}</td>
-          <td style="padding:9px 10px"><span style="font-size:10px;padding:2px 8px;border-radius:10px;background:${j.status===STATUS.COMPLETED?'rgba(37,213,142,.12)':j.status===STATUS.INVOICED?'rgba(168,85,247,.12)':j.status===STATUS.CANCELLED?'rgba(100,116,139,.12)':'rgba(245,166,35,.12)'};color:${j.status===STATUS.COMPLETED?'var(--green)':j.status===STATUS.INVOICED?'var(--purple)':j.status===STATUS.CANCELLED?'var(--txt3)':'var(--yellow)'};font-weight:700">${j.status||'Pending'}</span></td>
-          <td style="padding:9px 10px;text-align:right;font-family:var(--fm)">${j.price?'£'+Number(j.price).toFixed(2):'—'}</td>
-        </tr>`).join('')}
-      </tbody>
-    </table>` : '<div style="color:var(--txt3);font-size:13px;padding:20px 0">No jobs found for this client</div>';
+  // ── Jobs panel (agency view: one filter per linked agent, plus direct jobs) ──
+  _cvJobFilters = [{ key:'all', label:'All jobs', jobs }];
+  if(type==='agency' && agencyAgents.length){
+    const linkedNames = new Set(agencyAgents.map(a=>a.name));
+    agencyAgents.forEach((a,i)=>_cvJobFilters.push({ key:'a'+i, label:a.name, jobs:a.jobRows }));
+    const direct = jobs.filter(j=>!linkedNames.has(j.agentName));
+    if(direct.length) _cvJobFilters.push({ key:'direct', label:'Direct (no agent)', jobs:direct });
+  }
+  _cvJobFilterKey = 'all';
+  cvRenderJobsPanel();
 
   // ── Invoices panel ──
   document.getElementById('cv-panel-invoices').innerHTML = invs.length ? `
@@ -9582,11 +9572,24 @@ async function cvLoadClient(type, id, name){
 
   // ── Agents panel (agency only) ──
   if(type==='agency'){
+    const directEntry = _cvJobFilters.find(f=>f.key==='direct');
+    const directDone = directEntry ? directEntry.jobs.filter(j=>j.status===STATUS.COMPLETED||j.status===STATUS.INVOICED) : [];
+    const directRevenue = directDone.reduce((s,j)=>s+Number(j.price||0),0);
+    const directCard = directEntry ? `<div onclick="cvSetJobFilter('direct')" style="background:var(--s1);border:1px dashed var(--border2);border-radius:12px;padding:14px;cursor:pointer">
+            <div style="font-weight:700;font-size:14px;color:var(--txt);margin-bottom:10px">📦 Direct (no agent)</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;text-align:center">
+              <div><div style="font-family:var(--fh);font-size:16px;font-weight:800;color:var(--acc)">${directEntry.jobs.length}</div><div style="font-size:9px;color:var(--txt3);font-weight:700;text-transform:uppercase">Jobs</div></div>
+              <div><div style="font-family:var(--fh);font-size:16px;font-weight:800;color:var(--green)">${directDone.length}</div><div style="font-size:9px;color:var(--txt3);font-weight:700;text-transform:uppercase">Done</div></div>
+              <div><div style="font-family:var(--fh);font-size:16px;font-weight:800;color:var(--purple)">£${directRevenue.toFixed(0)}</div><div style="font-size:9px;color:var(--txt3);font-weight:700;text-transform:uppercase">Revenue</div></div>
+            </div>
+            <div style="font-size:9px;color:var(--txt3);text-align:right;margin-top:8px">Jobs with no linked agent · click to view</div>
+          </div>` : '';
     document.getElementById('cv-panel-agents').innerHTML = agencyAgents.length ? `
+      <div style="font-size:11px;color:var(--txt3);margin-bottom:10px">Click an agent to see only their jobs.</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin-bottom:16px">
-        ${agencyAgents.map(a=>{
+        ${agencyAgents.map((a,i)=>{
           const compRate=a.jobCount?Math.round(a.completedCount/a.jobCount*100):0;
-          return`<div style="background:var(--s1);border:1px solid var(--border);border-radius:12px;padding:14px">
+          return`<div onclick="cvSetJobFilter('a${i}')" style="background:var(--s1);border:1px solid var(--border);border-radius:12px;padding:14px;cursor:pointer">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
               <div style="width:36px;height:36px;border-radius:50%;background:var(--purple);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#fff;flex-shrink:0">${(a.name||'?').split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase()}</div>
               <div style="flex:1;min-width:0">
@@ -9605,6 +9608,7 @@ async function cvLoadClient(type, id, name){
             <div style="font-size:9px;color:var(--txt3);text-align:right;margin-top:2px">${compRate}% completion</div>
           </div>`;
         }).join('')}
+        ${directCard}
       </div>
       <div style="background:var(--s1);border:1px solid var(--border);border-radius:12px;padding:16px">
         <div style="font-family:var(--fh);font-size:14px;font-weight:800;margin-bottom:12px">All Agent Jobs</div>
@@ -9632,6 +9636,41 @@ async function cvLoadClient(type, id, name){
       : '<div style="color:var(--txt3);font-size:13px;padding:20px 0">No agents linked to this agency</div>';
   }
 
+  cvSwitchTab('jobs');
+}
+
+function cvRenderJobsPanel(){
+  const f = _cvJobFilters.find(x=>x.key===_cvJobFilterKey) || _cvJobFilters[0];
+  const list = f.jobs;
+  const chips = _cvJobFilters.length>1 ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">${_cvJobFilters.map(x=>`
+      <button onclick="cvSetJobFilter('${x.key}')" style="padding:6px 12px;border-radius:14px;border:1px solid ${x.key===f.key?'var(--acc)':'var(--border)'};background:${x.key===f.key?'var(--acc)':'transparent'};color:${x.key===f.key?'#fff':'var(--txt2)'};font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fh)">${escHtml(x.label)} <span style="opacity:.7">(${x.jobs.length})</span></button>`).join('')}</div>` : '';
+  const table = list.length ? `
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr style="border-bottom:2px solid var(--border)">
+        <th style="text-align:left;padding:8px 10px;color:var(--txt3);font-weight:700">Date</th>
+        <th style="text-align:left;padding:8px 10px;color:var(--txt3);font-weight:700">Address</th>
+        <th style="text-align:left;padding:8px 10px;color:var(--txt3);font-weight:700">Trade</th>
+        <th style="text-align:left;padding:8px 10px;color:var(--txt3);font-weight:700">Engineer</th>
+        <th style="text-align:left;padding:8px 10px;color:var(--txt3);font-weight:700">Status</th>
+        <th style="text-align:right;padding:8px 10px;color:var(--txt3);font-weight:700">Price</th>
+      </tr></thead>
+      <tbody>
+        ${list.map(j=>`<tr style="border-bottom:1px solid var(--border);cursor:pointer" onmouseover="this.style.background='var(--s2)'" onmouseout="this.style.background=''" onclick="openJobModal('${j.id}')">
+          <td style="padding:9px 10px;white-space:nowrap">${j.date||'—'}</td>
+          <td style="padding:9px 10px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(j.address)||'—'}</td>
+          <td style="padding:9px 10px">${escHtml(j.trade)||'—'}</td>
+          <td style="padding:9px 10px">${escHtml(j.engineer)||'—'}</td>
+          <td style="padding:9px 10px"><span style="font-size:10px;padding:2px 8px;border-radius:10px;background:${j.status===STATUS.COMPLETED?'rgba(37,213,142,.12)':j.status===STATUS.INVOICED?'rgba(168,85,247,.12)':j.status===STATUS.CANCELLED?'rgba(100,116,139,.12)':'rgba(245,166,35,.12)'};color:${j.status===STATUS.COMPLETED?'var(--green)':j.status===STATUS.INVOICED?'var(--purple)':j.status===STATUS.CANCELLED?'var(--txt3)':'var(--yellow)'};font-weight:700">${j.status||'Pending'}</span></td>
+          <td style="padding:9px 10px;text-align:right;font-family:var(--fm)">${j.price?'£'+Number(j.price).toFixed(2):'—'}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>` : `<div style="color:var(--txt3);font-size:13px;padding:20px 0">${f.key==='all'?'No jobs found for this client':'No jobs in this group'}</div>`;
+  document.getElementById('cv-panel-jobs').innerHTML = chips + table;
+}
+
+function cvSetJobFilter(key){
+  _cvJobFilterKey = key;
+  cvRenderJobsPanel();
   cvSwitchTab('jobs');
 }
 
@@ -10248,7 +10287,7 @@ Object.assign(window, {
   closePortalInviteModal, closePropertyCertHistoryModal, confirmKS, convertProformaToInvoice, copyCremMsg, copyJobToNextDay, copySql,
   copyText, copyWAText, copyWaTemplate, createAllTables, creditNote, createDraftsForCompleted, createInvFromJob,
   createJobFromPortalReq, createProforma, createRecurringInv, createRenewalJob, ctxCopyAddr, ctypeToggle, currentEditId, cvLoadClient,
-  cvSearch, cvSwitchTab, debounceRenderCmd, debounceRenderJobs, deleteAttachment, deleteComment, deleteCurrentAgency,
+  cvSearch, cvSetJobFilter, cvSwitchTab, debounceRenderCmd, debounceRenderJobs, deleteAttachment, deleteComment, deleteCurrentAgency,
   deleteCurrentAgent, deleteCurrentExpense, deleteCurrentJob, deleteCurrentPerson, deleteCurrentProp, deleteDuplicateInvoices,
   deleteInv, deleteJobById, deletePortalContact, deleteSavedView, deleteUser, dismissInvBanner, doLogin,
   doLogout, doResetPassword, downloadCertTemplate, downloadEngPayslip, downloadInvPDF, downloadInvPDFById, downloadPortalInviteCard,
