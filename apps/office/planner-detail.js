@@ -13,7 +13,7 @@
 
 import { escHtml } from '@ui';
 import { formatDateUK } from '@business';
-import { S, dAll, _sb, toast, calcInvTotal, getAppUser, signedUrl } from './main.js';
+import { S, dAll, _sb, toast, calcInvTotal, getAppUser, signedUrl, uploadVisitPhotos } from './main.js';
 import { el, money, resolveContact } from './planner-core.js';
 // openJobModal isn't an ES export of main.js (only exposed on window for
 // inline HTML handlers), so it's called via window here rather than imported.
@@ -112,20 +112,30 @@ export async function openJobDetails(jobId, tab='overview'){
   el('dfpDetailActivity').innerHTML = visits.length ? `
     <div class="activity-timeline">
       ${visits.map((v,i)=>{
-        const comments = Array.isArray(v.comments) ? v.comments : [];
+        const all = Array.isArray(v.comments) ? v.comments : [];
+        const handover = all.filter(c=>c.kind==='handover');
+        const comments = all.filter(c=>c.kind!=='handover');
         const photos = allAttachments.filter(a=>a.visit_id===v.id);
+        const engs = v.engineers||[];
+        const me = getAppUser()?.name;
+        const defaultBy = engs.includes(me) ? me : (engs[0]||'Office');
+        const byOptions = [...engs, 'Office'].filter((n,ix,arr)=>arr.indexOf(n)===ix);
         return `<article class="visit-detail-card">
           <div class="visit-detail-head">
             <div class="visit-number-block"><small>Visit</small><b>${i+1}</b></div>
             <div class="visit-head-main">
-              <h3>${escHtml((v.engineers||[]).join(', ')||'No engineer assigned')}</h3>
-              <p>${escHtml(v.notes||'No notes for this visit')}</p>
+              <h3>${engs.length ? engs.map(n=>`<span class="multi-eng-chip">${escHtml(n)}</span>`).join(' ') : 'No engineer assigned'}</h3>
+              <p class="visit-notes">${escHtml(v.notes||'No notes for this visit')}</p>
             </div>
             <div class="visit-head-meta">
               <b>${formatDateUK(v.visit_date)||v.visit_date}</b>
             </div>
           </div>
           <div class="visit-detail-body">
+            ${handover.length ? `<div class="visit-handover">
+              <div class="visit-handover-title">Handover for the next engineer / visit</div>
+              ${handover.map(h=>`<div class="visit-handover-text">${escHtml(h.text||'')}</div><div class="visit-handover-by">${escHtml(h.by||'Office')} · ${escHtml(h.time||'')}</div>`).join('')}
+            </div>` : ''}
             <div class="visit-section-title">Comments <span class="count">${comments.length}</span></div>
             <div class="visit-comments">
               ${comments.length ? comments.map(c=>`
@@ -135,9 +145,12 @@ export async function openJobDetails(jobId, tab='overview'){
                   <div class="comment-text">${escHtml(c.text||'')}</div>
                 </div>`).join('') : `<div class="detail-empty" style="padding:12px">No comments on this visit yet.</div>`}
             </div>
-            <div style="display:flex;gap:6px;margin-bottom:12px">
-              <input type="text" class="dfp-comment-input" data-visit-id="${v.id}" placeholder="Add a comment about this visit…" style="flex:1;border:1px solid #dfe2e6;border-radius:7px;padding:7px 9px;font-size:11px">
-              <button type="button" class="btn dfp-add-comment" data-visit-id="${v.id}">Add</button>
+            <div class="visit-comment-form">
+              <select class="dfp-comment-by" data-visit-id="${v.id}" title="Who is writing this comment">
+                ${byOptions.map(n=>`<option value="${escHtml(n)}"${n===defaultBy?' selected':''}>${escHtml(n)}</option>`).join('')}
+              </select>
+              <textarea class="dfp-comment-input" data-visit-id="${v.id}" rows="3" placeholder="Write the full comment — what was found, what the next engineer must check, materials needed. (Ctrl+Enter to post)"></textarea>
+              <button type="button" class="btn btn-acc dfp-add-comment" data-visit-id="${v.id}">Add comment</button>
             </div>
             <div class="visit-section-title">Photos <span class="count">${photos.length}</span></div>
             <div class="visit-photos">
@@ -150,7 +163,11 @@ export async function openJobDetails(jobId, tab='overview'){
                   ${preview}
                   <div class="visit-photo-info"><b>${escHtml(p.name||'Photo')}</b><span>${escHtml(p.uploaded_by_name||'')}</span></div>
                 </div>`;
-              }).join('') : `<div class="detail-empty" style="grid-column:1/-1;padding:12px">No photos tagged to this visit yet — add one from the "+ Add Visit" form.</div>`}
+              }).join('') : `<div class="detail-empty" style="grid-column:1/-1;padding:12px">No photos on this visit yet.</div>`}
+            </div>
+            <div class="visit-photo-add">
+              <input type="file" class="dfp-photo-input" data-visit-id="${v.id}" accept="image/*" multiple>
+              <span>Choose one or several photos — they are added to this visit straight away.</span>
             </div>
           </div>
         </article>`;
@@ -212,14 +229,14 @@ export function switchDetailTab(tab){
   document.querySelectorAll('.job-detail-body .detail-panel').forEach(p=>p.classList.toggle('active', p.dataset.dfpPanel===tab));
 }
 
-async function addVisitComment(visitId, text){
+async function addVisitComment(visitId, text, by){
   const trimmed=(text||'').trim();
   if(!trimmed) return;
   const rows = await _sb(`job_visits?id=eq.${encodeURIComponent(visitId)}&limit=1`);
   const visit = rows && rows[0];
   if(!visit) return;
   const comments = Array.isArray(visit.comments) ? visit.comments : [];
-  comments.push({by: getAppUser()?.name||'Office', time: new Date().toLocaleString('en-GB',{hour:'2-digit',minute:'2-digit'}), text: trimmed});
+  comments.push({by: by||getAppUser()?.name||'Office', time: new Date().toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}), text: trimmed});
   await _sb(`job_visits?id=eq.${encodeURIComponent(visitId)}`,{method:'PATCH', body:{comments}, prefer:'return=minimal'});
   toast('Comment added','success');
   if(detailJobId) openJobDetails(detailJobId, 'activity');
@@ -230,8 +247,10 @@ document.addEventListener('click', e=>{
   if(opener){ const u=opener.dataset.open; if(u&&u!=='#') window.open(u,'_blank'); return; }
   const addBtn = e.target.closest('.dfp-add-comment');
   if(addBtn){
-    const input = document.querySelector(`.dfp-comment-input[data-visit-id="${addBtn.dataset.visitId}"]`);
-    if(input){ addVisitComment(addBtn.dataset.visitId, input.value); input.value=''; }
+    const vid = addBtn.dataset.visitId;
+    const input = document.querySelector(`.dfp-comment-input[data-visit-id="${vid}"]`);
+    const by = document.querySelector(`.dfp-comment-by[data-visit-id="${vid}"]`)?.value;
+    if(input && input.value.trim()){ addVisitComment(vid, input.value, by); input.value=''; }
     return;
   }
   if(e.target.closest('button,select,input,a')) return;
@@ -240,9 +259,21 @@ document.addEventListener('click', e=>{
 });
 document.addEventListener('keydown', e=>{
   const input = e.target.closest('.dfp-comment-input');
-  if(input && e.key==='Enter'){
+  if(input && e.key==='Enter' && (e.ctrlKey||e.metaKey)){
     e.preventDefault();
-    addVisitComment(input.dataset.visitId, input.value);
+    const by = document.querySelector(`.dfp-comment-by[data-visit-id="${input.dataset.visitId}"]`)?.value;
+    if(input.value.trim()) addVisitComment(input.dataset.visitId, input.value, by);
     input.value='';
   }
+});
+
+document.addEventListener('change', async e=>{
+  const picker = e.target.closest('.dfp-photo-input');
+  if(!picker || !picker.files.length || !detailJobId) return;
+  const files = [...picker.files];
+  const failed = await uploadVisitPhotos(detailJobId, picker.dataset.visitId, files);
+  picker.value='';
+  if(failed) toast(`${failed} of ${files.length} photo(s) failed to upload`,'warn',6000);
+  else toast(`${files.length} photo(s) added to the visit`,'success');
+  openJobDetails(detailJobId,'activity');
 });

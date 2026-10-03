@@ -4119,6 +4119,7 @@ function toggleAddVisitForm(){
       `<span class="vf-eng-chip" onclick="_toggleVisitEngineer('${escHtml(e.name)}',this)">${escHtml(e.name)}</span>`
     ).join('');
     document.getElementById('vf-notes').value='';
+    document.getElementById('vf-handover').value='';
     const photoInp=document.getElementById('vf-photo');
     if(photoInp) photoInp.value='';
     const preview=document.getElementById('vf-photo-preview');
@@ -4143,37 +4144,46 @@ async function _visitPhotoUpload(jobId,file){
   return path;
 }
 
+export async function uploadVisitPhotos(jobId, visitId, files){
+  let failed=0;
+  for(const file of files){
+    try{
+      const path=await _visitPhotoUpload(jobId,file);
+      await _sb('attachments',{method:'POST',body:{
+        id:'att-'+Date.now()+'-'+Math.random().toString(36).slice(2,6),
+        jobid:jobId, visit_id:visitId, name:file.name, type:'photo',
+        mime:file.type||'image/jpeg', storage_path:path,
+        url:`${SB_URL}/storage/v1/object/public/deepflow/${path}`,
+        uploaded_by_name:_appUser?.name||'Office', created:Date.now(),
+      }});
+    }catch(err){
+      console.error('visit photo upload:',err);
+      failed++;
+    }
+  }
+  return failed;
+}
+
 async function saveVisit(){
   if(!editJid){toast('Save the job first, then add a visit','warn');return}
   const date=document.getElementById('vf-date').value;
   if(!date){toast('Pick a date for the visit','error');return}
   const engineers=[..._visitEngineersSel];
   const notes=document.getElementById('vf-notes').value.trim();
-  const photoFile=document.getElementById('vf-photo')?.files?.[0]||null;
+  const handover=document.getElementById('vf-handover').value.trim();
+  const photoFiles=[...(document.getElementById('vf-photo')?.files||[])];
   const saveBtn=document.getElementById('vf-save-btn');
   if(saveBtn){saveBtn.disabled=true;saveBtn.textContent='Saving…';}
   try{
     const visitId=uid();
-    await dPut('job_visits',{id:visitId,jobId:editJid,visitDate:date,engineers,notes,created:Date.now()});
-    if(photoFile){
-      try{
-        const path=await _visitPhotoUpload(editJid,photoFile);
-        await _sb('attachments',{method:'POST',body:{
-          id:'att-'+Date.now()+'-'+Math.random().toString(36).slice(2,6),
-          jobid:editJid, visit_id:visitId, name:photoFile.name, type:'photo',
-          mime:photoFile.type||'image/jpeg', storage_path:path,
-          url:`${SB_URL}/storage/v1/object/public/deepflow/${path}`,
-          uploaded_by_name:_appUser?.name||'Office', created:Date.now(),
-        }});
-      }catch(photoErr){
-        console.error('saveVisit photo upload:',photoErr);
-        toast('Visit saved, but the photo failed to upload','warn');
-      }
-    }
+    const comments=handover ? [{by:_appUser?.name||'Office', time:new Date().toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}), text:handover, kind:'handover'}] : [];
+    await dPut('job_visits',{id:visitId,jobId:editJid,visitDate:date,engineers,notes,comments,created:Date.now()});
+    const failed=await uploadVisitPhotos(editJid,visitId,photoFiles);
     toggleAddVisitForm();
     await loadJobVisits(editJid);
     _updateVisitsBadge(editJid);
-    toast('Visit logged','success');
+    if(failed) toast(`Visit saved, but ${failed} photo(s) failed to upload`,'warn',6000);
+    else toast('Visit logged','success');
   }catch(err){
     console.error('saveVisit:',err);
     toast('Could not save visit — check console','error');
