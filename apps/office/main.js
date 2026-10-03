@@ -36,7 +36,7 @@ import {
 } from './certs-appliances.js';
 import {
   getCurDirSection, switchDirSection, renderDir, renderDirSection, updateDirTabBadges,
-  openEngDir, renderAgentsSection,
+  openEngDir, renderAgentsSection, loadAllAgents,
 } from './directory-sections.js';
 import { matchDir, openPersonModalFor } from './directory-matching.js';
 import {
@@ -9406,7 +9406,7 @@ async function cvLoadClient(type, id, name){
 
   // Fetch everything in parallel
   const [allJobs, allInvs, allCerts, allPmts, allAgents] = await Promise.all([
-    dAll('jobs'), dAll('invoices'), dAll('certs'), dAll('payments'), dAll('agents')
+    dAll('jobs'), dAll('invoices'), dAll('certs'), dAll('payments'), loadAllAgents()
   ]);
 
   // Match by name (both referrer and landlordName on jobs, clientName on invoices)

@@ -144,9 +144,21 @@ export async function renderSubcontractorsSection(){
   }).join('');
 }
 
+// Two sources hold agents: the legacy `agents` table, and `persons` records
+// reclassified with the 'agent' role (the editable-in-place path — see
+// openPersonModal). Every agent view and agency count goes through this so
+// they can't disagree about how many agents an agency has.
+export async function loadAllAgents(){
+  const [legacy, persons] = await Promise.all([dAll('agents'), dAll('persons')]);
+  return [
+    ...legacy.map(ag=>({...ag,_src:'agents'})),
+    ...persons.filter(p=>(p.roles||[]).includes('agent')).map(p=>({...p,_src:'persons'})),
+  ];
+}
+
 export async function renderAgenciesSection(){
   const search = (document.getElementById('dir-search-agencies')?.value||'').toLowerCase();
-  let [agencies, agents, allJobs] = await Promise.all([dAll('agencies'), dAll('agents'), dAll('jobs')]);
+  let [agencies, agents, allJobs] = await Promise.all([dAll('agencies'), loadAllAgents(), dAll('jobs')]);
   if(search) agencies = agencies.filter(a=>(a.name+a.phone+a.email).toLowerCase().includes(search));
   const grid = document.getElementById('dir-grid-agencies');
   if(!grid) return;
@@ -193,10 +205,9 @@ export async function renderAgenciesSection(){
 export async function renderAgentsSection(){
   const search = (document.getElementById('dir-search-agents')?.value||'').toLowerCase();
   const agencyFilter = document.getElementById('dir-agent-agency-filter')?.value||'';
-  const [legacyAgents, personsAll, agencies, allJobs, allInvs] = await Promise.all([
-    dAll('agents'), dAll('persons'), dAll('agencies'), dAll('jobs'), dAll('invoices'),
+  const [allAgents, agencies, allJobs, allInvs] = await Promise.all([
+    loadAllAgents(), dAll('agencies'), dAll('jobs'), dAll('invoices'),
   ]);
-  const personAgents = personsAll.filter(p=>(p.roles||[]).includes('agent'));
 
   // Populate agency filter dropdown
   const agFilt = document.getElementById('dir-agent-agency-filter');
@@ -205,14 +216,7 @@ export async function renderAgentsSection(){
     agFilt.innerHTML = '<option value="">All Agencies</option>' + agencies.map(a=>`<option value="${a.id}" ${a.id===curVal?'selected':''}>${a.name}</option>`).join('');
   }
 
-  // Two sources feed this list: the legacy `agents` table, and `persons`
-  // records reclassified with the 'agent' role (the newer, editable-in-place
-  // path — see openPersonModal). Merged here so reclassifying someone never
-  // makes them disappear from the Agents view.
-  let agents = [
-    ...legacyAgents.map(ag=>({...ag,_src:'agents'})),
-    ...personAgents.map(p=>({...p,_src:'persons'})),
-  ];
+  let agents = allAgents;
   if(agencyFilter) agents = agents.filter(ag=>ag.agencyId===agencyFilter);
   if(search) agents = agents.filter(ag=>(ag.name+(ag.phone||'')+(ag.email||'')).toLowerCase().includes(search));
   const grid = document.getElementById('dir-grid-agents');

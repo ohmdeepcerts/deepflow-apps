@@ -15,7 +15,7 @@ import {
   S, dAll, dGet, dPut, dDel, toast, confirm2, uid, logActivity,
   closeModal, openModal, sendToWA, saveSetting,
 } from './main.js';
-import { getCurDirSection, renderDir, renderDirSection } from './directory-sections.js';
+import { getCurDirSection, renderDir, renderDirSection, loadAllAgents } from './directory-sections.js';
 import { showAutosaveBanner, wireAutoSave, cancelAutoSave } from './directory-matching.js';
 import { _lockedCertsForEntity, _releaseLockedCertsForEntity } from './certs-pdf.js';
 
@@ -183,7 +183,7 @@ export async function deleteCurrentAgency(){
   const a = await dGet('agencies', editAgencyId);
   if(!a) return;
 
-  const [allAgents, allJobs] = await Promise.all([dAll('agents'), dAll('jobs')]);
+  const [allAgents, allJobs] = await Promise.all([loadAllAgents(), dAll('jobs')]);
   const linkedAgents = allAgents.filter(ag => ag.agencyId === editAgencyId);
   const linkedJobs   = allJobs.filter(j => j.agencyName === a.name);
 
