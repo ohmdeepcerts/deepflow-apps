@@ -4,7 +4,7 @@
 // resulting .xlsx." Runs entirely in Node (ExcelJS's Node build), no browser
 // or login needed — see apps/office/export-workbook-builder.js for why the
 // builder is deliberately split from the browser-only data-gathering layer.
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import ExcelJS from 'exceljs';
 import { buildWorkbook } from '../../apps/office/export-workbook-builder.js';
 import { resolveDateRange } from '../../apps/office/export-data-service.js';
@@ -119,13 +119,19 @@ describe('buildWorkbook — golden dataset (full sheet set)', () => {
   });
 
   it('Certificates: excludes nothing from the detail sheet, computes days-remaining status the same way certs-stats-dashboard.js does', async () => {
-    const { data, scope } = makeFixture();
-    const result = await buildWorkbook({ data, S, scope, requestedBy: 'Test User' });
-    const ws = result.workbook.getWorksheet('Certificates');
-    let certRow = null;
-    ws.eachRow((row) => { if (row.getCell(1).value === 'GS-001') certRow = row; });
-    expect(certRow).toBeTruthy();
-    expect(certRow.getCell(13).value).toBe('Due Soon'); // expires 2026-10-01, generated 2026-09-10 → ~21 days
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(GENERATED_AT);
+    try {
+      const { data, scope } = makeFixture();
+      const result = await buildWorkbook({ data, S, scope, requestedBy: 'Test User' });
+      const ws = result.workbook.getWorksheet('Certificates');
+      let certRow = null;
+      ws.eachRow((row) => { if (row.getCell(1).value === 'GS-001') certRow = row; });
+      expect(certRow).toBeTruthy();
+      expect(certRow.getCell(13).value).toBe('Due Soon'); // expires 2026-10-01, generated 2026-09-10 → ~21 days
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('never invents a payment method or a chase date — Data Quality documents the real gaps instead', async () => {
