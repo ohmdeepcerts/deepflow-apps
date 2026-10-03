@@ -9411,9 +9411,13 @@ async function cvLoadClient(type, id, name){
     dAll('jobs'), dAll('invoices'), dAll('certs'), dAll('payments'), loadAllAgents()
   ]);
 
-  // Match by name (both referrer and landlordName on jobs, clientName on invoices)
+  // An agency's view is its own jobs plus every job of its linked agents,
+  // matched the same way the Directory counts an agent's jobs.
+  const linkedAgents = type==='agency' ? allAgents.filter(a=>a.agencyId===id||a.agencyName===name) : [];
+  const agentJobsOf = a => allJobs.filter(j => j.agentName===a.name || j.referrer===a.name || j.agentId===a.id);
+  const agentJobIds = new Set(linkedAgents.flatMap(a=>agentJobsOf(a).map(j=>j.id)));
   const jobs = allJobs.filter(j =>
-    j.referrer === name || j.landlordName === name || j.agencyName === name
+    j.referrer === name || j.landlordName === name || j.agencyName === name || agentJobIds.has(j.id)
   ).sort((a,b) => (b.date||'').localeCompare(a.date||''));
 
   const invs = allInvs.filter(i =>
@@ -9427,8 +9431,8 @@ async function cvLoadClient(type, id, name){
   // For agencies: find linked agents and their stats
   let agencyAgents = [];
   if(type==='agency'){
-    agencyAgents = allAgents.filter(a=>a.agencyId===id||a.agencyName===name).map(a=>{
-      const aJobs=jobs.filter(j=>j.agentName===a.name);
+    agencyAgents = linkedAgents.map(a=>{
+      const aJobs=agentJobsOf(a).sort((x,y)=>(y.date||'').localeCompare(x.date||''));
       const aCompleted=aJobs.filter(j=>j.status===STATUS.COMPLETED||j.status===STATUS.INVOICED);
       const aRevenue=aCompleted.reduce((s,j)=>s+Number(j.price||0),0);
       return{...a,jobRows:aJobs,jobCount:aJobs.length,completedCount:aCompleted.length,revenue:aRevenue};
@@ -9495,9 +9499,8 @@ async function cvLoadClient(type, id, name){
   // ── Jobs panel (agency view: one filter per linked agent, plus direct jobs) ──
   _cvJobFilters = [{ key:'all', label:'All jobs', jobs }];
   if(type==='agency' && agencyAgents.length){
-    const linkedNames = new Set(agencyAgents.map(a=>a.name));
     agencyAgents.forEach((a,i)=>_cvJobFilters.push({ key:'a'+i, label:a.name, jobs:a.jobRows }));
-    const direct = jobs.filter(j=>!linkedNames.has(j.agentName));
+    const direct = jobs.filter(j=>!agentJobIds.has(j.id));
     if(direct.length) _cvJobFilters.push({ key:'direct', label:'Direct (no agent)', jobs:direct });
   }
   _cvJobFilterKey = 'all';
