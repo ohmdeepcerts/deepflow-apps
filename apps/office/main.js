@@ -4560,7 +4560,7 @@ export async function renderInvList(){
   let invs=await dAll('invoices');
   invs=_filterByType(invs); // apply Agency / Landlord / All toggle
   if(filter)invs=invs.filter(i=>i.status===filter);
-  if(search)invs=invs.filter(i=>(i.clientName+i.number+i.description+(i.jobRef||'')).toLowerCase().includes(search));
+  if(search)invs=invs.filter(i=>(i.clientName+i.number+i.description+(i.jobRef||'')+' '+(i.agentName||'')+' '+(i.agencyName||'')).toLowerCase().includes(search));
   // Sort invoices
   const invSortEl=document.getElementById('inv-sort');
   const invSortBy=invSortEl?invSortEl.value:'date_desc';
@@ -4609,6 +4609,7 @@ export async function renderInvList(){
           <div style="font-size:11px;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${inv.propertyAddress||inv.jobAddress||inv.description||''}</div>
         </div>
         ${inv.jobNum?`<div class="inv-job-link" onclick="event.stopPropagation();openJobModalByNum('${inv.jobNum}')" title="Open job ${inv.jobNum}">🔗 ${inv.jobNum}</div>`:inv.jobRef?`<div class="inv-job-link" onclick="event.stopPropagation();openJobModalByNum('${inv.jobRef}')" title="Open job ${inv.jobRef}">🔗 ${inv.jobRef}</div>`:''}
+        ${inv.agentName?`<div class="inv-agent-tag" title="Agent: ${escHtml(inv.agentName)}">👔 ${escHtml(inv.agentName)}</div>`:''}
       </div>
       ${pct>0&&pct<100&&inv.type!=='proforma'?`<div style="height:3px;background:#e2e8f0;border-radius:2px;overflow:hidden;margin:0 8px 8px 8px"><div style="height:100%;width:${pct.toFixed(0)}%;background:var(--acc);border-radius:2px"></div></div>`:''}
       <div class="inv-bottom-bar" style="padding-left:8px">
